@@ -13,14 +13,26 @@ void *start(void *arg) {
 		int i;
 		for (i=0; i<50000000; i++) ;
 		ANNOTATE_END_TASK("child");
+#if 0
+		ANNOTATE_BELIEF(rand()%2 == 0, 0.6);
+#endif
 	}
 }
 
 int main() {
 	ANNOTATE_INIT();
 	ANNOTATE_SET_PATH_ID_INT(1);
+	int idsz, i;
+	const unsigned char *path_id = ANNOTATE_GET_PATH_ID(&idsz);
+	printf("parent's ID is ");
+	for (i=0; i<idsz; i++)
+		printf("%02x", path_id[i]);
+	printf("\n");
 	pthread_t child;
 	pthread_create(&child, NULL, start, NULL);
+#if 0
+	ANNOTATE_BELIEF(1, 0);
+#endif
 	while (1) {
 #if 0
 		struct tms clk;
