@@ -5,6 +5,21 @@
 
 typedef enum { EV_HEADER, EV_START_TASK, EV_END_TASK, EV_SET_PATH_ID, EV_END_PATH_ID, EV_NOTICE, EV_SEND, EV_RECV } EventType;
 
+class IDBlock {
+public:
+	IDBlock(void) : len(0), data(NULL) {}
+	IDBlock(const IDBlock &copy) : data(NULL) { set(copy.data, copy.len); }
+	IDBlock &operator=(const IDBlock &copy) { set(copy.data, copy.len); return *this; }
+	IDBlock(char *_data, int _len) { set(_data, _len); }
+	~IDBlock(void) { if (data) delete[] data; }
+	void set(char *_data, int _len);
+	bool operator==(const IDBlock &test) const;
+	const char *to_string(void) const;
+
+	int len;
+	char *data;
+};
+
 class Event {
 public:
 	virtual void print(FILE *fp = stdin) = 0;
@@ -30,8 +45,7 @@ class ResourceMark : public Event {
 public:
 	ResourceMark(const char *buf);
 
-	static const int bufsiz = 11*4;  // 11 ints
-	int path_id;
+	static const int bufsiz = 10*4;  // 10 ints
 	int minor_fault, major_fault, vol_cs, invol_cs;
 	timeval utime, stime;
 };
@@ -64,6 +78,8 @@ public:
 	NewPathID(const char *buf);
 	virtual void print(FILE *fp);
 	virtual EventType type(void) { return EV_SET_PATH_ID; }
+
+	IDBlock path_id;
 };
 
 class EndPathID : public Event {
@@ -72,7 +88,7 @@ public:
 	virtual void print(FILE *fp);
 	virtual EventType type(void) { return EV_END_PATH_ID; }
 
-	int path_id;
+	IDBlock path_id;
 };
 
 class Notice : public Event {
@@ -82,7 +98,6 @@ public:
 	virtual void print(FILE *fp);
 	virtual EventType type(void) { return EV_NOTICE; }
 
-	int path_id;
 	char *str;
 };
 
@@ -91,7 +106,8 @@ class Message : public Event {
 public:
 	Message(const char *buf);
 
-	int path_id, sender, msg_id, size;
+	IDBlock msgid;
+	int size;
 };
 
 class MessageSend : public Message {

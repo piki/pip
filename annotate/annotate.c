@@ -1,3 +1,5 @@
+#include <endian.h>
+#include <byteswap.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -10,12 +12,11 @@
 
 #define BASEPATH "/tmp"
 #define MAGIC 0x416e6e6f  // 'Anno'
-#define VERSION 1
+#define VERSION 2
 
 typedef struct {
 	FILE *fp;
 	int procfd;
-	int path_id;
 } ThreadContext;
 
 #ifdef THREADS
@@ -41,7 +42,7 @@ static ThreadContext ctx;
 #define GETRUSAGE getrusage
 #endif
 
-typedef enum { STRING, CHAR, INT, END } OutType;
+typedef enum { STRING, CHAR, INT, VOIDP, END } OutType;
 static void output(FILE *fp, ...);
 
 static char *hostname, *processname;
@@ -60,7 +61,6 @@ void ANNOTATE_INIT(void) {
 	sprintf(fn, BASEPATH"/trace-%d", getpid());
 	pctx->fp = fopen(fn, "w");
 	if (!pctx->fp) { perror(fn); exit(1); }
-	pctx->path_id = -1;
 	pctx->procfd = -1;
 
 #if 0    /* performance test */
@@ -94,7 +94,6 @@ void ANNOTATE_START_TASK(const char *name) {
 	GETRUSAGE(RUSAGE_SELF, &ru);
 	output(pctx->fp,
 		CHAR, 'T',
-		INT, pctx->path_id,
 		INT, tv.tv_sec, INT, tv.tv_usec,
 		INT, ru.ru_utime.tv_sec, INT, ru.ru_utime.tv_usec,
 		INT, ru.ru_stime.tv_sec, INT, ru.ru_stime.tv_usec,
@@ -114,7 +113,6 @@ void ANNOTATE_END_TASK(const char *name) {
 	GETRUSAGE(RUSAGE_SELF, &ru);
 	output(pctx->fp,
 		CHAR, 't',
-		INT, pctx->path_id,
 		INT, tv.tv_sec, INT, tv.tv_usec,
 		INT, ru.ru_utime.tv_sec, INT, ru.ru_utime.tv_usec,
 		INT, ru.ru_stime.tv_sec, INT, ru.ru_stime.tv_usec,
@@ -126,10 +124,8 @@ void ANNOTATE_END_TASK(const char *name) {
 		END);
 }
 
-void ANNOTATE_SET_PATH_ID(unsigned int path_id) {
+void ANNOTATE_SET_PATH_ID(const void *path_id, int idsz) {
 	ThreadContext *pctx = GET_CTX;
-	if (pctx->path_id == path_id) return;
-	pctx->path_id = path_id;
 
 	struct rusage ru;
 	struct timeval tv;
@@ -137,7 +133,6 @@ void ANNOTATE_SET_PATH_ID(unsigned int path_id) {
 	GETRUSAGE(RUSAGE_SELF, &ru);
 	output(pctx->fp,
 		CHAR, 'P',
-		INT, pctx->path_id,
 		INT, tv.tv_sec, INT, tv.tv_usec,
 		INT, ru.ru_utime.tv_sec, INT, ru.ru_utime.tv_usec,
 		INT, ru.ru_stime.tv_sec, INT, ru.ru_stime.tv_usec,
@@ -145,17 +140,18 @@ void ANNOTATE_SET_PATH_ID(unsigned int path_id) {
 		INT, ru.ru_majflt,  // major page faults -- spin the disk
 		INT, ru.ru_nvcsw,   // voluntary context switches -- block on something
 		INT, ru.ru_nivcsw,  // involuntary context switches -- cpu hog
+		VOIDP, path_id, idsz,
 		END);
 }
 
-void ANNOTATE_END_PATH_ID(unsigned int path_id) {
+void ANNOTATE_END_PATH_ID(const void *path_id, int idsz) {
 	ThreadContext *pctx = GET_CTX;
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	output(pctx->fp,
 		CHAR, 'p',
-		INT, pctx->path_id,
 		INT, tv.tv_sec, INT, tv.tv_usec,
+		VOIDP, path_id, idsz,
 		END);
 }
 
@@ -170,36 +166,31 @@ void ANNOTATE_NOTICE(const char *fmt, ...) {
 	va_end(args);
 	output(pctx->fp,
 		CHAR, 'N',
-		INT, pctx->path_id,
 		INT, tv.tv_sec, INT, tv.tv_usec,
 		STRING, buf,
 		END);
 }
 
-void ANNOTATE_SEND(int sender, int msgid, int size) {
+void ANNOTATE_SEND(const void *msgid, int idsz, int size) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	gettimeofday(&tv, NULL);
 	output(pctx->fp,
 		CHAR, 'M',
-		INT, pctx->path_id,
-		INT, sender,
-		INT, msgid,
+		VOIDP, msgid, idsz,
 		INT, size,
 		INT, tv.tv_sec,
 		INT, tv.tv_usec,
 		END);
 }
 
-void ANNOTATE_RECEIVE(int sender, int msgid, int size) {
+void ANNOTATE_RECEIVE(const void *msgid, int idsz, int size) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	gettimeofday(&tv, NULL);
 	output(pctx->fp,
 		CHAR, 'm',
-		INT, pctx->path_id,
-		INT, sender,
-		INT, msgid,
+		VOIDP, msgid, idsz,
 		INT, size,
 		INT, tv.tv_sec,
 		INT, tv.tv_usec,
@@ -232,6 +223,13 @@ static void output(FILE *fp, ...) {
 				*(p++) = (n>>8) & 0xFF;
 				*(p++) = n & 0xFF;
 				break;
+			case VOIDP:
+				s = va_arg(arg, const char*);
+				len = va_arg(arg, int);
+				*(p++) = (len & 0xFF);
+				memcpy(p, s, len);
+				p += len;
+				break;
 			case END:
 				goto loop_break;
 		}
@@ -253,7 +251,6 @@ static ThreadContext *new_context() {
 	pctx->fp = fopen(fn, "w");
 	if (!pctx->fp) { perror(fn); exit(1); }
 	output_header(pctx->fp);
-	pctx->path_id = -1;
 	pctx->procfd = -1;
 	pthread_setspecific(ctx_key, pctx);
 	return pctx;

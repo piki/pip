@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,9 +6,28 @@
 #include <sys/time.h>
 #include "events.h"
 
-typedef enum { STRING, CHAR, INT, END } InType;
+typedef enum { STRING, VOIDP, CHAR, INT, END } InType;
 static int readblock(FILE *_fp, char *buf);
 static void scan(const char *buf, ...);
+
+void IDBlock::set(char *_data, int _len) {
+	if (data) delete[] data;
+	len = _len;
+	data = new char[len];
+	memcpy(data, _data, len);
+}
+
+bool IDBlock::operator==(const IDBlock &test) const {
+	return len == test.len && !memcmp(data, test.data, len);
+}
+
+const char *IDBlock::to_string(void) const {
+	static char buf[512];
+	for (int i=0; i<len; i++)
+		sprintf(&buf[i*2], "%02x", (unsigned char)data[i]);
+	buf[len*2] = '\0';
+	return buf;
+}
 
 Header::Header(const char *buf) {
 	scan(buf,
@@ -22,6 +42,7 @@ Header::Header(const char *buf) {
 		INT, &uid,
 		STRING, &processname,
 		END);
+	assert(version == 2);
 }
 Header::~Header(void) {
 	delete[] hostname;
@@ -35,7 +56,6 @@ void Header::print(FILE *fp) {
 
 ResourceMark::ResourceMark(const char *buf) {
 	scan(buf,
-		INT, &path_id,
 		INT, &tv.tv_sec, INT, &tv.tv_usec,
 		INT, &utime.tv_sec, INT, &utime.tv_usec,
 		INT, &stime.tv_sec, INT, &stime.tv_usec,
@@ -52,69 +72,80 @@ Task::Task(const char *buf) : ResourceMark(buf) {
 Task::~Task(void) { delete[] name; }
 
 void StartTask::print(FILE *fp) {
-	printf("START_TASK: name=\"%s\" path_id=%d tv=%ld.%06ld utime=%ld.%06ld "
+	printf("START_TASK: name=\"%s\" tv=%ld.%06ld utime=%ld.%06ld "
 		"stime=%ld.%06ld minflt=%d majflt=%d vcs=%d ivcs=%d\n",
-		name, path_id, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
+		name, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
 }
 
 void EndTask::print(FILE *fp) {
-	printf("END_TASK: name=\"%s\" path_id=%d tv=%ld.%06ld utime=%ld.%06ld "
+	printf("END_TASK: name=\"%s\" tv=%ld.%06ld utime=%ld.%06ld "
 		"stime=%ld.%06ld minflt=%d majflt=%d vcs=%d ivcs=%d\n",
-		name, path_id, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
+		name, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
 }
 
-NewPathID::NewPathID(const char *buf) : ResourceMark(buf) { }
+NewPathID::NewPathID(const char *buf) : ResourceMark(buf) {
+	char *idbuf;
+	int len;
+	scan(buf+ResourceMark::bufsiz, VOIDP, &idbuf, &len, END);
+	path_id.set(idbuf, len);
+	delete[] idbuf;
+}
 void NewPathID::print(FILE *fp) {
-	printf("NEW_PATH_ID: path_id=%d tv=%ld.%06ld utime=%ld.%06ld "
+	printf("NEW_PATH_ID: path_id=%s tv=%ld.%06ld utime=%ld.%06ld "
 		"stime=%ld.%06ld minflt=%d majflt=%d vcs=%d ivcs=%d\n",
-		path_id, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
+		path_id.to_string(), tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
 }
 
 EndPathID::EndPathID(const char *buf) {
+	char *idbuf;
+	int len;
 	scan(buf,
-		INT, &path_id,
 		INT, &tv.tv_sec, INT, &tv.tv_usec,
+		VOIDP, &idbuf, &len,
 		END);
+	path_id.set(idbuf, len);
+	delete[] idbuf;
 }
 void EndPathID::print(FILE *fp) {
-	printf("END_PATH_ID: path_id=%d tv=%ld.%06ld\n",
-		path_id, tv.tv_sec, tv.tv_usec);
+	printf("END_PATH_ID: path_id=%s tv=%ld.%06ld\n",
+		path_id.to_string(), tv.tv_sec, tv.tv_usec);
 }
 
 Notice::Notice(const char *buf) {
 	scan(buf,
-		INT, &path_id,
 		INT, &tv.tv_sec, INT, &tv.tv_usec,
 		STRING, &str,
 		END);
 }
 Notice::~Notice(void) { delete[] str; }
 void Notice::print(FILE *fp) {
-	printf("NOTICE: path_id=%d tv=%ld.%06ld str=\"%s\"\n",
-		path_id, tv.tv_sec, tv.tv_usec, str);
+	printf("NOTICE: tv=%ld.%06ld str=\"%s\"\n",
+		tv.tv_sec, tv.tv_usec, str);
 }
 
 Message::Message(const char *buf) {
+	char *idbuf;
+	int len;
 	scan(buf,
-		INT, &path_id,
-		INT, &sender,
-		INT, &msg_id,
+		VOIDP, &idbuf, &len,
 		INT, &size,
 		INT, &tv.tv_sec, INT, &tv.tv_usec,
 		END);
+	msgid.set(idbuf, len);
+	delete[] idbuf;
 }
 
 void MessageSend::print(FILE *fp) {
-	printf("SEND: path_id=%d sender=%d msg_id=%d size=%d tv=%ld.%06ld\n",
-		path_id, sender, msg_id, size, tv.tv_sec, tv.tv_usec);
+	printf("SEND: msg_id=%s size=%d tv=%ld.%06ld\n",
+		msgid.to_string(), size, tv.tv_sec, tv.tv_usec);
 }
 
 void MessageRecv::print(FILE *fp) {
-	printf("RECV: path_id=%d sender=%d msg_id=%d size=%d tv=%ld.%06ld\n",
-		path_id, sender, msg_id, size, tv.tv_sec, tv.tv_usec);
+	printf("RECV: msg_id=%s size=%d tv=%ld.%06ld\n",
+		msgid.to_string(), size, tv.tv_sec, tv.tv_usec);
 }
 
 static int readblock(FILE *_fp, char *buf) {
@@ -128,7 +159,7 @@ static void scan(const char *buf, ...) {
 	const char *p=buf;
 	char **s;
 	char *c;
-	int *ip, len;
+	int *ip, len, *lenp;
 	va_list arg;
 	va_start(arg, buf);
 	while (1) {
@@ -140,6 +171,14 @@ static void scan(const char *buf, ...) {
 				*s = new char[len+1];
 				memcpy(*s, p, len);
 				(*s)[len] = '\0';
+				p += len;
+				break;
+			case VOIDP:
+				s = va_arg(arg, char**);
+				lenp = va_arg(arg, int*);
+				len = *lenp = *(p++);
+				*s = new char[len];
+				memcpy(*s, p, len);
 				p += len;
 				break;
 			case CHAR:

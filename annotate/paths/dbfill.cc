@@ -17,6 +17,13 @@ struct ltstr {
     return strcmp(s1, s2) < 0;
   }
 };
+struct ltIDBlock {
+  bool operator()(const IDBlock &id1, const IDBlock &id2) const {
+		if (id1.len < id2.len) return true;
+		if (id1.len > id2.len) return false;
+		return memcmp(id1.data, id2.data, id1.len) < 0;
+  }
+};
 static MYSQL mysql;
 
 static void read_file(const char *fn, const std::string &table_tasks,
@@ -54,6 +61,8 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
+static std::map<IDBlock, int, ltIDBlock> path_ids;
+static int next_id = 1;
 static void read_file(const char *fn, const std::string &table_tasks,
 		const std::string &table_notices, const std::string &table_threads) {
 	FILE *fp = fopen(fn, "r");
@@ -62,7 +71,7 @@ static void read_file(const char *fn, const std::string &table_tasks,
 	int thread_id = -1;
 	std::map<int, std::map<const char *, Event *, ltstr> > start_event;
 	Event *e = read_event(fp);
-
+	int current_id = -1;
 	while (e) {
 		switch (e->type()) {
 			case EV_HEADER:{
@@ -75,15 +84,16 @@ static void read_file(const char *fn, const std::string &table_tasks,
 				delete e;
 				break;
 			case EV_START_TASK:
-				start_event[((Task*)e)->path_id][((Task*)e)->name] = e;
+				start_event[current_id][((Task*)e)->name] = e;
 				break;
 			case EV_END_TASK:{
 					assert(thread_id != -1);
 					Task *end = (Task*)e;
-					Task *start = (Task*)start_event[end->path_id][end->name];
+					Task *start = (Task*)start_event[current_id][end->name];
+					assert(start != NULL);
 					run_sql("INSERT INTO %s VALUES "
 						"(%d, \"%s\", %lld, %lld, %ld, %ld, %d, %d, %d, %d, %d)",
-						table_tasks.c_str(), end->path_id, end->name,
+						table_tasks.c_str(), current_id, end->name,
 						ts(start->tv), ts(end->tv),
 						end->utime - start->utime,
 						end->stime - start->stime,
@@ -92,13 +102,21 @@ static void read_file(const char *fn, const std::string &table_tasks,
 						end->vol_cs - start->vol_cs,
 						end->invol_cs - start->invol_cs,
 						thread_id);
-					start_event[start->path_id].erase(start->name);
+					start_event[current_id].erase(start->name);
+					//!! delete path_ids for it, too
 					delete start;
 				}
 				delete e;
 				break;
 			case EV_SET_PATH_ID:
-				e->print();
+				//e->print();
+				if (path_ids.count(((NewPathID*)e)->path_id) == 0) {
+					current_id = path_ids[((NewPathID*)e)->path_id] = next_id++;
+				}
+				else
+					current_id = path_ids[((NewPathID*)e)->path_id];
+				printf("%s -> %d\n",
+					((NewPathID*)e)->path_id.to_string(), current_id);
 				delete e;
 				break;
 			case EV_END_PATH_ID:
@@ -108,9 +126,8 @@ static void read_file(const char *fn, const std::string &table_tasks,
 			case EV_NOTICE:
 				assert(thread_id != -1);
 				run_sql("INSERT INTO %s VALUES (%d, \"%s\", %lld, %d)",
-					table_notices.c_str(), ((Notice*)e)->path_id,
-					((Notice*)e)->str, ts(((Notice*)e)->tv),
-					thread_id);
+					table_notices.c_str(), current_id, ((Notice*)e)->str,
+					ts(((Notice*)e)->tv), thread_id);
 				delete e;
 				break;
 			case EV_SEND:
@@ -127,6 +144,8 @@ static void read_file(const char *fn, const std::string &table_tasks,
 		}
 		e = read_event(fp);
 	}
+
+	// !! print all starts and sends left in the hash table
 }
 
 static void run_sql(const char *fmt, ...) {
