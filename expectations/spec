@@ -1,4 +1,5 @@
 expectation E1 {
+	{ notice("FOO", "BAR"); }
   task("PARSE_REQUEST", "www.hp.com")
     limit(IO_OPS, {5...100})
     limit(CPU_TIME, {0...2});

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "parsetree.h"
 #include "expect.tab.hh"
+#include "exptree.h"
 
 static std::map<std::string, Symbol*> symbol_table;
 
@@ -83,7 +84,14 @@ struct {
 	{ -1, "" },
 };
 
-#if 1
+const char *get_op_name(int op) {
+	for (int i=0; opmap[i].op > 0; i++)
+		if (op == opmap[i].op)
+			return opmap[i].name;
+	return "!UNKNOWN!";
+}
+
+#if 0
 /* ALMOST print out the input.
  * 1)   The "RANGE" operator is used in three different contexts:
  *       - repeat between 1 and 5 { ... }
@@ -335,17 +343,8 @@ void print_tree(const Node *node, int depth) {
 					printf("\n\n\nunhandled operator: ");
 					if (onode->op <= 255)
 						printf("%d (%c)\n", onode->op, onode->op);
-					else {
-						int found = 0;
-						for (int i=0; opmap[i].op > 0; i++)
-							if (onode->op == opmap[i].op) {
-								printf("%d (%s)\n", onode->op, opmap[i].name);
-								found = 1;
-								break;
-							}
-						if (!found)
-							printf("%d (!UNKNOWN!)\n", onode->op);
-					}
+					else
+						printf("%d (%s)\n", onode->op, get_op_name(onode->op));
 					exit(1);
 			}
 			break;}
@@ -371,26 +370,172 @@ void print_tree(const Node *node, int depth) {
 		case NODE_IDENTIFIER:
 			printf("identifier: \"%s\"\n", ((IdentifierNode*)node)->sym->name.c_str());
 			break;
+		case NODE_LIST:{
+				ListNode *lnode = (ListNode*)node;										 	
+				printf("list: %d\n", lnode->size());
+				for (unsigned int i=0; i<lnode->size(); i++) {
+					print_tree((*lnode)[i], depth+1);
+				}
+			}
+			break;
 		case NODE_OPERATOR:{
 			OperatorNode *onode = (OperatorNode*)node;
 			if (onode->op <= 255)
 				printf("operator %d (%c)\n", onode->op, onode->op);
-			else {
-				int found = 0;
-				for (i=0; opmap[i].op > 0; i++)
-					if (onode->op == opmap[i].op) {
-						printf("operator %d (%s)\n", onode->op, opmap[i].name);
-						found = 1;
-						break;
-					}
-				if (!found)
-					printf("operator %d (!UNKNOWN!)\n", onode->op);
-			}
+			else
+				printf("operator %d (%s)\n", onode->op, get_op_name(onode->op));
 			for (i=0; i<onode->noperands; i++)
 				print_tree(onode->operands[i], depth+1);
 			break;}
 		default:
+			fprintf(stderr, "unknown node type %d\n", node->type());
 			assert(!"not reached");
 	}
 }
 #endif
+
+#undef TAB
+#define TAB
+void add_assert(const Node *node) {
+	return;
+	if (!node) { return; }
+	switch (node->type()) {
+		case NODE_INT:
+			printf("%d", ((IntNode*)node)->value);
+			break;
+		case NODE_STRING:
+			printf("\"%s\"", ((StringNode*)node)->s);
+			break;
+		case NODE_REGEX:
+			printf("m/%s/", ((StringNode*)node)->s);
+			break;
+		case NODE_IDENTIFIER:
+			printf("%s", ((IdentifierNode*)node)->sym->name.c_str());
+			break;
+		case NODE_OPERATOR:{
+			OperatorNode *onode = (OperatorNode*)node;
+			switch (onode->op) {
+				case ASSERT:
+					TAB printf("assert( ");
+					add_assert(onode->operands[0]);
+					printf(" )\n");
+					break;
+				case RANGE:
+					printf("{");
+					add_assert(onode->operands[0]);
+					printf("...");
+					if (onode->operands[1]) add_assert(onode->operands[1]);
+					printf("}");
+					break;
+				case '<':
+				case '>':
+					add_assert(onode->operands[0]);
+					printf(" %c ", onode->op);
+					add_assert(onode->operands[1]);
+					break;
+				case DURING:
+					TAB printf("during(");
+					add_assert(onode->operands[0]);
+					printf(") ");
+					add_assert(onode->operands[1]);
+					break;
+				case ANY:
+					printf("any ");
+					add_assert(onode->operands[0]);
+					break;
+				case B_AND:
+					add_assert(onode->operands[0]);
+					printf(" && ");
+					add_assert(onode->operands[1]);
+					break;
+				case B_OR:
+					add_assert(onode->operands[0]);
+					printf(" || ");
+					add_assert(onode->operands[1]);
+					break;
+				case IMPLIES:
+					add_assert(onode->operands[0]);
+					printf(" -> ");
+					add_assert(onode->operands[1]);
+					break;
+				case IN:
+					add_assert(onode->operands[0]);
+					printf(" in ");
+					add_assert(onode->operands[1]);
+					break;
+				case LE:
+					add_assert(onode->operands[0]);
+					printf(" <= ");
+					add_assert(onode->operands[1]);
+					break;
+				case GE:
+					add_assert(onode->operands[0]);
+					printf(" >= ");
+					add_assert(onode->operands[1]);
+					break;
+				case EQ:
+					add_assert(onode->operands[0]);
+					printf(" == ");
+					add_assert(onode->operands[1]);
+					break;
+				case NE:
+					add_assert(onode->operands[0]);
+					printf(" != ");
+					add_assert(onode->operands[1]);
+					break;
+				case '!':
+					printf("!");
+					add_assert(onode->operands[0]);
+					break;
+				case INSTANCES:
+					printf("instances(");
+					add_assert(onode->operands[0]);
+					printf(")");
+					break;
+				case UNIQUE:
+					printf("unique(");
+					add_assert(onode->operands[0]);
+					printf(")");
+					break;
+				case F_MAX:
+					printf("max(");
+					add_assert(onode->operands[0]);
+					printf(", ");
+					add_assert(onode->operands[1]);
+					printf(")");
+					break;
+				case AVERAGE:
+					printf("average(");
+					add_assert(onode->operands[0]);
+					printf(", ");
+					add_assert(onode->operands[1]);
+					printf(")");
+					break;
+				case STDDEV:
+					printf("stddev(");
+					add_assert(onode->operands[0]);
+					printf(", ");
+					add_assert(onode->operands[1]);
+					printf(")");
+					break;
+				default:
+					printf("\n\n\nunhandled operator: ");
+					if (onode->op <= 255)
+						printf("%d (%c)\n", onode->op, onode->op);
+					else
+						printf("%d (%s)\n", onode->op, get_op_name(onode->op));
+					exit(1);
+			}
+			break;}
+		default:
+			fprintf(stderr, "invalid node type %d\n", node->type());
+			assert(!"not reached");
+	}
+}
+
+std::vector<Recognizer*> recognizers;
+
+void add_recognizer(const Node *node) {
+	Recognizer *r = new Recognizer(node);
+	recognizers.push_back(r);
+}

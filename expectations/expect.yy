@@ -76,8 +76,8 @@ char *filename;
 %%
 
 program:
-		program pathdecl													{ print_tree($2, 0); }
-		| program assertdecl											{ print_tree($2, 0); }
+		program pathdecl													{ add_recognizer($2); delete $2; }
+		| program assertdecl											{ add_assert($2); delete $2; }
 		|
 		;
 
@@ -239,20 +239,12 @@ void yyerror(const char *fmt, ...) {
 	fputc('\n', stderr);
 }
 
-int main(int argc, char **argv) {
-	if (argc > 1) {
-		filename = argv[1];
-		yyin = fopen(filename, "r");
-		if (!yyin) {
-			perror(filename);
-			return 1;
-		}
-		yyparse();
-		fclose(yyin);
+void expect_parse(const char *filename) {
+	yyin = fopen(filename, "r");
+	if (!yyin) {
+		perror(filename);
+		exit(1);
 	}
-	else {
-		filename = "<stdin>";
-		yyparse();
-	}
-	return 0;
+	yyparse();
+	fclose(yyin);
 }

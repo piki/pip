@@ -77,7 +77,9 @@ void symbols_init(void);
  * indicating error. */
 Symbol *symbol_lookup(const char *name);
 
-
+const char *get_op_name(int op);
 void print_tree(const Node *node, int depth);
+void add_recognizer(const Node *node);
+void add_assert(const Node *node);
 
 #endif

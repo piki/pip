@@ -1,0 +1,89 @@
+expectation Init {
+	task("reading database", $where = m/.*/);
+	task("jump tables", $where);
+}
+
+expectation LinkMiss {
+	task("link", $where = m/.*/) {
+		repeat between 0 and 2 {
+			task("fuzzy find", $where);
+		}
+		notice("cache miss", $where);
+		task("shortest path", $where);
+	}
+}
+
+expectation LinkHit {
+	task("link", $where = m/.*/) {
+		repeat between 0 and 2 {
+			task("fuzzy find", $where);
+		}
+		notice("cache hit", $where);
+	}
+}
+
+expectation LinkNotFound {
+	task("link", $where = m/.*/) {
+		repeat between 0 and 2 {
+			task("fuzzy find", $where);
+		}
+	}
+}
+
+expectation CenterMiss {
+	task("center", $where = m/.*/) {
+		repeat between 0 and 2 {
+			task("fuzzy find", $where);
+		}
+		notice("cache miss", $where);
+		task("shortest path", $where);
+	}
+}
+
+expectation CenterHit {
+	task("center", $where = m/.*/) {
+		repeat between 0 and 2 {
+			task("fuzzy find", $where);
+		}
+		notice("cache hit", $where);
+	}
+}
+
+expectation CenterNotFound {
+	task("center", $where = m/.*/) {
+		repeat between 0 and 2 {
+			task("fuzzy find", $where);
+		}
+	}
+}
+
+expectation ShowCache {
+	task("show cache", m/.*/);
+}
+
+expectation ByNumberMiss {
+	task("by number", $where = m/.*/) {
+		repeat between 0 and 1 {
+			task("fuzzy find", $where);
+		}
+		notice("cache miss", $where);
+		task("shortest path", $where);
+	}
+}
+
+expectation ByNumberHit {
+	task("by number", $where = m/.*/) {
+		repeat between 0 and 1 {
+			task("fuzzy find", $where);
+		}
+		notice("cache hit", $where);
+	}
+}
+
+expectation ByNumberNotFound {
+	task("by number", $where = m/.*/) {
+		repeat between 0 and 1 {
+			task("fuzzy find", $where);
+		}
+	}
+}

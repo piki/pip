@@ -1,17 +1,23 @@
+CC = g++
 CFLAGS = -g -Wall
+CXXFLAGS = -g -Wall
 CPPFLAGS = -I.
-PROGS = expect
-LDLIBS = -lm
+PROGS = pathcheck
+LDLIBS = -lm -lmysqlclient
 YACC = bison
-LEX = flex
 
-all: $(PROGS)
+.PRECIOUS: expect.c
 
-expect: expect.l expect.yy parsetree.cc
+all: $(PROGS) exptree.o
+
+pathcheck: expect.tab.o parsetree.o exptree.o path.o pathcheck.o expect.o
+
+expect.tab.cc: expect.yy
 	$(YACC) -d expect.yy
-	$(LEX) expect.l
-	g++ $(CPPFLAGS) $(CFLAGS) $(LDLIBS) lex.yy.c expect.tab.cc parsetree.cc -o $@
 
 clean:
-	rm -f $(PROGS) lex.yy.c lex.yy.cc y.tab.c y.tab.h *.o *.exe \
-		*.tab.cc *.tab.hh *.tab.c *.tab.h
+	rm -f $(PROGS) expect.c expect.tab.* *.o
+
+parsetree.o:: parsetree.cc expect.tab.hh
+exptree.o:: exptree.cc expect.tab.hh
+expect.o:: expect.tab.o
