@@ -19,6 +19,7 @@ letter	[A-Za-z_]
 [-+()=/*;:{},]									return *yytext;
 [ \t]                         
 \n															yylno++;
+\.\.\.													return ELLIPSIS;
 "path"													return PATH;
 "repeat"												return REPEAT;
 "reverse"												return REVERSE;
@@ -26,10 +27,11 @@ letter	[A-Za-z_]
 "task"													return TASK;
 "limit"													return LIMIT;
 "split"													return SPLIT;
-"thread"												return THREAD;
+"branch"												return BRANCH;
 "join"													return JOIN;
 "event"													return EVENT;
 "xor"														return XOR;
+"call"													return CALL;
 \${letter}({letter}|{digit})*		{ yylval.symbol = symbol_lookup(yytext); return STRINGVAR; }
 \@{letter}({letter}|{digit})* 	{ yylval.symbol = symbol_lookup(yytext); return PATHVAR; }
 {letter}({letter}|{digit})*			{ yylval.symbol = symbol_lookup(yytext); return IDENTIFIER; }

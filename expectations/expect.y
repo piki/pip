@@ -14,15 +14,17 @@
 %token REPEAT
 %token REVERSE
 %token JOIN
-%token THREAD
+%token BRANCH
 %token SPLIT
 %token XOR
+%token CALL
 // operations
 %token MESSAGE
 %token TASK
 %token EVENT
 %token LIMIT
 // tokens
+%token ELLIPSIS
 %token RANGE
 %token <sValue> STRING
 %token <sValue> REGEX
@@ -30,7 +32,9 @@
 %token <symbol> IDENTIFIER
 %token <symbol> STRINGVAR
 %token <symbol> PATHVAR
-%type <nPtr> pathdecl ident_list statement statement_list thread_list thread thread_set repeat limit_list limit range path_expr task string_expr event xor_list
+%type <nPtr> pathdecl ident_list statement statement_list thread_list thread
+%type <nPtr> thread_set repeat limit_list limit range path_expr task
+%type <nPtr> string_expr event xor_list xor
 
 %left '+' '-'
 %left '*' '/'
@@ -52,8 +56,7 @@ program:
 		;
 
 pathdecl:
-		PATH IDENTIFIER ':' ident_list ';'				{ $$ = opr(PATH, 2, id($2), $4); }
-		| PATH IDENTIFIER '{' statement_list '}'	{ $$ = opr(PATH, 2, id($2), $4); }
+		PATH IDENTIFIER '{' statement_list '}'	{ $$ = opr(PATH, 2, id($2), $4); }
 		;
 
 ident_list:
@@ -69,20 +72,25 @@ statement_list:
 statement:
 		REVERSE '(' path_expr ')' ';'							{ $$ = opr(REVERSE, 1, $3); }
 		| MESSAGE '(' ')' ';'											{ $$ = opr(MESSAGE, 0); }
+		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, $3); }
 		| event ';'
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
 		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
 		| string_expr
 		| path_expr
-		| SPLIT '{' thread_list '}' JOIN thread_set ';'		{ $$ = opr(SPLIT, 2, $3, $6); }
+		| SPLIT '{' thread_list '}' JOIN '(' thread_set ')' ';'		{ $$ = opr(SPLIT, 2, $3, $7); }
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
 		;
 
 xor_list:
-		'{' statement_list '}' xor_list						{ $$ = opr(',', 2, $2, $4); }
+		xor_list xor															{ $$ = opr(',', 2, $1, $2); }
 		|																					{ $$ = NULL; }
+		;
+
+xor:
+		BRANCH ':' statement_list									{	$$ = opr(BRANCH, 1, $3); }
 		;
 
 thread_list:
@@ -91,12 +99,12 @@ thread_list:
 		;
 
 thread:
-		THREAD IDENTIFIER statement								{	$$ = opr(THREAD, 2, id($2), $3); }
+		BRANCH IDENTIFIER ':' statement_list			{	$$ = opr(BRANCH, 2, id($2), $4); }
 		;
 
 thread_set:
-		'{' ident_list '}'												{ $$ = $2; }
-		| '{' INTEGER '}'													{ $$ = constant_int($2); }
+		ident_list
+		| INTEGER																	{ $$ = constant_int($1); }
 		;
 
 repeat:
@@ -114,9 +122,9 @@ limit:
 
 range:
 		'{' INTEGER '}'														{ $$ = opr(RANGE, 2, constant_int($2), constant_int($2)); }
-		| '{' INTEGER ',' INTEGER '}'							{ $$ = opr(RANGE, 2, constant_int($2), constant_int($4)); }
-		| '{' ',' INTEGER '}'											{ $$ = opr(RANGE, 2, constant_int(0),  constant_int($3)); }
-		| '{' INTEGER ',' '}'											{ $$ = opr(RANGE, 2, constant_int($2), constant_int(RANGE_INF)); }
+		| '{' INTEGER ELLIPSIS INTEGER '}'							{ $$ = opr(RANGE, 2, constant_int($2), constant_int($4)); }
+		| '{' ELLIPSIS INTEGER '}'											{ $$ = opr(RANGE, 2, constant_int(0),  constant_int($3)); }
+		| '{' INTEGER ELLIPSIS '}'											{ $$ = opr(RANGE, 2, constant_int($2), constant_int(RANGE_INF)); }
 		;
 
 path_expr:
