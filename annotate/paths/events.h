@@ -107,7 +107,7 @@ public:
 	Message(const char *buf);
 
 	IDBlock msgid;
-	int size;
+	int size, thread_id;
 };
 
 class MessageSend : public Message {

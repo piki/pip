@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <map>
 #include <string>
+#include <vector>
 #include "common.h"
 #include "events.h"
 #include <mysql/mysql.h>
@@ -26,8 +27,16 @@ struct ltIDBlock {
 };
 static MYSQL mysql;
 
-static void read_file(const char *fn, const std::string &table_tasks,
-		const std::string &table_notices, const std::string &table_threads);
+static void read_file(const char *fn);
+static void reconcile(Message *send, Message *recv, bool is_send, int thread_id, int path_id);
+static void check_unpaired_messages(void);
+
+static std::string table_tasks;
+static std::string table_notices;
+static std::string table_messages;
+static std::string table_threads;
+static std::string table_paths;
+static int errors = 0;
 
 int main(int argc, char **argv) {
 	if (argc < 3) {
@@ -35,9 +44,11 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	std::string base(argv[1]);
-	std::string table_tasks = base + "_tasks";
-	std::string table_notices = base + "_notices";
-	std::string table_threads = base + "_threads";
+	table_tasks = base + "_tasks";
+	table_notices = base + "_notices";
+	table_messages = base + "_messages";
+	table_threads = base + "_threads";
+	table_paths = base + "_paths";
 
 	mysql_init(&mysql);
 	if (!mysql_real_connect(&mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
@@ -53,23 +64,35 @@ int main(int argc, char **argv) {
 	run_sql("CREATE TABLE %s (thread_id int auto_increment primary key, "
 		"host varchar(255), prog varchar(255), pid int, tid int, ppid int, uid int, "
 		"start bigint, tz int)", table_threads.c_str());
+	run_sql("CREATE TABLE %s (pathid int, ts_send bigint, ts_recv bigint, "
+		"size int, thread_send int, thread_recv int)", table_messages.c_str());
+	run_sql("CREATE TABLE %s (pathid int, pathblob varchar(512))", table_paths.c_str());
 
 	for (int i=2; i<argc; i++)
-		read_file(argv[i], table_tasks, table_notices, table_threads);
+		read_file(argv[i]);
 
 	mysql_close(&mysql);
-	return 0;
+
+	check_unpaired_messages();
+	printf("There were %d error%s\n", errors, errors==1?"":"s");
+	return errors > 0;
 }
 
+typedef std::map<IDBlock, Message*, ltIDBlock> MessageMap;
 static std::map<IDBlock, int, ltIDBlock> path_ids;
+static MessageMap sends;
+static MessageMap receives;
 static int next_id = 1;
-static void read_file(const char *fn, const std::string &table_tasks,
-		const std::string &table_notices, const std::string &table_threads) {
+static void read_file(const char *fn) {
+	fprintf(stderr, "Reading %s\n", fn);
 	FILE *fp = fopen(fn, "r");
 	if (!fp) { perror(fn); return; }
 
 	int thread_id = -1;
-	std::map<int, std::map<const char *, Event *, ltstr> > start_event;
+	typedef std::vector<Event *> EventList;
+	typedef std::map<const char *, EventList, ltstr> NameEventMap;
+	typedef std::map<int, NameEventMap> PathNameEventMap;
+	PathNameEventMap start_task;
 	Event *e = read_event(fp);
 	int current_id = -1;
 	while (e) {
@@ -83,14 +106,25 @@ static void read_file(const char *fn, const std::string &table_tasks,
 				}
 				delete e;
 				break;
-			case EV_START_TASK:
-				start_event[current_id][((Task*)e)->name] = e;
+			case EV_START_TASK:{
+				assert(thread_id != -1);
+				EventList *evl = &start_task[current_id][((Task*)e)->name];
+				evl->push_back(e);
 				break;
+				}
 			case EV_END_TASK:{
 					assert(thread_id != -1);
 					Task *end = (Task*)e;
-					Task *start = (Task*)start_event[current_id][end->name];
-					assert(start != NULL);
+					EventList *evl = &start_task[current_id][end->name];
+					if (evl == NULL || evl->empty()) {
+						fprintf(stderr, "start not found for...\n  ");
+						e->print(stderr);
+						abort();
+					}
+					Task *start = (Task*)evl->back();
+					evl->pop_back();
+					if (evl->empty()) 
+						start_task[current_id].erase(start->name);
 					run_sql("INSERT INTO %s VALUES "
 						"(%d, \"%s\", %lld, %lld, %ld, %ld, %d, %d, %d, %d, %d)",
 						table_tasks.c_str(), current_id, end->name,
@@ -102,8 +136,6 @@ static void read_file(const char *fn, const std::string &table_tasks,
 						end->vol_cs - start->vol_cs,
 						end->invol_cs - start->invol_cs,
 						thread_id);
-					start_event[current_id].erase(start->name);
-					//!! delete path_ids for it, too
 					delete start;
 				}
 				delete e;
@@ -112,15 +144,15 @@ static void read_file(const char *fn, const std::string &table_tasks,
 				//e->print();
 				if (path_ids.count(((NewPathID*)e)->path_id) == 0) {
 					current_id = path_ids[((NewPathID*)e)->path_id] = next_id++;
+					run_sql("INSERT INTO %s VALUES (%d, '%s')",
+						table_paths.c_str(), current_id, ((NewPathID*)e)->path_id.to_string());
 				}
 				else
 					current_id = path_ids[((NewPathID*)e)->path_id];
-				printf("%s -> %d\n",
-					((NewPathID*)e)->path_id.to_string(), current_id);
 				delete e;
 				break;
 			case EV_END_PATH_ID:
-				e->print();
+				//e->print();
 				delete e;
 				break;
 			case EV_NOTICE:
@@ -131,12 +163,10 @@ static void read_file(const char *fn, const std::string &table_tasks,
 				delete e;
 				break;
 			case EV_SEND:
-				e->print();
-				delete e;
+				reconcile((Message*)e, receives.find(((Message*)e)->msgid)->second, true, thread_id, current_id);
 				break;
 			case EV_RECV:
-				e->print();
-				delete e;
+				reconcile(sends.find(((Message*)e)->msgid)->second, (Message*)e, false, thread_id, current_id);
 				break;
 			default:
 				fprintf(stderr, "Invalid event type: %d\n", e->type());
@@ -145,7 +175,30 @@ static void read_file(const char *fn, const std::string &table_tasks,
 		e = read_event(fp);
 	}
 
-	// !! print all starts and sends left in the hash table
+	// print all starts, sends, and receives left in the hash tables
+	for (PathNameEventMap::const_iterator pathp=start_task.begin(); pathp!=start_task.end(); pathp++)
+		for (NameEventMap::const_iterator namep=pathp->second.begin(); namep!=pathp->second.end(); namep++)
+			for (EventList::const_iterator eventp=namep->second.begin(); eventp!=namep->second.end(); eventp++) {
+				fprintf(stderr, "Unmatched task start: ");
+				(*eventp)->print(stderr);
+				errors++;
+			}
+}
+
+static void check_unpaired_messages() {
+	MessageMap::const_iterator msgp;
+	fprintf(stderr, "Unmatched send count = %d\n", sends.size());
+	for (msgp=sends.begin(); msgp!=sends.end(); msgp++) {
+		fprintf(stderr, "Unmatched send: ");
+		msgp->second->print(stderr);
+		errors++;
+	}
+	fprintf(stderr, "Unmatched recv count = %d\n", receives.size());
+	for (msgp=receives.begin(); msgp!=receives.end(); msgp++) {
+		fprintf(stderr, "Unmatched recv: ");
+		msgp->second->print(stderr);
+		errors++;
+	}
 }
 
 static void run_sql(const char *fmt, ...) {
@@ -158,5 +211,41 @@ static void run_sql(const char *fmt, ...) {
 		printf("Database error:\n");
 		printf("  QUERY: \"%s\"\n", query);
 		printf("  MySQL error: \"%s\"\n", mysql_error(&mysql));
+	}
+}
+
+static void reconcile(Message *send, Message *recv, bool is_send, int thread_id, int path_id) {
+	assert(thread_id != -1);
+	if (is_send)
+		send->thread_id = thread_id;
+	else
+		recv->thread_id = thread_id;
+	if (send && recv) {
+		if (send->size != recv->size) {
+			fprintf(stderr, "packet size mismatch:\n  "); send->print(stderr);
+			fprintf(stderr, "  "); recv->print(stderr);
+			//abort();
+			errors++;
+		}
+		run_sql("INSERT INTO %s VALUES (%d, %lld, %lld, %d, %d, %d)",
+			table_messages.c_str(), path_id, ts(send->tv), ts(recv->tv),
+			send->size, send->thread_id, recv->thread_id);
+		if (is_send)
+			receives.erase(recv->msgid);
+		else
+			sends.erase(send->msgid);
+		delete recv;
+		delete send;
+	}
+	else {
+		MessageMap &table = is_send ? sends : receives;
+		Message *msg = is_send ? send : recv;
+		if (table[msg->msgid] != NULL) {
+			fprintf(stderr, "Reused message id:\n  OLD: "); table[msg->msgid]->print(stderr);
+			fprintf(stderr, "  NEW: "); msg->print(stderr);
+			//abort();
+			errors++;
+		}
+		table[msg->msgid] = msg;
 	}
 }

@@ -49,7 +49,7 @@ Header::~Header(void) {
 	delete[] processname;
 }
 void Header::print(FILE *fp) {
-	printf("HEADER: magic=%x version=%d host=\"%s\" tv=%ld.%06ld tz=%d "
+	fprintf(fp, "HEADER: magic=%x version=%d host=\"%s\" tv=%ld.%06ld tz=%d "
 		"pid=%d tid=%d ppid=%d uid=%d process=\"%s\"\n", magic, version,
 		hostname, tv.tv_sec, tv.tv_usec, tz, pid, tid, ppid, uid, processname);
 }
@@ -72,14 +72,14 @@ Task::Task(const char *buf) : ResourceMark(buf) {
 Task::~Task(void) { delete[] name; }
 
 void StartTask::print(FILE *fp) {
-	printf("START_TASK: name=\"%s\" tv=%ld.%06ld utime=%ld.%06ld "
+	fprintf(fp, "START_TASK: name=\"%s\" tv=%ld.%06ld utime=%ld.%06ld "
 		"stime=%ld.%06ld minflt=%d majflt=%d vcs=%d ivcs=%d\n",
 		name, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
 }
 
 void EndTask::print(FILE *fp) {
-	printf("END_TASK: name=\"%s\" tv=%ld.%06ld utime=%ld.%06ld "
+	fprintf(fp, "END_TASK: name=\"%s\" tv=%ld.%06ld utime=%ld.%06ld "
 		"stime=%ld.%06ld minflt=%d majflt=%d vcs=%d ivcs=%d\n",
 		name, tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
@@ -93,7 +93,7 @@ NewPathID::NewPathID(const char *buf) : ResourceMark(buf) {
 	delete[] idbuf;
 }
 void NewPathID::print(FILE *fp) {
-	printf("NEW_PATH_ID: path_id=%s tv=%ld.%06ld utime=%ld.%06ld "
+	fprintf(fp, "NEW_PATH_ID: path_id=%s tv=%ld.%06ld utime=%ld.%06ld "
 		"stime=%ld.%06ld minflt=%d majflt=%d vcs=%d ivcs=%d\n",
 		path_id.to_string(), tv.tv_sec, tv.tv_usec, utime.tv_sec, utime.tv_usec,
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
@@ -110,7 +110,7 @@ EndPathID::EndPathID(const char *buf) {
 	delete[] idbuf;
 }
 void EndPathID::print(FILE *fp) {
-	printf("END_PATH_ID: path_id=%s tv=%ld.%06ld\n",
+	fprintf(fp, "END_PATH_ID: path_id=%s tv=%ld.%06ld\n",
 		path_id.to_string(), tv.tv_sec, tv.tv_usec);
 }
 
@@ -122,7 +122,7 @@ Notice::Notice(const char *buf) {
 }
 Notice::~Notice(void) { delete[] str; }
 void Notice::print(FILE *fp) {
-	printf("NOTICE: tv=%ld.%06ld str=\"%s\"\n",
+	fprintf(fp, "NOTICE: tv=%ld.%06ld str=\"%s\"\n",
 		tv.tv_sec, tv.tv_usec, str);
 }
 
@@ -139,13 +139,13 @@ Message::Message(const char *buf) {
 }
 
 void MessageSend::print(FILE *fp) {
-	printf("SEND: msg_id=%s size=%d tv=%ld.%06ld\n",
-		msgid.to_string(), size, tv.tv_sec, tv.tv_usec);
+	fprintf(fp, "SEND: msg_id=%s size=%d tv=%ld.%06ld thread_id=%d\n",
+		msgid.to_string(), size, tv.tv_sec, tv.tv_usec, thread_id);
 }
 
 void MessageRecv::print(FILE *fp) {
-	printf("RECV: msg_id=%s size=%d tv=%ld.%06ld\n",
-		msgid.to_string(), size, tv.tv_sec, tv.tv_usec);
+	fprintf(fp, "RECV: msg_id=%s size=%d tv=%ld.%06ld thread_id=%d\n",
+		msgid.to_string(), size, tv.tv_sec, tv.tv_usec, thread_id);
 }
 
 static int readblock(FILE *_fp, char *buf) {
