@@ -68,6 +68,7 @@ public:
 
 	PathEventList *dest;
 	PathMessageRecv *pred;   // closest predecessor in current thread
+	PathMessageRecv *recv;
 	timeval ts_send;
 	int size, thread_send;
 };
@@ -103,6 +104,7 @@ public:
 		send = new PathMessageSend(row);
 		recv = new PathMessageRecv(row);
 		recv->send = send;
+		send->recv = recv;
 	}
 	PathMessageSend *send;
 	PathMessageRecv *recv;
@@ -113,28 +115,26 @@ public:
 	Path(void);
 	~Path(void);
 	// !! thread can start/end in different threads
-	void insert(PathTask *pt) { insert_task(pt, children_map[pt->thread_start]); }
-	void insert(PathNotice *pn) { insert_event(pn, children_map[pn->thread_id]); }
+	void insert(PathTask *pt) { insert_task(pt, children[pt->thread_start]); }
+	void insert(PathNotice *pn) { insert_event(pn, children[pn->thread_id]); }
 	void insert(PathMessage *pm) {
-		insert_event(pm->send, children_map[pm->send->thread_send]);
-		insert_event(pm->recv, children_map[pm->recv->thread_recv]);
-		pm->send->dest = &children_map[pm->recv->thread_recv];
+		insert_event(pm->send, children[pm->send->thread_send]);
+		insert_event(pm->recv, children[pm->recv->thread_recv]);
+		pm->send->dest = &children[pm->recv->thread_recv];
 		delete pm;  // does not delete its children
 	}
 	void print(FILE *fp = stdout) const;
 	void done_inserting(void);
 
-	PathEventList children;
-
+	std::map<int,PathEventList> children;
 	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
 	timeval ts_start, ts_end;
 	int size, path_id;
+	int root_thread;
 private:
 	void insert_task(PathTask *pt, PathEventList &where);
 	void insert_event(PathEvent *pn, PathEventList &where);  // notices, msg-send, msg-recv
-	void tally(const PathEventList *list, bool toplevel);
-
-	std::map<int,PathEventList> children_map;
+	void tally(const PathEventList &list, bool toplevel);
 };
 
 extern std::map<int, PathThread*> threads;

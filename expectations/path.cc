@@ -85,8 +85,8 @@ void PathMessageSend::print(FILE *fp, int depth) const {
 	}
 	//fprintf(fp, "r%x -> s%x;\n", (int)pred, (int)this);
 #else
-	fprintf(fp, "%*s<message_send size=%d thread=%d ts=\"%ld.%06ld\" addr=\"%p\"/>\n",
-		depth*2, "", size, thread_send, ts_send.tv_sec, ts_send.tv_usec, this);
+	fprintf(fp, "%*s<message_send size=\"%d\" send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" addr=\"%p\"/>\n",
+		depth*2, "", size, thread_send, recv->thread_recv, ts_send.tv_sec, ts_send.tv_usec, this);
 #endif
 }
 
@@ -110,8 +110,8 @@ void PathMessageRecv::print(FILE *fp, int depth) const {
 	else
 		fprintf(fp, "s%x -> r%x;\n", (int)send, (int)this);
 #else
-	fprintf(fp, "%*s<message_recv thread=%d ts=\"%ld.%06ld\" send=\"%p\" />\n",
-		depth*2, "", thread_recv, ts_recv.tv_sec, ts_recv.tv_usec, send);
+	fprintf(fp, "%*s<message_recv send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" send=\"%p\" />\n",
+		depth*2, "", send->thread_send, thread_recv, ts_recv.tv_sec, ts_recv.tv_usec, send);
 #endif
 }
 
@@ -128,20 +128,22 @@ PathThread::PathThread(const MYSQL_ROW &row) {
 }
 
 void PathThread::print(FILE *fp, int depth) const {
-	fprintf(fp, "%*s<thread id=%d host=\"%s\" prog=\"%s\" pid=%d tid=%d ppid=%d "
-		"uid=%d start=\"%ld.%06ld\" tz=%d />\n", thread_id, host.c_str(),
+	fprintf(fp, "%*s<thread id=\"%d\" host=\"%s\" prog=\"%s\" pid=\"%d\" tid=\"%d\" ppid=\"%d\" "
+		"uid=\"%d\" start=\"%ld.%06ld\" tz=\"%d\" />\n", thread_id, host.c_str(),
 		prog.c_str(), pid, tid, ppid, uid, start.tv_sec, start.tv_usec, tz);
 }
 
 Path::Path(void) : utime(0), stime(0), major_fault(0), minor_fault(0),
-		vol_cs(0), invol_cs(0), size(0) {
+		vol_cs(0), invol_cs(0), size(0), root_thread(-1) {
 	ts_start.tv_sec = ts_start.tv_usec = 0;
 	ts_end.tv_sec = ts_end.tv_usec = 0;
 }
 
 Path::~Path(void) {
-	for (unsigned int i=0; i<children.size(); i++)
-		delete children[i];
+	std::map<int,PathEventList>::const_iterator thread;
+	for (thread=children.begin(); thread!=children.end(); thread++)
+		for (unsigned int i=0; i<thread->second.size(); i++)
+			delete thread->second[i];
 }
 
 enum OverlapType { OV_BEFORE, OV_START, OV_WITHIN, OV_END, OV_AFTER, OV_SPAN, OV_INVALID };
@@ -224,14 +226,19 @@ void Path::insert_event(PathEvent *pe, std::vector<PathEvent *> &where) {
 void Path::print(FILE *fp) const {
 #ifdef PRINT_DOT
 	fprintf(fp, "digraph foo {\n");
-	for (std::map<int,PathEventList>::const_iterator list=children_map.begin(); list!=children_map.end(); list++) {
+	for (std::map<int,PathEventList>::const_iterator list=children.begin(); list!=children.end(); list++) {
 		for (unsigned int i=0; i<list->second.size(); i++)
-			list->second[i]->print(fp, 0);
+			list->second[i]->print(fp, 1);
 	}
 	fprintf(fp, "}\n");
 #else
-	for (unsigned int i=0; i<children.size(); i++)
-		children[i]->print(fp, 0);
+	for (std::map<int,PathEventList>::const_iterator list=children.begin(); list!=children.end(); list++) {
+		fprintf(fp, "<thread id=\"%d\"%s>\n",
+			list->first, list->first == root_thread ? " root=\"true\"" : "");
+		for (unsigned int i=0; i<list->second.size(); i++)
+			list->second[i]->print(fp, 1);
+		fprintf(fp, "</thread>\n", list->first);
+	}
 #endif
 }
 
@@ -320,10 +327,10 @@ static void check_order(const PathEventList &list) {
 void Path::done_inserting(void) {
 	std::map<int,PathEventList>::iterator thread;
 
-	assert(children_map.size() > 0);
+	assert(children.size() > 0);
 
 	//fprintf(stderr, "Checking Path %d\n", path_id);
-	for (thread=children_map.begin(); thread!=children_map.end(); thread++) {
+	for (thread=children.begin(); thread!=children.end(); thread++) {
 		//fprintf(stderr, "  Checking Thread %d\n", thread->first);
 		//for (unsigned int i=0; i<thread->second.size(); i++)
 			//thread->second[i]->print(stderr, 2);
@@ -332,19 +339,19 @@ void Path::done_inserting(void) {
 
 	// Can the DAG be connected?  Either all threads must have message
 	// events, or there must be exactly one thread.
-	if (children_map.size() > 1) {
-		for (thread=children_map.begin(); thread!=children_map.end(); thread++) {
+	if (children.size() > 1) {
+		for (thread=children.begin(); thread!=children.end(); thread++) {
 			int msg_count = count_messages(thread->second);
 			assert(msg_count != 0);
 		}
 
 		// set all PathMessageSend.pred fields
-		for (thread=children_map.begin(); thread!=children_map.end(); thread++)
+		for (thread=children.begin(); thread!=children.end(); thread++)
 			set_message_predecessors(thread->second, NULL);
 
 		// find the root -- the only send without a predecessor
 		PathMessageSend *root = NULL;
-		for (thread=children_map.begin(); thread!=children_map.end(); thread++) {
+		for (thread=children.begin(); thread!=children.end(); thread++) {
 			PathEvent *ev = first_message(thread->second);
 			if (ev->type() == PEV_MESSAGE_SEND) {
 				if (root != NULL) {
@@ -359,36 +366,28 @@ void Path::done_inserting(void) {
 			}
 		}
 		assert(root != NULL);
+		root_thread = root->thread_send;
 		//PathThread *root_thread = threads[((PathMessageSend*)ev)->thread_send];
 
 		// !! make sure the DAG is connected -- do we touch all events?
 		//
 		// Hmmm, I think this is implied by finding a unique root.
 
-#ifndef PRINT_DOT
-		children.swap(children_map[root->thread_send]);
 	}
 	else
-		children.swap(children_map.begin()->second);
-	children_map.clear();
-#else
-	}
-#endif
+		root_thread = children.begin()->first;
 
-#if 0
-kludge:
-	children.swap(children_map.begin()->second);
-	children_map.clear();
-#endif
-	if (children.size() == 0) return;
-	ts_start = children[0]->start();
-	ts_end = children[children.size()-1]->end();
-	tally(&children, true);
+	assert(children.begin()->second.size() > 0);
+	ts_start = children.begin()->second[0]->start();
+	ts_end = children.begin()->second[children.begin()->second.size()-1]->end();
+
+	for (thread=children.begin(); thread!=children.end(); thread++)
+		tally(thread->second, true);
 }
 
-void Path::tally(const PathEventList *list, bool toplevel) {
-	for (unsigned int i=0; i<list->size(); i++) {
-		const PathEvent *ev = (*list)[i];
+void Path::tally(const PathEventList &list, bool toplevel) {
+	for (unsigned int i=0; i<list.size(); i++) {
+		const PathEvent *ev = list[i];
 		switch (ev->type()) {
 			case PEV_TASK:
 				// Clocks are still running for the parent, so don't add the
@@ -401,7 +400,7 @@ void Path::tally(const PathEventList *list, bool toplevel) {
 					vol_cs += ((PathTask*)ev)->vol_cs;
 					invol_cs += ((PathTask*)ev)->invol_cs;
 				}
-				tally(&((PathTask*)ev)->children, false);
+				tally(((PathTask*)ev)->children, false);
 				break;
 			case PEV_NOTICE:
 				break;

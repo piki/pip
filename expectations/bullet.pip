@@ -1,0 +1,34 @@
+validator SendFail {
+	repeat between 1 and 100 {
+		notice(m/^Could not send/, *);
+	}
+}
+
+validator RequestMore {
+	task("request more", *);
+}
+
+validator Join3 {
+	task("join", *) {
+		message();
+		message();
+		message();
+	}
+}
+validator Join4 {
+	task("join", *) {
+		message();
+		message();
+		message();
+		message();
+	}
+}
+validator Join5 {
+	task("join", *) {
+		message();
+		message();
+		message();
+		message();
+		message();
+	}
+}

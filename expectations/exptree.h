@@ -9,6 +9,8 @@
 #include "parsetree.h"
 #include "path.h"
 
+enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_CALL };
+
 class Match {
 public:
 	Match(bool _negate) : negate(_negate) {}
@@ -60,6 +62,7 @@ class Limit {
 public:
 	enum Metric { REAL_TIME=0, UTIME, STIME, CPU_TIME, MAJOR_FAULTS,
 		MINOR_FAULTS, VOL_CS, INVOL_CS, LATENCY, SIZE, LAST };
+	static Metric metric_by_name(const std::string &name);
 
 	Limit(const OperatorNode *onode);
 	void print(FILE *fp, int depth) const;
@@ -73,13 +76,11 @@ private:
 };
 typedef std::vector<Limit*> LimitList;
 
-class ExpNotice;
-class ExpMessage;
-
 class ExpEvent {
 public:
 	virtual ~ExpEvent(void) {}
 	virtual void print(FILE *fp, int depth) const = 0;
+	virtual ExpEventType type(void) const = 0;
 
 	// checks to see if this Event can match 0 or more path events, starting
 	// at offset "ofs."  If yes, returns the number matched.  If no, returns
@@ -90,12 +91,14 @@ public:
 			bool *resources) const = 0;
 };
 typedef std::vector<ExpEvent*> ExpEventList;
+typedef std::vector<ExpEventList> ExpThreadSet;
 
 class ExpTask : public ExpEvent {
 public:
-	ExpTask(const OperatorNode *onode);
+	ExpTask(const OperatorNode *onode, ExpThreadSet &threads);
 	virtual ~ExpTask(void);
 	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_TASK; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
 
@@ -109,27 +112,41 @@ public:
 	ExpNotice(const OperatorNode *onode);
 	virtual ~ExpNotice(void) { delete name; delete host; }
 	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_NOTICE; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
 
 	Match *name, *host;
 };
 
-class ExpMessage : public ExpEvent {
+class ExpMessageSend : public ExpEvent {
 public:
-	virtual ~ExpMessage(void);
+	ExpMessageSend(const OperatorNode *onode, int _id);
+	virtual ~ExpMessageSend(void);
 	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_MESSAGE_SEND; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
-	ExpTask *recip;
 	LimitList limits;
+	int id;
+};
+
+class ExpMessageRecv : public ExpEvent {
+public:
+	ExpMessageRecv(const OperatorNode *onode, int _id);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_MESSAGE_RECV; }
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
+	int id;
 };
 
 class ExpRepeat : public ExpEvent {
 public:
-	ExpRepeat(const OperatorNode *onode);
+	ExpRepeat(const OperatorNode *onode, ExpThreadSet &threads);
 	virtual ~ExpRepeat(void);
 	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_REPEAT; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
 
@@ -139,9 +156,10 @@ public:
 
 class ExpXor : public ExpEvent {
 public:
-	ExpXor(const OperatorNode *onode);
+	ExpXor(const OperatorNode *onode, ExpThreadSet &threads);
 	virtual ~ExpXor(void);
 	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_XOR; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
 
@@ -152,6 +170,7 @@ class ExpCall : public ExpEvent {
 public:
 	ExpCall(const OperatorNode *onode);
 	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_CALL; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
 
@@ -160,18 +179,22 @@ public:
 
 class Recognizer {
 public:
-	Recognizer(const Node *node);
+	Recognizer(const IdentifierNode *ident, const ListNode *statements, bool _complete, bool _validating);
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
-	bool check(const Path *path, bool *resources) const;
-	int check(const PathEventList &test, int ofs, bool *resources) const;
+	bool check(const Path *path, bool *resources);
 	static int check(const PathEventList &test, const ExpEventList &list, int ofs,
 			bool *resources);
 
-	Symbol *name;
-	ExpEventList children;
+	std::string name;
+	ExpThreadSet threads;
 	LimitList limits;
-	bool complete;  /* match full paths (true) or fragments (false) */
+	bool complete;    // match full paths (true) or fragments (false)
+	bool validating;  // classify matched paths as valid?
+
+	int instances, unique;
+	Counter real_time, utime, stime, cpu_time, major_fault, minor_fault;
+	Counter	vol_cs, invol_cs, size;
 };
 
 #endif

@@ -94,6 +94,7 @@ class UnitsNode : public Node {
 public:
 	UnitsNode(float _amt, const char *_name);
 	inline NodeType type(void) const { return NODE_UNITS; }
+	const char *name(void) const;
 	float amt;
 	UnitType unit;
 };
@@ -109,13 +110,15 @@ private:
 	std::vector<Node*> data;
 };
 
-const char *get_op_name(int op);
-void print_tree(const Node *node, int depth);
-void add_recognizer(const Node *node);
-void add_aggregate(Node *node);
-
 class Recognizer;
 class Aggregate;
+
+const char *get_op_name(int op);
+void print_assert(FILE *fp, const Node *node);
+void print_tree(const Node *node, int depth);
+void add_recognizer(Recognizer *r);
+void add_aggregate(Aggregate *a);
+
 extern std::map<std::string, Recognizer*> recognizers;
 extern std::vector<Aggregate*> aggregates;
 extern bool expect_parse(const char *filename);

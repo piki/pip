@@ -1,5 +1,7 @@
 %{
 #include "parsetree.h"
+#include "aggregates.h"
+#include "exptree.h"
 %}
 %union {
 	int iValue;
@@ -10,7 +12,8 @@
 };
 
 // keywords
-%token EXPECTATION
+%token VALIDATOR
+%token RECOGNIZER
 %token FRAGMENT
 %token REPEAT
 %token REVERSE
@@ -42,6 +45,7 @@
 // operations
 %token MESSAGE
 %token TASK
+%token THREAD
 %token NOTICE
 %token LIMIT
 // tokens
@@ -54,10 +58,10 @@
 %token <sValue> STRINGVAR
 %token <sValue> PATHVAR
 %type <nList> branch_list limit_list statement_list thread_list xor_list
-%type <nPtr> pathdecl statement thread
-%type <nPtr> branch_set repeat limit limit_range repeat_range path_expr
+%type <nPtr> statement thread
+%type <nPtr> branch_set repeat limit limit_range limit_spec repeat_range path_expr
 %type <nPtr> string_expr event xor task assert assertdecl bool_expr
-%type <nPtr> int_expr window float_expr string_literal unit_qty count_range
+%type <nPtr> int_expr float_expr window string_literal unit_qty count_range
 
 %left B_AND B_OR IMPLIES
 %left '<' '>' LE GE EQ NE
@@ -78,14 +82,28 @@ bool yy_success = true;
 %%
 
 program:
-		program pathdecl													{ if (yy_success) { add_recognizer($2); } delete $2; }
-		| program assertdecl											{ if (yy_success) { add_aggregate($2); } }
+		program pathdecl
+		| program assertdecl											{ if ($2) add_aggregate(new Aggregate($2)); }
 		|
 		;
 
 pathdecl:
-		EXPECTATION IDENTIFIER '{' statement_list '}'	{ $$ = opr(EXPECTATION, 2, idcge($2,RECOGNIZER), $4); }
-		| FRAGMENT IDENTIFIER '{' statement_list '}'	{ $$ = opr(FRAGMENT, 2, idcge($2,RECOGNIZER), $4); }
+		VALIDATOR IDENTIFIER '{' statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, true, true));
+			delete $4;
+		}
+		| RECOGNIZER IDENTIFIER '{' statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, true, false));
+			delete $4;
+		}
+		| FRAGMENT VALIDATOR IDENTIFIER '{' statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, false, true));
+			delete $5;
+		}
+		| FRAGMENT RECOGNIZER IDENTIFIER '{' statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, false, false));
+			delete $5;
+		}
 		;
 
 branch_list:
@@ -105,6 +123,8 @@ statement:
 		| event ';'
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
 		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
+		| THREAD ';'															{ $$ = opr(THREAD, 1, NULL); }
+		| THREAD '{' statement_list '}'						{ $$ = opr(THREAD, 1, $3); }
 		| string_expr
 		| path_expr
 		| SPLIT '{' thread_list '}' JOIN '(' ANY branch_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $8); }
@@ -148,12 +168,16 @@ limit_list:
 		;
 
 limit:
-		LIMIT '(' IDENTIFIER ',' limit_range ')'	{ $$ = opr(LIMIT, 2, idcg($3,METRIC), $5); }
+		LIMIT '(' IDENTIFIER ',' limit_spec ')'	{ $$ = opr(LIMIT, 2, idcg($3,METRIC), $5); }
+		;
+
+limit_spec:
+		limit_range
+		| unit_qty																{ $$ = opr(RANGE, 2, new UnitsNode(0, NULL), $1); }
 		;
 
 limit_range:
-		unit_qty																	{ $$ = opr(RANGE, 2, new UnitsNode(0, NULL), $1); }
-		| '{' unit_qty ',' unit_qty '}'						{ $$ = opr(RANGE, 2, $2, $4); }
+		'{' unit_qty ',' unit_qty '}'							{ $$ = opr(RANGE, 2, $2, $4); }
 		| '{' unit_qty '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
 		;
 
@@ -163,10 +187,16 @@ count_range:
 		;
 
 unit_qty:
-		INTEGER																		{ $$ = new UnitsNode($1, NULL); }
-		| FLOAT																		{ $$ = new UnitsNode($1, NULL); }
-		| INTEGER IDENTIFIER											{ $$ = new UnitsNode($1, $2); }
-		| FLOAT IDENTIFIER												{ $$ = new UnitsNode($1, $2); }
+		INTEGER IDENTIFIER																{ $$ = new UnitsNode($1, $2); }
+		| FLOAT IDENTIFIER																{ $$ = new UnitsNode($1, $2); }
+		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), $5); }
+		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, idcg($3,METRIC), $5); }
+		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, idcg($3,METRIC), $5); }
+		| F_MIN '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MIN, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| F_MIN '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MIN, 2, idcg($3,METRIC), $5); }
 		;
 
 repeat_range:
@@ -212,7 +242,7 @@ window:
 		;
 
 assert:
-		ASSERT '(' bool_expr ')'									{ $$ = opr(ASSERT, 1, $3); }
+		ASSERT '(' bool_expr ')' ';'							{ $$ = opr(ASSERT, 1, $3); }
 		;
 
 bool_expr:
@@ -221,7 +251,20 @@ bool_expr:
 		| bool_expr IMPLIES bool_expr							{ $$ = opr(IMPLIES, 2, $1, $3); }
 		| '!' bool_expr														{ $$ = opr('!', 1, $2); }
 		| '(' bool_expr ')'												{ $$ = $2; }
-		| float_expr IN count_range								{ $$ = opr(IN, 2, $1, $3); }
+		| int_expr IN count_range									{ $$ = opr(IN, 2, $1, $3); }
+		| int_expr '<' int_expr										{ $$ = opr('<', 2, $1, $3); }
+		| int_expr '>' int_expr										{ $$ = opr('>', 2, $1, $3); }
+		| int_expr LE int_expr										{ $$ = opr(LE, 2, $1, $3); }
+		| int_expr GE int_expr										{ $$ = opr(GE, 2, $1, $3); }
+		| int_expr EQ int_expr										{ $$ = opr(EQ, 2, $1, $3); }
+		| int_expr NE int_expr										{ $$ = opr(NE, 2, $1, $3); }
+		| unit_qty IN limit_range									{ $$ = opr(IN, 2, $1, $3); }
+		| unit_qty '<' unit_qty										{ $$ = opr('<', 2, $1, $3); }
+		| unit_qty '>' unit_qty										{ $$ = opr('>', 2, $1, $3); }
+		| unit_qty LE unit_qty										{ $$ = opr(LE, 2, $1, $3); }
+		| unit_qty GE unit_qty										{ $$ = opr(GE, 2, $1, $3); }
+		| unit_qty EQ unit_qty										{ $$ = opr(EQ, 2, $1, $3); }
+		| unit_qty NE unit_qty										{ $$ = opr(NE, 2, $1, $3); }
 		| float_expr '<' float_expr								{ $$ = opr('<', 2, $1, $3); }
 		| float_expr '>' float_expr								{ $$ = opr('>', 2, $1, $3); }
 		| float_expr LE float_expr								{ $$ = opr(LE, 2, $1, $3); }
@@ -230,24 +273,24 @@ bool_expr:
 		| float_expr NE float_expr								{ $$ = opr(NE, 2, $1, $3); }
 		;
 
-float_expr:
-		int_expr
-		| FLOAT																						{ $$ = new FloatNode($1); }
-		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
-		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), $5); }
-		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
-		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, idcg($3,METRIC), $5); }
-		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
-		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, idcg($3,METRIC), $5); }
-		| F_MIN '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MIN, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
-		| F_MIN '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MIN, 2, idcg($3,METRIC), $5); }
-		;
-
 int_expr:
 		INTEGER																		{ $$ = new IntNode($1); }
 		| INSTANCES '(' IDENTIFIER ')'						{ $$ = opr(INSTANCES, 1, idf($3,RECOGNIZER)); }
 		| UNIQUE '(' IDENTIFIER ')'								{ $$ = opr(UNIQUE, 1, idf($3,RECOGNIZER)); }
 		| UNIQUE '(' STRINGVAR ')'								{ $$ = opr(UNIQUE, 1, idf($3,STRING_VAR)); }
+		| int_expr '*' int_expr										{ $$ = opr('*', 2, $1, $3); }
+		| int_expr '+' int_expr										{ $$ = opr('+', 2, $1, $3); }
+		| int_expr '-' int_expr										{ $$ = opr('-', 2, $1, $3); }
+		;
+
+float_expr:
+		FLOAT																			{ $$ = new FloatNode($1); }
+		| int_expr '/' int_expr										{ $$ = opr('/', 2, $1, $3); }
+		| unit_qty '/' unit_qty										{ $$ = opr('/', 2, $1, $3); }
+		| float_expr '/' float_expr								{ $$ = opr('/', 2, $1, $3); }
+		| float_expr '*' float_expr								{ $$ = opr('*', 2, $1, $3); }
+		| float_expr '-' float_expr								{ $$ = opr('-', 2, $1, $3); }
+		| float_expr '+' float_expr								{ $$ = opr('+', 2, $1, $3); }
 		;
 
 %%

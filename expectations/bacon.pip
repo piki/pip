@@ -1,0 +1,71 @@
+recognizer SPSub {
+	xor {
+		branch:   // cache miss
+			notice("cache miss", *);
+			task("shortest path", *) limit(CPU_TIME, 1.0s);
+		branch:   // cache hit
+			notice("cache hit", *);
+		branch:   // actor not found
+	}
+}
+
+validator Init {
+	task("reading database", $where = *);
+	task("jump tables", $where);
+}
+
+validator Link {
+	task("link", *) {
+		message();
+		task("link", $where = *) {
+			repeat between 0 and 2 {
+				task("fuzzy find", $where) limit(CPU_TIME, 400ms);
+			}
+			call(SPSub);
+		}
+		message();
+	}
+}
+
+validator Center {
+	task("center", $where = *) {
+		message();
+		task("center", $where = *) {
+			repeat between 0 and 2 {
+				task("fuzzy find", $where);
+			}
+			call(SPSub);
+		}
+		message();
+	}
+}
+
+validator ShowCache {
+	task("show cache", *) {
+		message();
+		task("show cache", *);
+		message();
+	}
+}
+
+validator ByNumber {
+	limit(REAL_TIME, 0.2s);
+	task("by number", $where = *) {
+		message();
+		task("by number", $where = *) {
+			repeat between 0 and 1 {
+				task("fuzzy find", $where);
+			}
+			call(SPSub);
+		}
+		message();
+	}
+}
+
+fragment recognizer CacheHit { notice("cache hit", *); }
+fragment recognizer CacheMiss { notice("cache miss", *); }
+
+assert(instances(Init) == 1 );
+assert(instances(ShowCache) <= 20);
+assert(average(CPU_TIME, Center) < 600ms);
+assert(instances(CacheHit) / instances(CacheMiss) >= 0.8);

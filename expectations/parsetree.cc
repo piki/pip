@@ -97,6 +97,10 @@ static UnitType get_unit_by_name(const char *sym) {
 	return UNIT_NONE;
 }
 
+const char *UnitsNode::name(void) const {
+	return get_unit_name(unit);
+}
+
 UnitsNode::UnitsNode(float _amt, const char *_name) : amt(_amt) {
 	if (!_name) {
 		unit = UNIT_NONE;
@@ -118,7 +122,7 @@ UnitsNode::UnitsNode(float _amt, const char *_name) : amt(_amt) {
 		case UNIT_TB:   amt *= 1099511627776.0; unit = UNIT_BYTE; break;
 		default:
 			fprintf(stderr, "Invalid unit: %d\n", (int)unit);
-			exit(1);
+			abort();
 	}
 }
 
@@ -131,7 +135,8 @@ struct {
 	int op;
 	const char *name;
 } opmap[] = {
-	{ EXPECTATION, "EXPECTATION" },
+	{ VALIDATOR, "VALIDATOR" },
+	{ RECOGNIZER, "RECOGNIZER" },
 	{ FRAGMENT, "FRAGMENT" },
 	{ REPEAT, "REPEAT" },
 	{ REVERSE, "REVERSE" },
@@ -161,6 +166,7 @@ struct {
 	{ IN, "IN" },
 	{ MESSAGE, "MESSAGE" },
 	{ TASK, "TASK" },
+	{ THREAD, "THREAD" },
 	{ NOTICE, "NOTICE" },
 	{ LIMIT, "LIMIT" },
 	{ RANGE, "RANGE" },
@@ -182,258 +188,147 @@ const char *get_op_name(int op) {
 	return "!UNKNOWN!";
 }
 
-#if 0
 /* ALMOST print out the input.
- * 1)   The "RANGE" operator is used in three different contexts:
- *       - repeat between 1 and 5 { ... }
- *       - during(1, 5) ...
- *       - limit(CPU_TIME, {1...5})
- *      We print it out as "{1...5}" and so it does not parse right in the
- *      "repeat" or "during" contexts.
- * 2)   Blank lines, spacing, and comments.  Duh.
- * 3)   Parentheses get lost.
- * 4)   "repeat" statements always get {} around their body
- * 5)   Indentation weirdness with @PATH=repeat
+ * 1)   Blank lines, spacing, and comments.  Duh.
+ * 2)   Parentheses get lost.
  */
-#define TAB printf("%*s", 2*depth, "");
-void print_tree(const Node *node, int depth) {
+void print_assert(FILE *fp, const Node *node) {
 	if (!node) { return; }
 	switch (node->type()) {
 		case NODE_INT:
-			printf("%d", ((IntNode*)node)->value);
+			fprintf(fp, "%d", ((IntNode*)node)->value);
+			break;
+		case NODE_FLOAT:
+			fprintf(fp, "%f", ((FloatNode*)node)->value);
+			break;
+		case NODE_UNITS:
+			fprintf(fp, "%.2f%s", ((UnitsNode*)node)->amt, ((UnitsNode*)node)->name());
 			break;
 		case NODE_STRING:
-			printf("\"%s\"", ((StringNode*)node)->s);
+			fprintf(fp, "\"%s\"", ((StringNode*)node)->s);
 			break;
 		case NODE_REGEX:
-			printf("m/%s/", ((StringNode*)node)->s);
+			fprintf(fp, "m/%s/", ((StringNode*)node)->s);
 			break;
 		case NODE_IDENTIFIER:
-			printf("%s", ((IdentifierNode*)node)->sym->name.c_str());
+			fprintf(fp, "%s", ((IdentifierNode*)node)->sym->name.c_str());
 			break;
 		case NODE_LIST:{
 				ListNode *lnode = (ListNode*)node;										 	
 				for (unsigned int i=0; i<lnode->size(); i++) {
-					print_tree((*lnode)[i], depth);
+					print_assert(fp, (*lnode)[i]);
 				}
 			}
 			break;
 		case NODE_OPERATOR:{
 			OperatorNode *onode = (OperatorNode*)node;
 			switch (onode->op) {
-				case EXPECTATION:
-					TAB printf("expectation ");
-					print_tree(onode->operands[0], depth);
-					printf(" {\n");
-					print_tree(onode->operands[1], depth+1);
-					TAB printf("}\n");
-					break;
-				case FRAGMENT:
-					TAB printf("fragment ");
-					print_tree(onode->operands[0], depth);
-					printf(" {\n");
-					print_tree(onode->operands[1], depth+1);
-					TAB printf("}\n");
-					break;
-				case ASSERT:
-					TAB printf("assert( ");
-					print_tree(onode->operands[0], depth);
-					printf(" )\n");
-					break;
-				case REVERSE:
-					TAB printf("reverse(");
-					print_tree(onode->operands[0], depth);
-					printf(");\n");
-					break;
-				case MESSAGE:
-					TAB printf("message();\n");
-					break;
-				case CALL:
-					TAB printf("call(");
-					print_tree(onode->operands[0], depth);
-					printf(");\n");
-					break;
-				case TASK:
-					switch (onode->nops()) {
-						case 2:
-							TAB printf("task(");
-							print_tree(onode->operands[0], depth);
-							printf(", ");
-							print_tree(onode->operands[1], depth);
-							printf(")");
-							break;
-						case 3:
-							print_tree(onode->operands[0], depth);
-							print_tree(onode->operands[1], depth+1);
-							if (onode->operands[2]) {
-								printf(" {\n");
-								print_tree(onode->operands[2], depth+1);
-								TAB printf("}\n");
-							}
-							else
-								printf(";\n");
-							break;
-						default:
-							assert(!"invalid number of operands for TASK");
-					}
-					break;
-				case NOTICE:
-					TAB printf("notice(");
-					print_tree(onode->operands[0], depth);
-					printf(", ");
-					print_tree(onode->operands[1], depth);
-					printf(");\n");
-					break;
-				case XOR:
-					TAB printf("xor {\n");
-					print_tree(onode->operands[0], depth+1);
-					TAB printf("}\n");
-					break;
-				case LIMIT:
-					printf("\n");
-					TAB printf("limit(");
-					print_tree(onode->operands[0], depth);
-					printf(", ");
-					print_tree(onode->operands[1], depth);
-					printf(")");
-					break;
 				case RANGE:
-					printf("{");
-					print_tree(onode->operands[0], depth);
-					printf("...");
-					if (onode->operands[1]) print_tree(onode->operands[1], depth);
-					printf("}");
+					fprintf(fp, "{");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, "...");
+					if (onode->operands[1]) print_assert(fp, onode->operands[1]);
+					fprintf(fp, "}");
 					break;
-				case BRANCH:
-					TAB printf("branch ");
-					print_tree(onode->operands[0], depth);
-					printf(":\n");
-					print_tree(onode->operands[1], depth+1);
-					break;
-				case SPLIT:
-					TAB printf("split {\n");
-					print_tree(onode->operands[0], depth+1);
-					TAB printf("} join (");
-					print_tree(onode->operands[1], depth+1);
-					printf(");\n");
-					break;
-				case REPEAT:
-					TAB printf("repeat ");
-					print_tree(onode->operands[0], depth);
-					printf(" {\n");
-					print_tree(onode->operands[1], depth+1);
-					TAB printf("}\n");
-					break;
-				case '=':
-					print_tree(onode->operands[0], depth);
-					printf("%c", onode->op);
-					print_tree(onode->operands[1], depth);
-					break;
+				case '/':
+				case '+':
+				case '*':
+				case '-':
 				case '<':
 				case '>':
-					print_tree(onode->operands[0], depth);
-					printf(" %c ", onode->op);
-					print_tree(onode->operands[1], depth);
-					break;
-				case DURING:
-					TAB printf("during(");
-					print_tree(onode->operands[0], depth);
-					printf(") ");
-					print_tree(onode->operands[1], depth);
-					break;
-				case ANY:
-					printf("any ");
-					print_tree(onode->operands[0], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " %c ", onode->op);
+					print_assert(fp, onode->operands[1]);
 					break;
 				case B_AND:
-					print_tree(onode->operands[0], depth);
-					printf(" && ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " && ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case B_OR:
-					print_tree(onode->operands[0], depth);
-					printf(" || ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " || ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case IMPLIES:
-					print_tree(onode->operands[0], depth);
-					printf(" -> ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " -> ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case IN:
-					print_tree(onode->operands[0], depth);
-					printf(" in ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " in ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case LE:
-					print_tree(onode->operands[0], depth);
-					printf(" <= ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " <= ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case GE:
-					print_tree(onode->operands[0], depth);
-					printf(" >= ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " >= ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case EQ:
-					print_tree(onode->operands[0], depth);
-					printf(" == ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " == ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case NE:
-					print_tree(onode->operands[0], depth);
-					printf(" != ");
-					print_tree(onode->operands[1], depth);
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " != ");
+					print_assert(fp, onode->operands[1]);
 					break;
 				case '!':
-					printf("!");
-					print_tree(onode->operands[0], depth);
+					fprintf(fp, "!");
+					print_assert(fp, onode->operands[0]);
 					break;
 				case INSTANCES:
-					printf("instances(");
-					print_tree(onode->operands[0], depth);
-					printf(")");
+					fprintf(fp, "instances(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ")");
 					break;
 				case UNIQUE:
-					printf("unique(");
-					print_tree(onode->operands[0], depth);
-					printf(")");
+					fprintf(fp, "unique(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ")");
 					break;
 				case F_MAX:
-					printf("max(");
-					print_tree(onode->operands[0], depth);
-					printf(", ");
-					print_tree(onode->operands[1], depth);
-					printf(")");
+					fprintf(fp, "max(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ", ");
+					print_assert(fp, onode->operands[1]);
+					fprintf(fp, ")");
 					break;
 				case AVERAGE:
-					printf("average(");
-					print_tree(onode->operands[0], depth);
-					printf(", ");
-					print_tree(onode->operands[1], depth);
-					printf(")");
+					fprintf(fp, "average(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ", ");
+					print_assert(fp, onode->operands[1]);
+					fprintf(fp, ")");
 					break;
 				case STDDEV:
-					printf("stddev(");
-					print_tree(onode->operands[0], depth);
-					printf(", ");
-					print_tree(onode->operands[1], depth);
-					printf(")");
+					fprintf(fp, "stddev(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ", ");
+					print_assert(fp, onode->operands[1]);
+					fprintf(fp, ")");
 					break;
 				default:
-					printf("\n\n\nunhandled operator: ");
+					fprintf(fp, "\n\n\nunhandled operator: ");
 					if (onode->op <= 255)
-						printf("%d (%c)\n", onode->op, onode->op);
+						fprintf(fp, "%d (%c)\n", onode->op, onode->op);
 					else
-						printf("%d (%s)\n", onode->op, get_op_name(onode->op));
-					exit(1);
+						fprintf(fp, "%d (%s)\n", onode->op, get_op_name(onode->op));
+					abort();
 			}
 			break;}
 		default:
 			assert(!"not reached");
 	}
 }
-#else
+
 void print_tree(const Node *node, int depth) {
 	unsigned int i;
 	printf("%*sNode %p: ", depth*2, "", node);
@@ -445,6 +340,10 @@ void print_tree(const Node *node, int depth) {
 		case NODE_FLOAT:
 			printf("float: %f\n", ((FloatNode*)node)->value);
 			break;
+		case NODE_UNITS:{
+			UnitsNode *unode = (UnitsNode*)node;
+			printf("units: %.2f %s\n", unode->amt, unode->name());
+			break;}
 		case NODE_STRING:
 			printf("string: \"%s\"\n", ((StringNode*)node)->s);
 			break;
@@ -471,26 +370,19 @@ void print_tree(const Node *node, int depth) {
 			for (i=0; i<onode->nops(); i++)
 				print_tree(onode->operands[i], depth+1);
 			break;}
-		case NODE_UNITS:{
-			UnitsNode *unode = (UnitsNode*)node;
-			printf("%f %s\n", unode->amt, get_unit_name(unode->unit));
-			break;}
 		default:
 			fprintf(stderr, "unknown node type %d\n", node->type());
 			assert(!"not reached");
 	}
 }
-#endif
 
 std::map<std::string, Recognizer*> recognizers;
 std::vector<Aggregate*> aggregates;
 
-void add_recognizer(const Node *node) {
-	Recognizer *r = new Recognizer(node);
-	recognizers[r->name->name] = r;
+void add_recognizer(Recognizer *r) {
+	recognizers[r->name] = r;
 }
 
-void add_aggregate(Node *node) {
-	Aggregate *a = new Aggregate(node);
+void add_aggregate(Aggregate *a) {
 	aggregates.push_back(a);
 }

@@ -27,12 +27,14 @@ letter	[A-Za-z_]
 [-+()=/*;:{},><!]								return *yytext;
 [ \t]                         
 \n															yylno++;
-"expectation"										return EXPECTATION;
+"validator"											return VALIDATOR;
 "fragment"											return FRAGMENT;
+"recognizer"										return RECOGNIZER;
 "repeat"												return REPEAT;
 "reverse"												return REVERSE;
 "message"												return MESSAGE;
 "task"													return TASK;
+"thread"												return THREAD;
 "limit"													return LIMIT;
 "split"													return SPLIT;
 "branch"												return BRANCH;

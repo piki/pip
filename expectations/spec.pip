@@ -25,6 +25,14 @@ expectation E3 {
   }
 }
 
+expectation E4 {
+	thread {
+		message();
+		thread;
+		message();
+	}
+}
+
 expectation DHT_recursive_shortcut {
 	limit(SIZE, 10kb);
   task(m/^DHT/, $SRC=*);
@@ -103,7 +111,7 @@ assert( instances(E1) != 0 )
 //during(any 0) assert( unique(E1) == unique(E2) )
 //during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 )
 //during(1, 10) assert( unique($HERE) == 1 )
-assert( average(CPU_TIME, E1) < 5 )
-assert( stddev(IO_OPS, E1) < 5 )
-assert( max(REAL_TIME, "DHT") in { 0, 10 } )
-assert( min(REAL_TIME, "DHT") in { 0, 10 } )
+assert( average(CPU_TIME, E1) < 5s )
+assert( stddev(INVOL_CS, E1) < 5ms )
+//assert( max(REAL_TIME, "DHT") in { 0, 10 } )
+//assert( min(REAL_TIME, "DHT") in { 0, 10 } )

@@ -1,10 +1,12 @@
 #include <assert.h>
+#include <map>
 #include "common.h"
 #include "exptree.h"
 #include "expect.tab.hh"
 
-static void add_statements(const ListNode *list, ExpEventList *where,
-		LimitList *limits);
+static void move_send_and_receive(ExpEventList &where);
+static void add_statements(const ListNode *list_node, ExpEventList *where,
+		LimitList *limits, ExpThreadSet &threads);
 
 Match *Match::create(Node *node, bool negate) {
 	if (node->type() == NODE_STRING)
@@ -51,20 +53,19 @@ static const char *metric_name[] = {
 	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", NULL
 };
 
-static Limit::Metric metric_by_name(const char *name) {
+Limit::Metric Limit::metric_by_name(const std::string &name) {
 	for (int i=0; metric_name[i]; i++)
-		if (!strcmp(name, metric_name[i]))
+		if (name == metric_name[i])
 			return (Limit::Metric)i;
-	fprintf(stderr, "Invalid metric \"%s\"\n", name);
-	exit(1);
+	fprintf(stderr, "Invalid metric \"%s\"\n", name.c_str());
+	abort();
 }
 
 Limit::Limit(const OperatorNode *onode) : metric(LAST) {
 	assert(onode->op == LIMIT);
 	assert(onode->nops() == 2);
 	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
-	metric = metric_by_name(
-		((IdentifierNode*)onode->operands[0])->sym->name.c_str());
+	metric = metric_by_name(((IdentifierNode*)onode->operands[0])->sym->name);
 
 	assert(onode->operands[1]->type() == NODE_OPERATOR);
 	OperatorNode *range = (OperatorNode*)onode->operands[1];
@@ -146,7 +147,7 @@ bool Limit::check(const Path *test) const {
 	}
 }
 
-ExpTask::ExpTask(const OperatorNode *onode) {
+ExpTask::ExpTask(const OperatorNode *onode, ExpThreadSet &threads) {
 	assert(onode->op == TASK);
 	assert(onode->nops() == 3);
 	assert(onode->operands[0]->type() == NODE_OPERATOR);
@@ -164,7 +165,7 @@ ExpTask::ExpTask(const OperatorNode *onode) {
 	if (onode->operands[2]) {
 		assert(onode->operands[2]->type() == NODE_LIST);
 		add_statements((ListNode*)onode->operands[2],
-			&children, NULL);
+			&children, NULL, threads);
 	}
 }
 
@@ -233,24 +234,34 @@ int ExpNotice::check(const PathEventList &test, unsigned int ofs,
 	return 1;
 }
 
-ExpMessage::~ExpMessage(void) {
+ExpMessageSend::ExpMessageSend(const OperatorNode *onode, int _id) : id(_id) {
+	assert(onode->op == MESSAGE);
+	assert(onode->nops() == 1);
+	if (onode->operands[0]) {
+		assert(onode->operands[0]->type() == NODE_LIST);
+		ListNode *limit_list = (ListNode*)onode->operands[0];
+		for (unsigned int i=0; i<limit_list->size(); i++)
+			limits.push_back(new Limit((OperatorNode*)(*limit_list)[i]));
+	}
+}
+
+ExpMessageSend::~ExpMessageSend(void) {
 	for (unsigned int i=0; i<limits.size(); i++)
 		delete limits[i];
 }
 
-void ExpMessage::print(FILE *fp, int depth) const {
+void ExpMessageSend::print(FILE *fp, int depth) const {
 	bool empty = limits.size() == 0;
-	fprintf(fp, "%*s<message%s", depth*2, "", empty ? " />\n" : ">\n");
+	fprintf(fp, "%*s<message_send id=\"%d\"%s", depth*2, "", id, empty ? " />\n" : ">\n");
 	if (!empty) {
 		for (unsigned int i=0; i<limits.size(); i++)
 			limits[i]->print(fp, depth+1);
-		fprintf(fp, "%*s</message>\n", depth*2, "");
+		fprintf(fp, "%*s</message_send>\n", depth*2, "");
 	}
 }
 
-int ExpMessage::check(const PathEventList &test, unsigned int ofs,
+int ExpMessageSend::check(const PathEventList &test, unsigned int ofs,
 		bool *resources) const {
-	// !! rewrite this now that send+recv are different classes
 	if (ofs == test.size()) return -1;  // we need at least one
 	if (test[ofs]->type() != PEV_MESSAGE_SEND) return -1;
 	PathMessageSend *pms = (PathMessageSend*)test[ofs];
@@ -264,7 +275,23 @@ int ExpMessage::check(const PathEventList &test, unsigned int ofs,
 	return 1;
 }
 
-ExpRepeat::ExpRepeat(const OperatorNode *onode) {
+ExpMessageRecv::ExpMessageRecv(const OperatorNode *onode, int _id) : id(_id) {
+	assert(onode->op == MESSAGE);
+}
+
+void ExpMessageRecv::print(FILE *fp, int depth) const {
+	fprintf(fp, "%*s<message_recv id=\"%d\" />\n", depth*2, "", id);
+}
+
+int ExpMessageRecv::check(const PathEventList &test, unsigned int ofs,
+		bool *resources) const {
+	if (ofs == test.size()) return -1;  // we need at least one
+	if (test[ofs]->type() != PEV_MESSAGE_RECV) return -1;
+
+	return 1;
+}
+
+ExpRepeat::ExpRepeat(const OperatorNode *onode, ExpThreadSet &threads) {
 	assert(onode->op == REPEAT);
 	assert(onode->nops() == 2);
 	assert(onode->operands[0]->type() == NODE_OPERATOR);
@@ -278,7 +305,7 @@ ExpRepeat::ExpRepeat(const OperatorNode *onode) {
 	max = ((IntNode*)range->operands[1])->value;
 
 	assert(onode->operands[1]->type() == NODE_LIST);
-	add_statements((ListNode*)onode->operands[1], &children, NULL);
+	add_statements((ListNode*)onode->operands[1], &children, NULL, threads);
 }
 
 ExpRepeat::~ExpRepeat(void) {
@@ -305,7 +332,7 @@ int ExpRepeat::check(const PathEventList &test, unsigned int ofs,
 	return -1;
 }
 
-ExpXor::ExpXor(const OperatorNode *onode) {
+ExpXor::ExpXor(const OperatorNode *onode, ExpThreadSet &threads) {
 	assert(onode->op == XOR);
 	assert(onode->nops() == 1);
 	assert(onode->operands[0]->type() == NODE_LIST);
@@ -319,7 +346,7 @@ ExpXor::ExpXor(const OperatorNode *onode) {
 		assert(branch->operands[0] == NULL);  // no named branches
 		assert(branch->operands[1]->type() == NODE_LIST);
 		branches.push_back(ExpEventList());
-		add_statements((ListNode*)branch->operands[1], &branches[j], NULL);
+		add_statements((ListNode*)branch->operands[1], &branches[j], NULL, threads);
 	}
 }
 
@@ -368,55 +395,114 @@ int ExpCall::check(const PathEventList &test, unsigned int ofs,
 		fprintf(stderr, "call(%s): recognizer not found\n", target.c_str());
 		exit(1);
 	}
-	printf("calling %s (%p)...", r->name->name.c_str(), r);
-	int ret = r->check(test, ofs, resources);
-	printf(" ret=%d\n", ret);
-	return ret;
+	// !! broken -- don't force it to threads[0]
+	return r->check(test, r->threads[0], ofs, resources);
 	// !! if the called recognizer sets whole-path limits, check those
 }
 
-Recognizer::Recognizer(const Node *node) {
-	assert(node->type() == NODE_OPERATOR);
-	const OperatorNode *onode = (OperatorNode*)node;
-	assert(onode->op == EXPECTATION || onode->op == FRAGMENT);
-	complete = (onode->op == EXPECTATION);
-	assert(onode->nops() == 2);
-	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
-	assert(onode->operands[1]->type() == NODE_LIST);
-	name = ((IdentifierNode*)onode->operands[0])->sym;
-	const ListNode *statements = (ListNode*)onode->operands[1];
-	add_statements(statements, &children, &limits);
+Recognizer::Recognizer(const IdentifierNode *ident, const ListNode *statements, bool _complete, bool _validating)
+		: complete(_complete), validating(_validating), instances(0), unique(0) {
+	assert(ident->type() == NODE_IDENTIFIER);
+	name = ident->sym->name;
+
+	assert(statements->type() == NODE_LIST);
+	// Reserve enough space that the vector won't have to expand itself.
+	// !! Ugly, ugly.  But it keeps the iterators from getting invalidated.
+	threads.reserve(1000);
+	threads.push_back(ExpEventList());
+	add_statements(statements, &threads[0], &limits, threads);
+	for (unsigned int i=0; i<threads.size(); i++)
+		move_send_and_receive(threads[i]);
 }
 
 Recognizer::~Recognizer(void) {
 	unsigned int i;
-	for (i=0; i<children.size(); i++) delete children[i];
+	for (unsigned int t=0; t<threads.size(); t++)
+		for (i=0; i<threads[t].size(); i++) delete threads[t][i];
 	for (i=0; i<limits.size(); i++) delete limits[i];
 }
 
 void Recognizer::print(FILE *fp) const {
-	fprintf(fp, "<recognizer name=\"%s\">\n", name->name.c_str());
-	unsigned int i;
+	fprintf(fp, "<recognizer name=\"%s\" validator=\"%s\" complete=\"%s\">\n",
+		name.c_str(), validating?"true":"false", complete?"true":"false");
+	unsigned int i, t;
 	for (i=0; i<limits.size(); i++)
 		limits[i]->print(fp, 1);
-	for (i=0; i<children.size(); i++)
-		children[i]->print(fp, 1);
+	for (t=0; t<threads.size(); t++) {
+		printf("  <!-- begin thread %d -->\n", t);
+		for (i=0; i<threads[t].size(); i++) {
+			const ExpEventList *list = &threads[t];
+			const ExpEvent *ev = (*list)[i];
+			ev->print(fp, 1);
+		}
+	}
 	fprintf(fp, "</recognizer>\n");
 }
 
-bool Recognizer::check(const Path *p, bool *resources) const {
+static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources) {
+	for (unsigned int i=0; i<test.size(); i++) {
+		if (Recognizer::check(test, list, i, resources) != -1) return true;
+		if (test[i]->type() == PEV_TASK)
+			if (check_fragment(((PathTask*)test[i])->children, list, 0, resources)) return true;
+	}
+	return false;
+}
+
+bool Recognizer::check(const Path *p, bool *resources) {
+	if (!complete) {
+		for (std::map<int,PathEventList>::const_iterator tp=p->children.begin(); tp!=p->children.end(); tp++)
+			if (check_fragment(tp->second, threads[0], 0, resources)) {
+				instances++;
+				// !! what about the rest of the resources?
+				return true;
+			}
+		return false;
+	}
+
+	printf("Recognizer %s\n", name.c_str());
+	if (threads.size() != p->children.size()) {
+		printf(" -> false, R.threads=%d P.threads=%d\n", threads.size(), p->children.size());
+		return false;
+	}
+
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
 			if (!limits[i]->check(p)) {
 				*resources = false;
 				break;
 			}
-	int res = check(p->children, 0, resources);
-	return res == (int)p->children.size();
-}
 
-int Recognizer::check(const PathEventList &test, int ofs, bool *resources) const {
-	return check(test, children, ofs, resources);
+	std::vector<int> thread_map(threads.size(), -1);
+	unsigned int i;
+	assert(p->root_thread != -1);
+	thread_map[0] = p->root_thread;
+	// make the rest of the thread map by transitively following messages
+	// this part MAY FAIL and cause the function to return false...
+	
+	// !! this ain't it
+	i = 1;
+	for (std::map<int,PathEventList>::const_iterator tp=p->children.begin(); tp!=p->children.end(); tp++) {
+		if (tp->first == p->root_thread) continue;
+		thread_map[i++] = tp->first;
+	}
+	
+	for (i=0; i<thread_map.size(); i++) {
+		printf("thread_map[%d] = %d\n", i, thread_map[i]);
+		if (check(p->children.find(thread_map[i])->second, threads[i], 0, resources) != (int)threads[i].size()) return false;
+	}
+
+	instances++;
+	// unique++ if path or hosts different !!
+	real_time.add(p->ts_end - p->ts_start);
+	utime.add(p->utime);
+	stime.add(p->stime);
+	cpu_time.add(p->utime + p->stime);
+	major_fault.add(p->major_fault);
+	minor_fault.add(p->minor_fault);
+	vol_cs.add(p->vol_cs);
+	invol_cs.add(p->invol_cs);
+	size.add(p->size);
+	return true;
 }
 
 int Recognizer::check(const PathEventList &test, const ExpEventList &list,
@@ -432,40 +518,67 @@ int Recognizer::check(const PathEventList &test, const ExpEventList &list,
 	return my_ofs - ofs;
 }
 
-static void add_statements(const ListNode *list, ExpEventList *where,
-		LimitList *limits) {
+/* Move all send events at the beginning, and receive events at the end,
+ * of a thread into adjacent task events, if present.
+ * !! This is a giant kludge.  I would like to match either way, not force
+ * messages to be children of tasks. */
+static void move_send_and_receive(ExpEventList &where) {
+	if (where.size() >= 2 && where[0]->type() == EXP_MESSAGE_RECV && where[1]->type() == EXP_TASK) {
+		ExpTask *task = (ExpTask*)where[1];
+		task->children.insert(task->children.begin(), where[0]);
+		where.erase(where.begin());
+	}
+	if (where.size() >= 2 && where[where.size()-1]->type() == EXP_MESSAGE_SEND && where[where.size()-2]->type() == EXP_TASK) {
+		ExpTask *task = (ExpTask*)where[where.size()-2];
+		task->children.push_back(where[where.size()-1]);
+		where.pop_back();
+	}
+}
+
+static int msgseq = 0;
+static void add_statements(const ListNode *list_node, ExpEventList *where,
+		LimitList *limits, ExpThreadSet &threads) {
 	unsigned int i;
 	assert(where != NULL);
-	for (i=0; i<list->size(); i++) {
-		const Node *node = (*list)[i];
+	ExpEventList *local_where = where;
+	for (i=0; i<list_node->size(); i++) {
+		const Node *node = (*list_node)[i];
 		switch (node->type()) {
 			case NODE_LIST:
-				add_statements((ListNode*)node, where, NULL);
+				add_statements((ListNode*)node, local_where, NULL, threads);
 				break;
 			case NODE_OPERATOR:{
 					OperatorNode *onode = (OperatorNode*)node;
 					switch (onode->op) {
+						case THREAD: break;  //!!
 						case TASK:
-							where->push_back(new ExpTask(onode));
+							local_where->push_back(new ExpTask(onode, threads));
 							break;
 						case NOTICE:
-							where->push_back(new ExpNotice(onode));
+							local_where->push_back(new ExpNotice(onode));
 							break;
 						case REPEAT:
-							where->push_back(new ExpRepeat(onode));
+							local_where->push_back(new ExpRepeat(onode, threads));
 							break;
 						case XOR:
-							where->push_back(new ExpXor(onode));
+							local_where->push_back(new ExpXor(onode, threads));
 							break;
 						case LIMIT:
 							assert(limits);
 							limits->push_back(new Limit(onode));
 							break;
 						case CALL:
-							where->push_back(new ExpCall(onode));
+							local_where->push_back(new ExpCall(onode));
 							break;
 						case MESSAGE:
-							//where->push_back(new ExpMessage(onode));
+							local_where->push_back(new ExpMessageSend(onode, msgseq));
+							if (i == list_node->size() - 1)
+								local_where = where;
+							else {
+								threads.push_back(ExpEventList());
+								local_where = &threads[threads.size()-1];
+							}
+							local_where->push_back(new ExpMessageRecv(onode, msgseq++));
 							break;
 						case REVERSE:
 						case SPLIT:

@@ -5,6 +5,7 @@
 #include "path.h"
 #include <mysql/mysql.h>
 #include <map>
+#include <set>
 #include "aggregates.h"
 #include "exptree.h"
 
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
 	printf("----------------------------------------------------------------\n");
 	printf("%d aggregates registered:\n", aggregates.size());
 	for (i=0; i<aggregates.size(); i++)
-		aggregates[i]->print();
+		aggregates[i]->print_tree();
 	printf("----------------------------------------------------------------\n");
 	match_tally.insert(match_tally.end(), recognizers.size()+1, 0);
 	match_count.insert(match_count.end(), recognizers.size(), 0);
@@ -57,14 +58,25 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	std::vector<int> pathids;
-	fprintf(stderr, "Reading pathids...");
-	run_sql("SELECT pathid from %s_paths", base);
-	MYSQL_RES *res = mysql_use_result(&mysql);
+	MYSQL_RES *res;
 	MYSQL_ROW row;
-	while ((row = mysql_fetch_row(res)) != NULL) {
-		pathids.push_back(atoi(row[0]));
-	}
+
+	std::set<int> pathids;
+	fprintf(stderr, "Reading pathids...");
+	run_sql("SELECT distinct pathid from %s_tasks", base);
+	res = mysql_use_result(&mysql);
+	while ((row = mysql_fetch_row(res)) != NULL)
+		pathids.insert(atoi(row[0]));
+	mysql_free_result(res);
+	run_sql("SELECT distinct pathid from %s_notices", base);
+	res = mysql_use_result(&mysql);
+	while ((row = mysql_fetch_row(res)) != NULL)
+		pathids.insert(atoi(row[0]));
+	mysql_free_result(res);
+	run_sql("SELECT distinct pathid from %s_messages", base);
+	res = mysql_use_result(&mysql);
+	while ((row = mysql_fetch_row(res)) != NULL)
+		pathids.insert(atoi(row[0]));
 	mysql_free_result(res);
 	fprintf(stderr, " done: %d found.\n", pathids.size());
 
@@ -77,17 +89,21 @@ int main(int argc, char **argv) {
 	mysql_free_result(res);
 	fprintf(stderr, " done: %d found.\n", threads.size());
 
-	for (i=0; i<pathids.size(); i++)
-		check_path(base, pathids[i]);
+	for (std::set<int>::const_iterator p=pathids.begin(); p!=pathids.end(); p++)
+		check_path(base, *p);
 
 	for (i=0; i<=recognizers.size(); i++)
-		printf("paths matching %d recognizer(s): %d\n", i, match_tally[i]);
+		printf("paths matching %d validator(s): %d\n", i, match_tally[i]);
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); rp++,i++)
-		printf("paths matching recognizer \"%s\": %d (%d over limits)\n",
-			rp->second->name->name.c_str(), match_count[i], resources_count[i]);
+		printf("paths matching %s \"%s\": %d (%d over limits)\n",
+			rp->second->validating ? "validator" : "recognizer",
+			rp->second->name.c_str(), match_count[i], resources_count[i]);
 
-	for (i=0; i<aggregates.size(); i++)
-		printf("aggregate %d: %d\n", i, aggregates[i]->check());
+	for (i=0; i<aggregates.size(); i++) {
+		printf("aggregate %d [ ", i);
+		aggregates[i]->print();
+		printf(" ] = %s\n", aggregates[i]->check() ? "true" : "false");
+	}
 
 	mysql_close(&mysql);
 	return 0;
@@ -115,7 +131,6 @@ static void check_path(const char *base, int pathid) {
 
 	path.path_id = pathid;
 
-	/* !! "order by" is expensive -- better to allow inserting children first */
 	run_sql("SELECT * FROM %s_tasks WHERE pathid=%d ORDER BY start", base, pathid);
 	MYSQL_RES *res = mysql_use_result(&mysql);
 	MYSQL_ROW row;
@@ -147,15 +162,15 @@ static void check_path(const char *base, int pathid) {
 	int tally = 0;
 	path.done_inserting();
 	bool printed = false;
-	//printf("# path %d\n", pathid);
-	//path.print();
-	//printed = true;
+	printf("# path %d\n", pathid);
+	path.print();
+	printed = true;
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++) {
 		bool resources = true;
 		if (rp->second->check(&path, &resources)) {
-			printf("-----> matched %s\n", rp->second->name->name.c_str());
+			printf("---> matched %s\n", rp->second->name.c_str());
 			match_count[i]++;
-			tally++;
+			if (rp->second->validating) tally++;
 			if (!resources) {
 				resources_count[i]++;
 				if (!printed) {
@@ -164,7 +179,7 @@ static void check_path(const char *base, int pathid) {
 					path.print();
 				}
 				printf("  %d (%s) matched, resources false\n",
-					i, rp->second->name->name.c_str());
+					i, rp->second->name.c_str());
 			}
 		}
 	}
