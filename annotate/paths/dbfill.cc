@@ -62,22 +62,28 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	run_sql("CREATE TABLE %s (pathid int, name varchar(255), ts bigint, "
-		"thread_id int)", table_notices.c_str());
+		"thread_id int, index(pathid))", table_notices.c_str());
 	run_sql("CREATE TABLE %s (pathid int, name varchar(255), start bigint, "
 		"end bigint, tdiff int, utime int, stime int, major_fault int, "
 		"minor_fault int, vol_cs int, invol_cs int, thread_start int, "
-		"thread_end int)", table_tasks.c_str());
+		"thread_end int, index(pathid))", table_tasks.c_str());
 	run_sql("CREATE TABLE %s (thread_id int auto_increment primary key, "
-		"host varchar(255), prog varchar(255), pid int, tid int, ppid int, uid int, "
-		"start bigint, tz int)", table_threads.c_str());
-	run_sql("CREATE TABLE %s (pathid int, msgid varchar(255), ts_send bigint, ts_recv bigint, "
-		"size int, thread_send int, thread_recv int)", table_messages.c_str());
-	run_sql("CREATE TABLE %s (pathid int, pathblob varchar(255))", table_paths.c_str());
+		"host varchar(255), prog varchar(255), pid int, tid int, ppid int, "
+		"uid int, start bigint, tz int)", table_threads.c_str());
+	run_sql("CREATE TABLE %s (pathid int, msgid varchar(255), ts_send bigint, "
+		"ts_recv bigint, size int, thread_send int, thread_recv int, "
+		"index(pathid))", table_messages.c_str());
+	run_sql("CREATE TABLE %s (pathid int primary key, pathblob varchar(255))",
+		table_paths.c_str());
+	run_sql("LOCK TABLES %s WRITE, %s WRITE, %s WRITE, %s WRITE, %s WRITE",
+		table_notices.c_str(), table_tasks.c_str(), table_threads.c_str(),
+		table_messages.c_str(), table_paths.c_str());
 
 	for (int i=2; i<argc; i++)
 		read_file(argv[i]);
 
 	check_unpaired_tasks();
+	run_sql("UNLOCK TABLES");
 	mysql_close(&mysql);
 	check_unpaired_messages();
 

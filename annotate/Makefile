@@ -4,7 +4,7 @@ CXXFLAGS = $(CFLAGS)
 OBJS = annotate.o
 CPPFLAGS += -DTHREADS
 
-all: libannotate.a libjannotate.so threadtest AnnTest.class
+all: libannotate.a libjannotate.so threadtest evtest AnnTest.class
 
 Annotate.h: Annotate.class
 	javah Annotate && touch $@
@@ -15,6 +15,9 @@ Annotate.h: Annotate.class
 threadtest: threadtest.c
 	$(CC) $< -o $@ -lpthread -lrt -L. -lannotate
 
+evtest: evtest.c
+	$(CC) $< -o $@ -lpthread -lrt -L. -lannotate
+
 libannotate.a: $(OBJS)
 	$(AR) r $@ $(OBJS)
 
@@ -22,6 +25,6 @@ libjannotate.so: $(OBJS) jannotate.o
 	gcc -shared -o $@ $(OBJS) jannotate.o
 
 clean:
-	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) threadtest *.class Annotate.h
+	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) threadtest evtest *.class Annotate.h
 
 jannotate.o:: Annotate.h

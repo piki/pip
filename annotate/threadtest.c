@@ -5,7 +5,13 @@
 #include "annotate.h"
 
 void *start(void *arg) {
-	int n = 2;
+	int n = 3;
+	ANNOTATE_SET_PATH_ID_INT(n++);
+	ANNOTATE_START_TASK("sleep 50 ms");
+	usleep(50000);
+	ANNOTATE_END_TASK("sleep 50 ms");
+	ANNOTATE_SET_PATH_ID_INT(2);
+	ANNOTATE_END_TASK("catch-this");
 	while (1) {
 		ANNOTATE_SET_PATH_ID_INT(n++);
 		ANNOTATE_START_TASK("child");
@@ -26,6 +32,9 @@ int main() {
 	for (i=0; i<idsz; i++)
 		printf("%02x", path_id[i]);
 	printf("\n");
+	ANNOTATE_SET_PATH_ID_INT(2);
+	ANNOTATE_START_TASK("catch-this");
+	ANNOTATE_SET_PATH_ID_INT(1);
 	pthread_t child;
 	pthread_create(&child, NULL, start, NULL);
 	ANNOTATE_BELIEF(1, 0);
