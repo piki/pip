@@ -129,6 +129,7 @@ static void run_sql(const char *fmt, ...) {
 }
 
 static void check_path(const char *base, int pathid) {
+	if (pathid > 1700) return;
 	Path path;
 	std::map<std::string,Recognizer*>::const_iterator rp;
 	unsigned int i;

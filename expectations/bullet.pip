@@ -1,93 +1,91 @@
-validator Data {
-	split {
-		branch {1,10}:
-			message();
-			thread();
-			split {
-				branch {1,10}:
-					message();
-					thread();
-					split {
-						branch {1,10}:
-							message();
-							thread();
-							xor {
-								branch:
-									task("request more", *);
-								branch:
-							}
-						branch:
-							xor {
-								branch:
-									task("request more", *);
-								branch:
-							}
-					} join(any 1);
-				branch:
-					xor {
-						branch:
-							task("request more", *);
-						branch:
-					}
-				branch:
-					xor {
-						branch:
-							notice(m/^Could not send/, *);
-						branch:
-					}
-			} join(any 1);
-		branch:
-			xor {
-				branch:
-					task("request more", *);
-				branch:
-			}
-	} join(any 1);
-}
-
 validator SendFail {
-	repeat between 1 and 100 {
-		notice(m/^Could not send/, *);
+	thread Node(*, 1) {
+		repeat between 1 and 100 {
+			notice(m/^Could not send/);
+		}
 	}
 }
 
 validator RequestMore {
-	repeat between 1 and 20 {
-		task("request more", *);
+	thread Node(*, 1) {
+		repeat between 1 and 20 {
+			task("request more");
+		}
 	}
 }
 
-validator Join2 {
-	task("join", *) {
-		message();
-		message();
-		thread();
+validator Data {
+	thread Root(*, 1) {
+		repeat between 1 and 10 {
+			send(Interior);
+		}
+	}
+	thread Interior(*, {10,150}) {
+		xor {
+			branch: recv(Root);
+			branch: recv(Interior);
+		}
+		repeat between 0 and 20 {
+			xor {
+				branch: send(Interior);
+				branch: notice(m/^Could not send/);
+			}
+		}
+		maybe { task("request more"); }
+		xor {   // we might get more...
+			branch: recv(Root);
+			branch: recv(Interior);
+			branch:
+		}
 	}
 }
-validator Join3 {
-	task("join", *) {
-		message();
-		message();
-		message();
-		thread();
+
+validator Join {
+	thread New(*, 1) {
+		task("join") {
+			send(Existing);
+			recv(Existing);
+		}
+	}
+	thread Existing(*, {1,10}) {
+		xor {
+			branch: recv(New);
+			branch: recv(Existing);
+		}
+		xor {
+			branch: send(New);
+			branch: send(Existing);
+		}
 	}
 }
-validator Join4 {
-	task("join", *) {
-		message();
-		message();
-		message();
-		message();
-		thread();
+
+validator RanSub {
+	thread Root(*, 1) {
+		repeat between 1 and 20 {
+			send(Interior);
+		}
+		repeat between 1 and 20 {
+			recv(Root2);
+		}
 	}
-}
-validator Join5 {
-	task("join", *) {
-		message();
-		message();
-		message();
-		message();
-		message();
-		thread();
+	thread Root2(*, 1) {   // mostly fake messages!
+		repeat between 1 and 20 {
+			recv(Interior);
+			send(Root);
+		}
+	}
+	thread Interior(*, {1,100}) {
+		recv(Interior);  // or root
+		repeat between 1 and 20 {
+			send(Interior);  // or leaf
+		}
+		repeat between 1 and 20 {
+			recv(Interior);  // or leaf
+		}
+		send(Interior);  // or root2
+	}
+	thread Leaf(*, {1,100}) {
+		recv(Interior);
+		send(Interior);
 	}
 }

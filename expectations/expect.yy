@@ -21,6 +21,7 @@
 %token BRANCH
 %token SPLIT
 %token XOR
+%token MAYBE
 %token CALL
 %token BETWEEN
 %token AND
@@ -43,10 +44,10 @@
 %token IMPLIES
 %token IN
 // operations
-%token MESSAGE
+%token SEND
+%token RECV
 %token TASK
 %token THREAD
-%token THREAD_SET
 %token NOTICE
 %token LIMIT
 // tokens
@@ -58,10 +59,10 @@
 %token <sValue> IDENTIFIER
 %token <sValue> STRINGVAR
 %token <sValue> PATHVAR
-%type <nList> branch_list limit_list statement_list thread_list xor_list
-%type <nPtr> statement thread
-%type <nPtr> branch_set repeat limit limit_range limit_spec repeat_range path_expr
-%type <nPtr> string_expr event xor task assert assertdecl bool_expr
+%type <nList> limit_list statement_list thread_list xor_list
+%type <nPtr> statement thread thread_count_range
+%type <nPtr> repeat limit limit_range limit_spec repeat_range path_expr
+%type <nPtr> string_expr xor task assert assertdecl bool_expr
 %type <nPtr> int_expr float_expr window string_literal unit_qty count_range
 
 %left B_AND B_OR IMPLIES
@@ -89,11 +90,11 @@ program:
 		;
 
 pathdecl:
-		VALIDATOR IDENTIFIER '{' statement_list '}' {
+		VALIDATOR IDENTIFIER '{' thread_list '}' {
 			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, true, true));
 			delete $4;
 		}
-		| RECOGNIZER IDENTIFIER '{' statement_list '}' {
+		| RECOGNIZER IDENTIFIER '{' thread_list '}' {
 			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, true, false));
 			delete $4;
 		}
@@ -107,11 +108,6 @@ pathdecl:
 		}
 		;
 
-branch_list:
-		branch_list ',' IDENTIFIER								{ $$ = $1; ($$)->add(idf($3,BRANCH)); }
-		| IDENTIFIER															{ $$ = new ListNode; ($$)->add(idf($1,BRANCH)); }
-		;
-
 statement_list:
 		statement_list statement									{ $$ = $1; ($$)->add($2); }
 		|																					{ $$ = new ListNode; }
@@ -119,20 +115,16 @@ statement_list:
 		
 statement:
 		REVERSE '(' path_expr ')' ';'							{ $$ = opr(REVERSE, 1, $3); }
-		| MESSAGE '(' ')' limit_list ';'					{ $$ = opr(MESSAGE, 1, $4); }
-		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }
-		| event ';'
+		| SEND '(' IDENTIFIER ')' limit_list ';'	{ $$ = opr(SEND, 2, idcl($3,THREAD), $5); }
+		| RECV '(' IDENTIFIER ')' limit_list ';'	{ $$ = opr(RECV, 2, idcl($3,THREAD), $5); }
+		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }   //?
+		| NOTICE '(' string_expr ')' ';'					{ $$ = opr(NOTICE, 1, $3); }
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
 		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
-		| THREAD '(' ')' ';'																{ $$ = opr(THREAD, 2, NULL, NULL); }
-		| THREAD '(' ')' '{' statement_list '}'							{ $$ = opr(THREAD, 2, NULL, $5); }
-		| THREAD '(' IDENTIFIER ')' ';'											{ $$ = opr(THREAD, 2, idcl($3,BRANCH), NULL); }
-		| THREAD '(' IDENTIFIER ')' '{' statement_list '}'	{ $$ = opr(THREAD, 2, idcl($3,BRANCH), $6); }
-		| THREAD '=' IDENTIFIER ';'								{ $$ = opr(THREAD_SET, 2, idcl($3,BRANCH), NULL); }
 		| string_expr
 		| path_expr
-		| SPLIT '{' thread_list '}' JOIN '(' branch_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $7); }
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
+		| MAYBE statement													{ $$ = opr(REPEAT, 2, opr(RANGE, 2, new IntNode(0), new IntNode(1)), $2); }
 		| limit ';'
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
@@ -153,14 +145,14 @@ thread_list:
 		;
 
 thread:
-		BRANCH ':' statement_list											{	$$ = opr(BRANCH, 4, NULL, NULL, NULL, $3); }
-		| BRANCH '{' INTEGER ',' INTEGER '}' ':' statement_list		{	$$ = opr(BRANCH, 4, NULL, new IntNode($3), new IntNode($5), $8); }
-		| BRANCH IDENTIFIER ':' statement_list				{	$$ = opr(BRANCH, 4, idcle($2,BRANCH), NULL, NULL, $4); }
+		THREAD IDENTIFIER '(' string_expr ',' thread_count_range ')' '{' statement_list '}' {
+			$$ = opr(THREAD, 4, idcl($2,THREAD), $4, $6, $9);
+		}
 		;
 
-branch_set:
-		branch_list																{ $$ = $1; }
-		| ANY INTEGER															{ $$ = new IntNode($2); }
+thread_count_range:
+		INTEGER																		{ $$ = opr(RANGE, 2, new IntNode($1), new IntNode($1)); }
+		| '{' INTEGER ',' INTEGER '}'							{ $$ = opr(RANGE, 2, new IntNode($2), new IntNode($4)); }
 		;
 
 repeat:
@@ -216,11 +208,7 @@ path_expr:
 		;
 
 task:
-		TASK '(' string_expr ',' string_expr ')'	{ $$ = opr(TASK, 2, $3, $5); }
-		;
-
-event:
-		NOTICE '(' string_expr ',' string_expr ')'	{ $$ = opr(NOTICE, 2, $3, $5); }
+		TASK '(' string_expr ')'									{ $$ = opr(TASK, 1, $3); }
 		;
 
 string_literal:

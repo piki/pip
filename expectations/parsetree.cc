@@ -164,7 +164,8 @@ struct {
 	{ B_OR, "B_OR" },
 	{ IMPLIES, "IMPLIES" },
 	{ IN, "IN" },
-	{ MESSAGE, "MESSAGE" },
+	{ RECV, "RECV" },
+	{ SEND, "SEND" },
 	{ TASK, "TASK" },
 	{ THREAD, "THREAD" },
 	{ NOTICE, "NOTICE" },
@@ -349,6 +350,9 @@ void print_tree(const Node *node, int depth) {
 			break;
 		case NODE_REGEX:
 			printf("regex: \"%s\"\n", ((StringNode*)node)->s);
+			break;
+		case NODE_WILDCARD:
+			printf("wildcard: \"*\"\n");
 			break;
 		case NODE_IDENTIFIER:
 			printf("identifier: \"%s\"\n", ((IdentifierNode*)node)->sym->name.c_str());

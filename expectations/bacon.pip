@@ -1,69 +1,95 @@
-recognizer SPSub {
+fragment recognizer SPSub {
 	xor {
 		branch:   // cache miss
-			notice("cache miss", *);
-			task("shortest path", *) limit(CPU_TIME, 1.0s);
+			notice("cache miss");
+			task("shortest path") limit(CPU_TIME, 1.0s);
 		branch:   // cache hit
-			notice("cache hit", *);
+			notice("cache hit");
 		branch:   // actor not found
 	}
 }
 
-validator Init {
-	task("reading database", $where = *);
-	task("jump tables", $where);
-}
-
 validator Link {
-	task("link", *) {
-		message();
-		task("link", $where = *) {
+	thread Client(*, 1) {
+		task("link") {
+			send(Server);
+			recv(Server);
+		}
+	}
+	thread Server(*, 1) {
+		task("link") {
+			recv(Client);
 			repeat between 0 and 2 {
-				task("fuzzy find", $where) limit(CPU_TIME, 400ms);
+				task("fuzzy find") limit(CPU_TIME, 400ms);
 			}
 			call(SPSub);
+			send(Client);
 		}
-		message();
 	}
 }
 
 validator Center {
-	task("center", $where = *) {
-		message();
-		task("center", $where = *) {
-			repeat between 0 and 2 {
-				task("fuzzy find", $where);
+	thread Client(*, 1) {
+		task("center") {
+			send(Server);
+			recv(Server);
+		}
+	}
+	thread Server(*, 1) {
+		task("center") {
+			recv(Client);
+			repeat between 0 and 1 {
+				task("fuzzy find") limit(CPU_TIME, 400ms);
 			}
 			call(SPSub);
+			send(Client);
 		}
-		message();
 	}
 }
 
 validator ShowCache {
-	task("show cache", *) {
-		message();
-		task("show cache", *);
-		message();
+	thread Client(*, 1) {
+		task("show cache") {
+			send(Server);
+			recv(Server);
+		}
+	}
+	thread Server(*, 1) {
+		task("show cache") {
+			recv(Client);
+			send(Client);
+		}
 	}
 }
 
 validator ByNumber {
-	limit(REAL_TIME, 0.2s);
-	task("by number", $where = *) {
-		message();
-		task("by number", $where = *) {
+	thread Client(*, 1) {
+		task("by number") {
+			send(Server);
+			recv(Server);
+		}
+	}
+	thread Server(*, 1) {
+		task("by number") {
+			recv(Client);
 			repeat between 0 and 1 {
-				task("fuzzy find", $where);
+				task("fuzzy find") limit(CPU_TIME, 400ms);
 			}
 			call(SPSub);
+			send(Client);
 		}
-		message();
 	}
 }
 
-fragment recognizer CacheHit { notice("cache hit", *); }
-fragment recognizer CacheMiss { notice("cache miss", *); }
+validator Init {
+	thread Server(*, 1) {
+		task("reading database");
+		task("jump tables");
+	}
+}
+
+fragment recognizer CacheHit { notice("cache hit"); }
+fragment recognizer CacheMiss { notice("cache miss"); }
 
 assert(instances(Init) == 1 );
 assert(instances(ShowCache) <= 20);
