@@ -27,6 +27,7 @@ static MYSQL mysql;
 static std::vector<int> match_tally;     // how many paths matched N recognizers
 static std::vector<int> match_count;     // how many paths matched recognizer N
 static std::vector<int> resources_count; // # paths matching N, but over limits
+static int malformed_paths_count = 0;
 
 int main(int argc, char **argv) {
 	std::map<std::string,Recognizer*>::const_iterator rp;
@@ -89,9 +90,12 @@ int main(int argc, char **argv) {
 	mysql_free_result(res);
 	fprintf(stderr, " done: %d found.\n", threads.size());
 
+	//check_path(base, 3);
+	//return 0;
 	for (std::set<int>::const_iterator p=pathids.begin(); p!=pathids.end(); p++)
 		check_path(base, *p);
 
+	printf("malformed paths: %d\n", malformed_paths_count);
 	for (i=0; i<=recognizers.size(); i++)
 		printf("paths matching %d validator(s): %d\n", i, match_tally[i]);
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); rp++,i++)
@@ -161,6 +165,11 @@ static void check_path(const char *base, int pathid) {
 
 	int tally = 0;
 	path.done_inserting();
+	if (!path.valid()) {
+		printf("# path %d malformed -- not checked\n", pathid);
+		malformed_paths_count++;
+		return;
+	}
 	bool printed = false;
 	printf("# path %d\n", pathid);
 	path.print();

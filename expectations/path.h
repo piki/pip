@@ -114,6 +114,7 @@ class Path {
 public:
 	Path(void);
 	~Path(void);
+	inline bool valid(void) const { return root_thread != -1; }
 	// !! thread can start/end in different threads
 	void insert(PathTask *pt) { insert_task(pt, children[pt->thread_start]); }
 	void insert(PathNotice *pn) { insert_event(pn, children[pn->thread_id]); }

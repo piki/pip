@@ -46,6 +46,7 @@
 %token MESSAGE
 %token TASK
 %token THREAD
+%token THREAD_SET
 %token NOTICE
 %token LIMIT
 // tokens
@@ -123,11 +124,14 @@ statement:
 		| event ';'
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
 		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
-		| THREAD ';'															{ $$ = opr(THREAD, 1, NULL); }
-		| THREAD '{' statement_list '}'						{ $$ = opr(THREAD, 1, $3); }
+		| THREAD '(' ')' ';'																{ $$ = opr(THREAD, 2, NULL, NULL); }
+		| THREAD '(' ')' '{' statement_list '}'							{ $$ = opr(THREAD, 2, NULL, $5); }
+		| THREAD '(' IDENTIFIER ')' ';'											{ $$ = opr(THREAD, 2, idcl($3,BRANCH), NULL); }
+		| THREAD '(' IDENTIFIER ')' '{' statement_list '}'	{ $$ = opr(THREAD, 2, idcl($3,BRANCH), $6); }
+		| THREAD '=' IDENTIFIER ';'								{ $$ = opr(THREAD_SET, 2, idcl($3,BRANCH), NULL); }
 		| string_expr
 		| path_expr
-		| SPLIT '{' thread_list '}' JOIN '(' ANY branch_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $8); }
+		| SPLIT '{' thread_list '}' JOIN '(' branch_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $7); }
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| limit ';'
 		| '{' statement_list '}'									{ $$ = $2; }
@@ -149,13 +153,14 @@ thread_list:
 		;
 
 thread:
-		BRANCH ':' statement_list									{	$$ = opr(BRANCH, 2, NULL, $3); }
-		| BRANCH IDENTIFIER ':' statement_list		{	$$ = opr(BRANCH, 2, idcle($2,BRANCH), $4); }
+		BRANCH ':' statement_list											{	$$ = opr(BRANCH, 4, NULL, NULL, NULL, $3); }
+		| BRANCH '{' INTEGER ',' INTEGER '}' ':' statement_list		{	$$ = opr(BRANCH, 4, NULL, new IntNode($3), new IntNode($5), $8); }
+		| BRANCH IDENTIFIER ':' statement_list				{	$$ = opr(BRANCH, 4, idcle($2,BRANCH), NULL, NULL, $4); }
 		;
 
 branch_set:
 		branch_list																{ $$ = $1; }
-		| INTEGER																	{ $$ = new IntNode($1); }
+		| ANY INTEGER															{ $$ = new IntNode($2); }
 		;
 
 repeat:

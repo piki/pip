@@ -9,7 +9,7 @@
 #include "parsetree.h"
 #include "path.h"
 
-enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_CALL };
+enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_SPLIT, EXP_CALL };
 
 class Match {
 public:
@@ -78,6 +78,7 @@ typedef std::vector<Limit*> LimitList;
 
 class ExpEvent {
 public:
+	ExpEvent(int _priority) : priority(_priority) {}
 	virtual ~ExpEvent(void) {}
 	virtual void print(FILE *fp, int depth) const = 0;
 	virtual ExpEventType type(void) const = 0;
@@ -89,18 +90,22 @@ public:
 	// searches if we could have matched a varying number
 	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs,
 			bool *resources) const = 0;
+
+	int priority;
 };
 typedef std::vector<ExpEvent*> ExpEventList;
 typedef std::vector<ExpEventList> ExpThreadSet;
 
 class ExpTask : public ExpEvent {
 public:
-	ExpTask(const OperatorNode *onode, ExpThreadSet &threads);
+	ExpTask(const OperatorNode *onode, ExpThreadSet &threads, int _priority);
 	virtual ~ExpTask(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_TASK; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
 			bool *resources) const;
+	virtual int check_extras(const PathEventList &test, unsigned int ofs,
+			ExpEvent *front, ExpEvent *back, bool *resources) const;
 
 	Match *name, *host;
 	LimitList limits;
@@ -109,7 +114,7 @@ public:
 
 class ExpNotice : public ExpEvent {
 public:
-	ExpNotice(const OperatorNode *onode);
+	ExpNotice(const OperatorNode *onode, int _priority);
 	virtual ~ExpNotice(void) { delete name; delete host; }
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_NOTICE; }
@@ -121,7 +126,7 @@ public:
 
 class ExpMessageSend : public ExpEvent {
 public:
-	ExpMessageSend(const OperatorNode *onode, int _id);
+	ExpMessageSend(const OperatorNode *onode, int _id, int _priority);
 	virtual ~ExpMessageSend(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_MESSAGE_SEND; }
@@ -133,7 +138,7 @@ public:
 
 class ExpMessageRecv : public ExpEvent {
 public:
-	ExpMessageRecv(const OperatorNode *onode, int _id);
+	ExpMessageRecv(const OperatorNode *onode, int _id, int _priority);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_MESSAGE_RECV; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
@@ -143,7 +148,7 @@ public:
 
 class ExpRepeat : public ExpEvent {
 public:
-	ExpRepeat(const OperatorNode *onode, ExpThreadSet &threads);
+	ExpRepeat(const OperatorNode *onode, ExpThreadSet &threads, int _priority);
 	virtual ~ExpRepeat(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_REPEAT; }
@@ -156,7 +161,7 @@ public:
 
 class ExpXor : public ExpEvent {
 public:
-	ExpXor(const OperatorNode *onode, ExpThreadSet &threads);
+	ExpXor(const OperatorNode *onode, ExpThreadSet &threads, int _priority);
 	virtual ~ExpXor(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_XOR; }
@@ -166,9 +171,22 @@ public:
 	std::vector<ExpEventList> branches;
 };
 
+class ExpSplit : public ExpEvent {
+public:
+	ExpSplit(const OperatorNode *onode, ExpThreadSet &threads, int _priority);
+	virtual ~ExpSplit(void);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_SPLIT; }
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
+
+	std::vector<bool> optional;
+	std::vector<ExpEventList> branches;
+};
+
 class ExpCall : public ExpEvent {
 public:
-	ExpCall(const OperatorNode *onode);
+	ExpCall(const OperatorNode *onode, int _priority);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_CALL; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
@@ -188,6 +206,7 @@ public:
 
 	std::string name;
 	ExpThreadSet threads;
+	std::vector<int> thread_priority;
 	LimitList limits;
 	bool complete;    // match full paths (true) or fragments (false)
 	bool validating;  // classify matched paths as valid?

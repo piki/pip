@@ -327,7 +327,10 @@ static void check_order(const PathEventList &list) {
 void Path::done_inserting(void) {
 	std::map<int,PathEventList>::iterator thread;
 
-	assert(children.size() > 0);
+	if (children.size() == 0) {
+		fprintf(stderr, "No children ??\n");
+		return;
+	}
 
 	//fprintf(stderr, "Checking Path %d\n", path_id);
 	for (thread=children.begin(); thread!=children.end(); thread++) {
@@ -342,7 +345,10 @@ void Path::done_inserting(void) {
 	if (children.size() > 1) {
 		for (thread=children.begin(); thread!=children.end(); thread++) {
 			int msg_count = count_messages(thread->second);
-			assert(msg_count != 0);
+			if (msg_count == 0) {
+				fprintf(stderr, "Malformed path -- unconnected causality DAG: thread %d has no messages\n", thread->first);
+				return;
+			}
 		}
 
 		// set all PathMessageSend.pred fields
@@ -357,7 +363,7 @@ void Path::done_inserting(void) {
 				if (root != NULL) {
 					fprintf(stderr, "Path %d has multiple roots!\n", path_id);
 					ev->print(stderr, 1);
-					//abort();
+					return;
 				}
 				else {
 					root = (PathMessageSend*)ev;
@@ -378,8 +384,10 @@ void Path::done_inserting(void) {
 		root_thread = children.begin()->first;
 
 	assert(children.begin()->second.size() > 0);
-	ts_start = children.begin()->second[0]->start();
-	ts_end = children.begin()->second[children.begin()->second.size()-1]->end();
+	// !! root may not be the last to end
+	// but anything else assumes synchronized clocks
+	ts_start = children[root_thread][0]->start();
+	ts_end = children[root_thread][children[root_thread].size()-1]->end();
 
 	for (thread=children.begin(); thread!=children.end(); thread++)
 		tally(thread->second, true);

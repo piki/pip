@@ -1,3 +1,50 @@
+validator Data {
+	split {
+		branch {1,10}:
+			message();
+			thread();
+			split {
+				branch {1,10}:
+					message();
+					thread();
+					split {
+						branch {1,10}:
+							message();
+							thread();
+							xor {
+								branch:
+									task("request more", *);
+								branch:
+							}
+						branch:
+							xor {
+								branch:
+									task("request more", *);
+								branch:
+							}
+					} join(any 1);
+				branch:
+					xor {
+						branch:
+							task("request more", *);
+						branch:
+					}
+				branch:
+					xor {
+						branch:
+							notice(m/^Could not send/, *);
+						branch:
+					}
+			} join(any 1);
+		branch:
+			xor {
+				branch:
+					task("request more", *);
+				branch:
+			}
+	} join(any 1);
+}
+
 validator SendFail {
 	repeat between 1 and 100 {
 		notice(m/^Could not send/, *);
@@ -5,14 +52,24 @@ validator SendFail {
 }
 
 validator RequestMore {
-	task("request more", *);
+	repeat between 1 and 20 {
+		task("request more", *);
+	}
 }
 
+validator Join2 {
+	task("join", *) {
+		message();
+		message();
+		thread();
+	}
+}
 validator Join3 {
 	task("join", *) {
 		message();
 		message();
 		message();
+		thread();
 	}
 }
 validator Join4 {
@@ -21,6 +78,7 @@ validator Join4 {
 		message();
 		message();
 		message();
+		thread();
 	}
 }
 validator Join5 {
@@ -30,5 +88,6 @@ validator Join5 {
 		message();
 		message();
 		message();
+		thread();
 	}
 }
