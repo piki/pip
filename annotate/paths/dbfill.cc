@@ -169,7 +169,10 @@ static void read_file(const char *fn) {
 	}
 
 	// put all starts left in start_task into unpaired_tasks to be checked later
-	assert(!hostname.empty());
+	if (hostname.empty()) {
+		fprintf(stderr, "%s: Hostname is empty -- zero-length log file?\n", fn);
+		errors++;
+	}
 	for (PathNameTaskMap::const_iterator pathp=start_task.begin(); pathp!=start_task.end(); pathp++)
 		for (NameTaskMap::const_iterator namep=pathp->second.begin(); namep!=pathp->second.end(); namep++)
 			for (StartList::const_iterator eventp=namep->second.begin(); eventp!=namep->second.end(); eventp++)
@@ -219,7 +222,7 @@ static void check_unpaired_tasks(void) {
 					break;
 				case EV_END_TASK:{
 						if (!handle_end_task((EndTask*)ev, start_task)) {
-							fprintf(stderr, "task end without start on %s: ", tasksetp->first.c_str());
+							fprintf(stderr, "task end without start on %s, path %d: ", tasksetp->first.c_str(), ev->path_id);
 							ev->print(stderr);
 							errors++;
 						}
@@ -236,7 +239,7 @@ static void check_unpaired_tasks(void) {
 		for (PathNameTaskMap::const_iterator pathp=start_task.begin(); pathp!=start_task.end(); pathp++)
 			for (NameTaskMap::const_iterator namep=pathp->second.begin(); namep!=pathp->second.end(); namep++)
 				for (StartList::const_iterator eventp=namep->second.begin(); eventp!=namep->second.end(); eventp++) {
-					fprintf(stderr, "task start without end on %s: ", tasksetp->first.c_str());
+					fprintf(stderr, "task start without end on %s, path %d: ", tasksetp->first.c_str(), (*eventp)->path_id);
 					(*eventp)->print(stderr);
 					errors++;
 				}
