@@ -13,9 +13,7 @@ void *start(void *arg) {
 		int i;
 		for (i=0; i<50000000; i++) ;
 		ANNOTATE_END_TASK("child");
-#if 0
 		ANNOTATE_BELIEF(rand()%2 == 0, 0.6);
-#endif
 	}
 }
 
@@ -30,9 +28,7 @@ int main() {
 	printf("\n");
 	pthread_t child;
 	pthread_create(&child, NULL, start, NULL);
-#if 0
 	ANNOTATE_BELIEF(1, 0);
-#endif
 	while (1) {
 #if 0
 		struct tms clk;
