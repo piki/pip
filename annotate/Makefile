@@ -15,4 +15,4 @@ libjannotate.so: $(OBJS) jannotate.o
 	gcc -shared -o $@ $(OBJS) jannotate.o
 
 clean:
-	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) annotrans threadtest
+	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) annotrans threadtest *.class

@@ -34,11 +34,20 @@ JNIEXPORT void JNICALL Java_Annotate_endTask(JNIEnv *env, jclass cls, jstring _n
 
 /*
  * Class:     Annotate
- * Method:    setRequest
+ * Method:    setPathID
  * Signature: (I)V
  */
-JNIEXPORT void JNICALL Java_Annotate_setRequest(JNIEnv *env, jclass cls, jint reqid) {
-	ANNOTATE_SET_REQUEST(reqid);
+JNIEXPORT void JNICALL Java_Annotate_setPathID(JNIEnv *env, jclass cls, jint pathid) {
+	ANNOTATE_SET_PATH_ID(pathid);
+}
+
+/*
+ * Class:     Annotate
+ * Method:    endPathID
+ * Signature: (I)V
+ */
+JNIEXPORT void JNICALL Java_Annotate_endPathID(JNIEnv *env, jclass cls, jint pathid) {
+	ANNOTATE_END_PATH_ID(pathid);
 }
 
 /*

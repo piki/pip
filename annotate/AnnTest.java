@@ -1,7 +1,7 @@
 public class AnnTest implements Runnable {
 	public static void main(String[] args) {
 		Annotate.init();
-		Annotate.setRequest(5040);
+		Annotate.setPathID(5040);
 		Annotate.startTask("one to a hundred million");
 		for (int i=0; i<100000000; i++) {}
 		Annotate.startTask("subtask");
@@ -15,7 +15,7 @@ public class AnnTest implements Runnable {
 	}
 	public void run() {
 		System.out.println("child thread");
-		Annotate.setRequest(8712);
+		Annotate.setPathID(8712);
 		Annotate.startTask("child's hundred million");
 		for (int i=0; i<100000000; i++) {}
 		Annotate.endTask("child's hundred million");
