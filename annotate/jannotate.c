@@ -38,7 +38,7 @@ JNIEXPORT void JNICALL Java_Annotate_endTask(JNIEnv *env, jclass cls, jstring _n
  * Signature: (I)V
  */
 JNIEXPORT void JNICALL Java_Annotate_setPathID(JNIEnv *env, jclass cls, jint pathid) {
-	ANNOTATE_SET_PATH_ID(pathid);
+	ANNOTATE_SET_PATH_ID_INT(pathid);
 }
 
 /*
@@ -47,7 +47,7 @@ JNIEXPORT void JNICALL Java_Annotate_setPathID(JNIEnv *env, jclass cls, jint pat
  * Signature: (I)V
  */
 JNIEXPORT void JNICALL Java_Annotate_endPathID(JNIEnv *env, jclass cls, jint pathid) {
-	ANNOTATE_END_PATH_ID(pathid);
+	ANNOTATE_END_PATH_ID_INT(pathid);
 }
 
 /*
@@ -66,8 +66,8 @@ JNIEXPORT void JNICALL Java_Annotate_notice(JNIEnv *env, jclass cls, jstring _st
  * Method:    send
  * Signature: (II)V
  */
-JNIEXPORT void JNICALL Java_Annotate_send(JNIEnv *env, jclass cls, jint sender, jint msgid, jint size) {
-	ANNOTATE_SEND(sender, msgid, size);
+JNIEXPORT void JNICALL Java_Annotate_send(JNIEnv *env, jclass cls, jint msgid, jint size) {
+	ANNOTATE_SEND_INT(msgid, size);
 }
 
 /*
@@ -75,6 +75,6 @@ JNIEXPORT void JNICALL Java_Annotate_send(JNIEnv *env, jclass cls, jint sender, 
  * Method:    receive
  * Signature: (II)V
  */
-JNIEXPORT void JNICALL Java_Annotate_receive(JNIEnv *env, jclass cls, jint sender, jint msgid, jint size) {
-	ANNOTATE_RECEIVE(sender, msgid, size);
+JNIEXPORT void JNICALL Java_Annotate_receive(JNIEnv *env, jclass cls, jint msgid, jint size) {
+	ANNOTATE_RECEIVE_INT(msgid, size);
 }

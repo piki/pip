@@ -5,8 +5,8 @@ public class Annotate {
 	public static native void setPathID(int pathid);
 	public static native void endPathID(int pathid);
 	public static native void notice(String str);
-	public static native void send(int sender, int msgid, int size);
-	public static native void receive(int sender, int msgid, int size);
+	public static native void send(int msgid, int size);
+	public static native void receive(int msgid, int size);
 
 	static {
 		System.loadLibrary("jannotate");

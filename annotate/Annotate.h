@@ -58,18 +58,18 @@ JNIEXPORT void JNICALL Java_Annotate_notice
 /*
  * Class:     Annotate
  * Method:    send
- * Signature: (III)V
+ * Signature: (II)V
  */
 JNIEXPORT void JNICALL Java_Annotate_send
-  (JNIEnv *, jclass, jint, jint, jint);
+  (JNIEnv *, jclass, jint, jint);
 
 /*
  * Class:     Annotate
  * Method:    receive
- * Signature: (III)V
+ * Signature: (II)V
  */
 JNIEXPORT void JNICALL Java_Annotate_receive
-  (JNIEnv *, jclass, jint, jint, jint);
+  (JNIEnv *, jclass, jint, jint);
 
 #ifdef __cplusplus
 }

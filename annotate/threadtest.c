@@ -7,7 +7,7 @@
 void *start(void *arg) {
 	int n = 2;
 	while (1) {
-		ANNOTATE_SET_PATH_ID(n++);
+		ANNOTATE_SET_PATH_ID_INT(n++);
 		ANNOTATE_START_TASK("child");
 		printf("child\n"); fflush(stdout);
 		int i;
@@ -18,7 +18,7 @@ void *start(void *arg) {
 
 int main() {
 	ANNOTATE_INIT();
-	ANNOTATE_SET_PATH_ID(1);
+	ANNOTATE_SET_PATH_ID_INT(1);
 	pthread_t child;
 	pthread_create(&child, NULL, start, NULL);
 	while (1) {

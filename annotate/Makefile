@@ -6,6 +6,12 @@ CPPFLAGS += -DTHREADS
 
 all: libannotate.a libjannotate.so threadtest
 
+Annotate.h: Annotate.class
+	javah Annotate
+
+Annotate.class: Annotate.java
+	javac $<
+
 threadtest: threadtest.c
 	$(CC) $< -o $@ -lpthread -lrt -L. -lannotate
 
@@ -16,4 +22,6 @@ libjannotate.so: $(OBJS) jannotate.o
 	gcc -shared -o $@ $(OBJS) jannotate.o
 
 clean:
-	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) threadtest *.class
+	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) threadtest *.class Annotate.h
+
+jannotate.o:: Annotate.h
