@@ -1,7 +1,9 @@
-CFLAGS = -g -Wall `pkg-config --cflags glib-2.0`
+CFLAGS = -g -Wall
 CPPFLAGS = -I.
 PROGS = devowel lineno calc expect
-LDLIBS = -lm `pkg-config --libs glib-2.0`
+LDLIBS = -lm
+YACC = bison
+LEX = flex
 
 all: $(PROGS)
 
@@ -16,12 +18,13 @@ lineno: lineno.l
 calc: calc.l calc.y
 	$(YACC) -d calc.y
 	$(LEX) calc.l
-	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c y.tab.c -o $@ -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c calc.tab.c -o $@ -lm
 
-expect: expect.l expect.y parsetree.c
-	$(YACC) -d expect.y
+expect: expect.l expect.yy parsetree.cc
+	$(YACC) -d expect.yy
 	$(LEX) expect.l
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDLIBS) lex.yy.c y.tab.c parsetree.c -o $@
+	g++ $(CPPFLAGS) $(CFLAGS) $(LDLIBS) lex.yy.c expect.tab.cc parsetree.cc -o $@
 
 clean:
-	rm -f $(PROGS) lex.yy.c y.tab.c y.tab.h *.o *.exe
+	rm -f $(PROGS) lex.yy.c lex.yy.cc y.tab.c y.tab.h *.o *.exe \
+		*.tab.cc *.tab.hh *.tab.c *.tab.h

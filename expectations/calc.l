@@ -1,7 +1,7 @@
 %{
 #include <stdlib.h>
 void yyerror(char*);
-#include "y.tab.h"
+#include "calc.tab.h"
 %}
 
 digit		[0-9]

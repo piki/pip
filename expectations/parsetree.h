@@ -1,6 +1,9 @@
 #ifndef PARSE_TREE_H
 #define PARSE_TREE_H
 
+#include <string>
+#include <vector>
+
 #define RANGE_INF -1
 
 typedef enum { NODE_INT, NODE_STRING, NODE_REGEX, NODE_IDENTIFIER, NODE_OPERATOR } NodeType;
@@ -8,38 +11,54 @@ typedef enum {
 	SYM_UNBOUND, SYM_PATH_DECL, SYM_PATH_VAR, SYM_STRING_VAR
 } SymbolType;
 
-typedef struct {
+class Symbol {
+public:
+	Symbol(const std::string &_name) : type(SYM_UNBOUND), name(_name) {}
 	SymbolType type;
-	char *name;
-} Symbol;
+	std::string name;
+};
 
-typedef struct {
+class Node {
+public:
+	virtual NodeType type() const = 0;
+	virtual ~Node() {};
+};
+
+class IntNode : public Node {
+public:
+	IntNode(int _value) : value(_value) {}
+	inline NodeType type(void) const { return NODE_INT; }
 	int value;
-} IntNode;
+};
 
-typedef struct {
-	char *s;
-} StringNode;  /* also regex */
+class StringNode : public Node {
+public:
+	StringNode(bool regex, const char *_s) :
+		s(strdup(_s)), _type(regex?NODE_REGEX:NODE_STRING) {}
+	~StringNode(void) { free(s); }
+	inline NodeType type(void) const { return _type; }
+	char *s;    /* string or regex */
+private:
+	NodeType _type;
+};
 
-typedef struct {
+#define id(X) new IdentifierNode(X)
+class IdentifierNode : public Node {
+public:
+	IdentifierNode(Symbol *_sym) : sym(_sym) {}
+	inline NodeType type(void) const { return NODE_IDENTIFIER; }
 	Symbol *sym;
-} IdentifierNode;
+};
 
-typedef struct {
-	int op;
-	int noperands;
-	struct _Node *operands[1];  /* expandable */
-} OperatorNode;
-
-typedef struct _Node {
-	NodeType type;
-	union {
-		IntNode iconst;
-		StringNode sconst;
-		IdentifierNode id;
-		OperatorNode opr;
-	};
-} Node;
+#define opr(which, args...) new OperatorNode(which, args)
+class OperatorNode : public Node {
+public:
+	OperatorNode(int which, int argc, ...);
+	~OperatorNode();
+	inline NodeType type(void) const { return NODE_OPERATOR; }
+	int op, noperands;
+	std::vector<Node*> operands;
+};
 
 void symbols_init(void);
 /* Look for a symbol with the given name.  If none is found, create it. */
@@ -47,11 +66,6 @@ void symbols_init(void);
  * indicating error. */
 Symbol *symbol_lookup(const char *name);
 
-Node *constant_int(int n);
-Node *opr(int which, int argc, ...);
-Node *id(Symbol *sym);
-Node *constant_string(const char *s);
-Node *constant_regex(const char *s);
 
 void print_tree(const Node *node, int depth);
 
