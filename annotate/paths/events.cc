@@ -21,6 +21,12 @@ bool IDBlock::operator==(const IDBlock &test) const {
 	return len == test.len && !memcmp(data, test.data, len);
 }
 
+bool IDBlock::operator< (const IDBlock &test) const {
+	if (len < test.len) return true;
+	if (len > test.len) return false;
+	return memcmp(data, test.data, len) < 0;
+}
+
 const char *IDBlock::to_string(void) const {
 	static char buf[512];
 	for (int i=0; i<len; i++)
@@ -66,7 +72,7 @@ ResourceMark::ResourceMark(const char *buf) {
 		END);
 }
 
-Task::Task(const char *buf) : ResourceMark(buf) {
+Task::Task(const char *buf) : ResourceMark(buf), path_id(-1), thread_id(-1) {
 	scan(buf+ResourceMark::bufsiz, STRING, &name, END);
 }
 Task::~Task(void) { delete[] name; }

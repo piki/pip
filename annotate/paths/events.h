@@ -2,6 +2,7 @@
 #define EVENTS_H
 
 #include <sys/time.h>
+#include "common.h"
 
 typedef enum { EV_HEADER, EV_START_TASK, EV_END_TASK, EV_SET_PATH_ID, EV_END_PATH_ID, EV_NOTICE, EV_SEND, EV_RECV } EventType;
 
@@ -14,6 +15,7 @@ public:
 	~IDBlock(void) { if (data) delete[] data; }
 	void set(char *_data, int _len);
 	bool operator==(const IDBlock &test) const;
+	bool operator< (const IDBlock &test) const;
 	const char *to_string(void) const;
 
 	int len;
@@ -25,6 +27,7 @@ public:
 	virtual void print(FILE *fp = stdin) = 0;
 	virtual ~Event(void) {}
 	virtual EventType type(void) = 0;
+	bool operator< (const Event &test) const { return tv < test.tv; }
 	timeval tv;
 };
 
@@ -57,6 +60,7 @@ public:
 	virtual ~Task(void);
 
 	char *name;
+	int path_id, thread_id;
 };
 
 class StartTask : public Task {

@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include "common.h"
@@ -18,17 +19,17 @@ struct ltstr {
     return strcmp(s1, s2) < 0;
   }
 };
-struct ltIDBlock {
-  bool operator()(const IDBlock &id1, const IDBlock &id2) const {
-		if (id1.len < id2.len) return true;
-		if (id1.len > id2.len) return false;
-		return memcmp(id1.data, id2.data, id1.len) < 0;
-  }
-};
+
+typedef std::vector<StartTask *> StartList;
+typedef std::map<const char *, StartList, ltstr> NameTaskMap;
+typedef std::map<int, NameTaskMap> PathNameTaskMap;
+
 static MYSQL mysql;
 
 static void read_file(const char *fn);
+static bool handle_end_task(Task *end, PathNameTaskMap &start_task);
 static void reconcile(Message *send, Message *recv, bool is_send, int thread_id, int path_id);
+static void check_unpaired_tasks(void);
 static void check_unpaired_messages(void);
 
 static std::string table_tasks;
@@ -58,9 +59,9 @@ int main(int argc, char **argv) {
 	run_sql("CREATE TABLE %s (pathid int, name varchar(255), ts bigint, "
 		"thread_id int)", table_notices.c_str());
 	run_sql("CREATE TABLE %s (pathid int, name varchar(255), start bigint, "
-		"end bigint, utime int, stime int, major_fault int, minor_fault int, "
-		"vol_cs int, invol_cs int, thread_id int)",
-		table_tasks.c_str());
+		"end bigint, tdiff int, utime int, stime int, major_fault int, "
+		"minor_fault int, vol_cs int, invol_cs int, thread_start int, "
+		"thread_end int)", table_tasks.c_str());
 	run_sql("CREATE TABLE %s (thread_id int auto_increment primary key, "
 		"host varchar(255), prog varchar(255), pid int, tid int, ppid int, uid int, "
 		"start bigint, tz int)", table_threads.c_str());
@@ -71,28 +72,28 @@ int main(int argc, char **argv) {
 	for (int i=2; i<argc; i++)
 		read_file(argv[i]);
 
+	check_unpaired_tasks();
 	mysql_close(&mysql);
-
 	check_unpaired_messages();
+
 	printf("There were %d error%s\n", errors, errors==1?"":"s");
 	return errors > 0;
 }
 
-typedef std::map<IDBlock, Message*, ltIDBlock> MessageMap;
-static std::map<IDBlock, int, ltIDBlock> path_ids;
+typedef std::map<IDBlock, Message*> MessageMap;
+static std::map<IDBlock, int> path_ids;
+static std::map<std::string, std::set<Task*> > unpaired_tasks;
 static MessageMap sends;
 static MessageMap receives;
 static int next_id = 1;
 static void read_file(const char *fn) {
 	fprintf(stderr, "Reading %s\n", fn);
 	FILE *fp = fopen(fn, "r");
+	std::string hostname;
 	if (!fp) { perror(fn); return; }
 
 	int thread_id = -1;
-	typedef std::vector<Event *> EventList;
-	typedef std::map<const char *, EventList, ltstr> NameEventMap;
-	typedef std::map<int, NameEventMap> PathNameEventMap;
-	PathNameEventMap start_task;
+	PathNameTaskMap start_task;
 	Event *e = read_event(fp);
 	int current_id = -1;
 	while (e) {
@@ -103,44 +104,36 @@ static void read_file(const char *fn) {
 						table_threads.c_str(), hdr->hostname, hdr->processname, hdr->pid,
 						hdr->tid, hdr->ppid, hdr->uid, ts(hdr->tv), hdr->tz);
 					thread_id = mysql_insert_id(&mysql);
+					assert(hostname.empty());
+					hostname = hdr->hostname;
 				}
 				delete e;
 				break;
 			case EV_START_TASK:{
-				assert(thread_id != -1);
-				EventList *evl = &start_task[current_id][((Task*)e)->name];
-				evl->push_back(e);
-				break;
+					assert(thread_id != -1);
+					StartTask *task = (StartTask*)e;
+					task->thread_id = thread_id;
+					task->path_id = current_id;
+					StartList *evl = &start_task[current_id][task->name];
+					evl->push_back(task);
 				}
+				break;
 			case EV_END_TASK:{
 					assert(thread_id != -1);
-					Task *end = (Task*)e;
-					EventList *evl = &start_task[current_id][end->name];
-					if (evl == NULL || evl->empty()) {
-						fprintf(stderr, "start not found for...\n  ");
-						e->print(stderr);
-						abort();
+					EndTask *task = (EndTask*)e;
+					task->thread_id = thread_id;
+					task->path_id = current_id;
+					if (!handle_end_task(task, start_task)) {
+						assert(!hostname.empty());
+						unpaired_tasks[hostname].insert(task);
+						break;
 					}
-					Task *start = (Task*)evl->back();
-					evl->pop_back();
-					if (evl->empty()) 
-						start_task[current_id].erase(start->name);
-					run_sql("INSERT INTO %s VALUES "
-						"(%d, \"%s\", %lld, %lld, %ld, %ld, %d, %d, %d, %d, %d)",
-						table_tasks.c_str(), current_id, end->name,
-						ts(start->tv), ts(end->tv),
-						end->utime - start->utime,
-						end->stime - start->stime,
-						end->minor_fault - start->minor_fault,
-						end->major_fault - start->major_fault,
-						end->vol_cs - start->vol_cs,
-						end->invol_cs - start->invol_cs,
-						thread_id);
-					delete start;
 				}
-				delete e;
 				break;
 			case EV_SET_PATH_ID:
+				//!! if a task is open, stop billing it
+				//  anything in path_ids[the current id] is active and should be
+				//  paused.
 				//e->print();
 				if (path_ids.count(((NewPathID*)e)->path_id) == 0) {
 					current_id = path_ids[((NewPathID*)e)->path_id] = next_id++;
@@ -175,17 +168,83 @@ static void read_file(const char *fn) {
 		e = read_event(fp);
 	}
 
-	// print all starts, sends, and receives left in the hash tables
-	for (PathNameEventMap::const_iterator pathp=start_task.begin(); pathp!=start_task.end(); pathp++)
-		for (NameEventMap::const_iterator namep=pathp->second.begin(); namep!=pathp->second.end(); namep++)
-			for (EventList::const_iterator eventp=namep->second.begin(); eventp!=namep->second.end(); eventp++) {
-				fprintf(stderr, "Unmatched task start: ");
-				(*eventp)->print(stderr);
-				errors++;
-			}
+	// put all starts left in start_task into unpaired_tasks to be checked later
+	assert(!hostname.empty());
+	for (PathNameTaskMap::const_iterator pathp=start_task.begin(); pathp!=start_task.end(); pathp++)
+		for (NameTaskMap::const_iterator namep=pathp->second.begin(); namep!=pathp->second.end(); namep++)
+			for (StartList::const_iterator eventp=namep->second.begin(); eventp!=namep->second.end(); eventp++)
+				unpaired_tasks[hostname].insert(*eventp);
 }
 
-static void check_unpaired_messages() {
+static bool handle_end_task(Task *end, PathNameTaskMap &start_task) {
+	//!! use find() so it doesn't auto-create entire vectors
+	StartList *evl = &start_task[end->path_id][end->name];
+	if (evl == NULL || evl->empty())
+		return false;
+	Task *start = (Task*)evl->back();
+	evl->pop_back();
+	assert(start->path_id == end->path_id);
+	if (evl->empty()) start_task[end->path_id].erase(start->name);
+	run_sql("INSERT INTO %s VALUES "
+		"(%d, \"%s\", %lld, %lld, %ld, %ld, %ld, %d, %d, %d, %d, %d, %d)",
+		table_tasks.c_str(), start->path_id, end->name,
+		ts(start->tv), ts(end->tv),
+		end->tv - start->tv,         // !! wrong, doesn't account for switchage
+		end->utime - start->utime,
+		end->stime - start->stime,
+		end->minor_fault - start->minor_fault,
+		end->major_fault - start->major_fault,
+		end->vol_cs - start->vol_cs,
+		end->invol_cs - start->invol_cs,
+		start->thread_id, end->thread_id);
+	delete start;
+	delete end;
+	return true;
+}
+
+// print all tasks starts and ends left in the hash table
+static void check_unpaired_tasks(void) {
+	std::map<std::string, std::set<Task*> >::const_iterator tasksetp;
+	for (tasksetp=unpaired_tasks.begin(); tasksetp!=unpaired_tasks.end(); tasksetp++) {
+		// host is tasksetp->first
+		// set of unmatched tasks (starts and ends together) is tasksetp->second
+		PathNameTaskMap start_task;
+		for (std::set<Task*>::const_iterator taskp=tasksetp->second.begin(); taskp!=tasksetp->second.end(); taskp++) {
+			Task *ev = (Task*)(*taskp);
+			switch (ev->type()) {
+				case EV_START_TASK:{
+						StartList *evl = &start_task[ev->path_id][ev->name];
+						evl->push_back((StartTask*)ev);
+					}
+					break;
+				case EV_END_TASK:{
+						if (!handle_end_task((EndTask*)ev, start_task)) {
+							fprintf(stderr, "task end without start on %s: ", tasksetp->first.c_str());
+							ev->print(stderr);
+							errors++;
+						}
+					}
+					break;
+				default:
+					fprintf(stderr, "Unexpected event type in unpaired_tasks table: %d\n", ev->type());
+					abort();
+			}
+			//fprintf(stderr, "Unpaired task on %s: ", tasksetp->first.c_str()); ev->print(stderr);
+		}
+
+		// now let's see what's left in start_task
+		for (PathNameTaskMap::const_iterator pathp=start_task.begin(); pathp!=start_task.end(); pathp++)
+			for (NameTaskMap::const_iterator namep=pathp->second.begin(); namep!=pathp->second.end(); namep++)
+				for (StartList::const_iterator eventp=namep->second.begin(); eventp!=namep->second.end(); eventp++) {
+					fprintf(stderr, "task start without end on %s: ", tasksetp->first.c_str());
+					(*eventp)->print(stderr);
+					errors++;
+				}
+	}
+}
+
+// print all sends and receives left in the hash table
+static void check_unpaired_messages(void) {
 	MessageMap::const_iterator msgp;
 	fprintf(stderr, "Unmatched send count = %d\n", sends.size());
 	for (msgp=sends.begin(); msgp!=sends.end(); msgp++) {
