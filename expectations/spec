@@ -1,0 +1,81 @@
+path P1 {
+  task("PARSE_REQUEST", "web_server")
+    limit(CPU_TIME, {,2});
+  task("REVERSE_DNS_LOOKUP", "web_server")
+    limit(REAL_TIME, {10,50});
+	event("CACHE_MISS");
+	event(m/^FOO/);
+	task("LINK", $HERE=m/.*/) {
+		task("SP_TREE", $HERE);
+	}
+	xor {
+		{ event("THIS"); }
+		{ event("THAT"); }
+	}
+}
+
+path P3 : P1, P2;
+
+path DHT_recursive_shortcut {
+  task(m/^DHT/, $SRC=m/.*/);
+  repeat {1, 5} {
+    message();
+    task("DHT", "exacthost");
+  }
+  message();
+  task("DHT", $SRC);
+}
+
+path DHT_iterative {
+  task("DHT", $SRC=m/.*/);
+  repeat {1, 5} {
+    message();
+    task("DHT", m/.*/);
+    message();
+    task("DHT", $SRC);
+  }
+}
+
+path DHT_recursive {
+  task("DHT", $SRC=m/.*/);
+  message();
+  @PATH = repeat {1, 5} {
+    task("DHT", m/.*/);
+    message();
+  }
+  task("DHT", m/.*/);
+  reverse(@PATH);
+  message();
+  task("DHT", $SRC);
+}
+
+path DHT_Coral {
+  task("DHT", $SRC=m/.*/);
+  message();
+  task("DHT", m/.*/);
+  message();
+	repeat {2} {
+    split {
+      thread T1 {
+        message();
+        task("DHT", m/.*/);
+        message();
+      }
+      thread T2 {
+        message();
+        task("DHT", m/.*/);
+        message();
+      }
+      thread T3 {
+        message();
+        task("DHT", m/.*/);
+        message();
+      }
+    } join {2};
+    task("DHT", $SRC);
+  }
+  message();
+  task("DHT", m/.*/);
+  message();
+  task("DHT", $SRC);
+}
