@@ -19,6 +19,11 @@ struct ltstr {
     return strcmp(s1, s2) < 0;
   }
 };
+struct ltEvP {
+  bool operator()(const Event* s1, const Event* s2) const {
+    return *s1 < *s2;
+  }
+};
 
 typedef std::vector<StartTask *> StartList;
 typedef std::map<const char *, StartList, ltstr> NameTaskMap;
@@ -82,7 +87,7 @@ int main(int argc, char **argv) {
 
 typedef std::map<IDBlock, Message*> MessageMap;
 static std::map<IDBlock, int> path_ids;
-static std::map<std::string, std::set<Task*> > unpaired_tasks;
+static std::map<std::string, std::set<Task*, ltEvP> > unpaired_tasks;
 static MessageMap sends;
 static MessageMap receives;
 static int next_id = 1;
@@ -207,12 +212,12 @@ static bool handle_end_task(Task *end, PathNameTaskMap &start_task) {
 
 // print all tasks starts and ends left in the hash table
 static void check_unpaired_tasks(void) {
-	std::map<std::string, std::set<Task*> >::const_iterator tasksetp;
+	std::map<std::string, std::set<Task*, ltEvP> >::const_iterator tasksetp;
 	for (tasksetp=unpaired_tasks.begin(); tasksetp!=unpaired_tasks.end(); tasksetp++) {
 		// host is tasksetp->first
 		// set of unmatched tasks (starts and ends together) is tasksetp->second
 		PathNameTaskMap start_task;
-		for (std::set<Task*>::const_iterator taskp=tasksetp->second.begin(); taskp!=tasksetp->second.end(); taskp++) {
+		for (std::set<Task*, ltEvP>::const_iterator taskp=tasksetp->second.begin(); taskp!=tasksetp->second.end(); taskp++) {
 			Task *ev = (Task*)(*taskp);
 			switch (ev->type()) {
 				case EV_START_TASK:{
