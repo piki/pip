@@ -20,5 +20,6 @@ void ANNOTATE_RECEIVE(const void *msgid, int idsz, int size);
 void REAL_ANNOTATE_BELIEF(int condition, float max_fail_rate, const char *condstr, const char *file, int line);
 #define ANNOTATE_BELIEF(cond, rate) REAL_ANNOTATE_BELIEF(cond, rate, #cond, __FILE__, __LINE__);
 #endif
+#define ANNOTATE_BELIEF(cond, rate) do{}while(0)
 
 #endif
