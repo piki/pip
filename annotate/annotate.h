@@ -1,6 +1,10 @@
 #ifndef ANNOTATE_H
 #define ANNOTATE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void ANNOTATE_INIT(void);
 void ANNOTATE_START_TASK(const char *name);
 void ANNOTATE_END_TASK(const char *name);
@@ -21,5 +25,9 @@ void REAL_ANNOTATE_BELIEF(int condition, float max_fail_rate, const char *condst
 #define ANNOTATE_BELIEF(cond, rate) REAL_ANNOTATE_BELIEF(cond, rate, #cond, __FILE__, __LINE__);
 #endif
 #define ANNOTATE_BELIEF(cond, rate) do{}while(0)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
