@@ -230,6 +230,8 @@ int_expr:
 
 %%
 
+static bool yy_success = true;
+
 void yyerror(const char *fmt, ...) {
 	va_list args;
 	fprintf(stderr, "%s:%d: ", filename, yylno);
@@ -237,14 +239,16 @@ void yyerror(const char *fmt, ...) {
 	vfprintf(stderr, fmt, args);
 	va_end(args);
 	fputc('\n', stderr);
+	yy_success = false;
 }
 
-void expect_parse(const char *filename) {
+bool expect_parse(const char *filename) {
 	yyin = fopen(filename, "r");
 	if (!yyin) {
 		perror(filename);
-		exit(1);
+		return false;
 	}
 	yyparse();
 	fclose(yyin);
+	return yy_success;
 }

@@ -3,56 +3,34 @@ expectation Init {
 	task("jump tables", $where);
 }
 
-expectation LinkMiss {
+expectation Link {
 	task("link", $where = m/.*/) {
 		repeat between 0 and 2 {
 			task("fuzzy find", $where);
 		}
-		notice("cache miss", $where);
-		task("shortest path", $where);
-	}
-}
-
-expectation LinkHit {
-	task("link", $where = m/.*/) {
-		repeat between 0 and 2 {
-			task("fuzzy find", $where);
-		}
-		notice("cache hit", $where);
-	}
-}
-
-expectation LinkNotFound {
-	task("link", $where = m/.*/) {
-		repeat between 0 and 2 {
-			task("fuzzy find", $where);
+		xor {
+			branch:   // cache miss
+				notice("cache miss", $where);
+				task("shortest path", $where);
+			branch:   // cache hit
+				notice("cache hit", $where);
+			branch:   // actor not found
 		}
 	}
 }
 
-expectation CenterMiss {
+expectation Center {
 	task("center", $where = m/.*/) {
 		repeat between 0 and 2 {
 			task("fuzzy find", $where);
 		}
-		notice("cache miss", $where);
-		task("shortest path", $where);
-	}
-}
-
-expectation CenterHit {
-	task("center", $where = m/.*/) {
-		repeat between 0 and 2 {
-			task("fuzzy find", $where);
-		}
-		notice("cache hit", $where);
-	}
-}
-
-expectation CenterNotFound {
-	task("center", $where = m/.*/) {
-		repeat between 0 and 2 {
-			task("fuzzy find", $where);
+		xor {
+			branch:   // cache miss
+				notice("cache miss", $where);
+				task("shortest path", $where);
+			branch:   // cache hit
+				notice("cache hit", $where);
+			branch:   // actor not found
 		}
 	}
 }
@@ -61,29 +39,18 @@ expectation ShowCache {
 	task("show cache", m/.*/);
 }
 
-expectation ByNumberMiss {
+expectation ByNumber {
 	task("by number", $where = m/.*/) {
 		repeat between 0 and 1 {
 			task("fuzzy find", $where);
 		}
-		notice("cache miss", $where);
-		task("shortest path", $where);
-	}
-}
-
-expectation ByNumberHit {
-	task("by number", $where = m/.*/) {
-		repeat between 0 and 1 {
-			task("fuzzy find", $where);
-		}
-		notice("cache hit", $where);
-	}
-}
-
-expectation ByNumberNotFound {
-	task("by number", $where = m/.*/) {
-		repeat between 0 and 1 {
-			task("fuzzy find", $where);
+		xor {
+			branch:   // cache miss
+				notice("cache miss", $where);
+				task("shortest path", $where);
+			branch:   // cache hit
+				notice("cache hit", $where);
+			branch:   // actor not found
 		}
 	}
 }

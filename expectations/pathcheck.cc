@@ -21,7 +21,7 @@ struct ltstr {
 };
 static MYSQL mysql;
 
-extern void expect_parse(const char *filename);
+extern bool expect_parse(const char *filename);
 extern std::vector<Recognizer*> recognizers;
 int main(int argc, char **argv) {
 	unsigned int i;
@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	expect_parse(argv[2]);
+	if (!expect_parse(argv[2])) return 1;
 	printf("%d recognizers registered:\n", recognizers.size());
 	for (i=0; i<recognizers.size(); i++)
 		recognizers[i]->print();
@@ -68,20 +68,26 @@ int main(int argc, char **argv) {
 	}
 	mysql_free_result(res);
 
+	int match_count[recognizers.size()+1];
+	bzero(match_count, sizeof(int)*(recognizers.size()+1));
 	printf("%d paths to check\n", path.size());
 	for (std::map<int, Path>::iterator p=path.begin(); p!=path.end(); p++) {
+		int count = 0;
 		printf("%d:\n", p->first);
 		p->second.print();
-		bool found_one = 0;
 		for (i=0; i<recognizers.size(); i++) {
 			if (recognizers[i]->check(p->second)) {
+				count++;
 				printf("  %d (%s) matched!\n", i, recognizers[i]->name->name.c_str());
-				found_one = true;
 			}
 		}
-		if (!found_one)
+		if (!count)
 			printf("  nothing matched\n");
+		match_count[count]++;
 	}
+
+	for (i=0; i<=recognizers.size(); i++)
+		printf("paths matching %d recognizer(s): %d\n", i, match_count[i]);
 
 	mysql_close(&mysql);
 	return 0;

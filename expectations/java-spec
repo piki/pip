@@ -1,0 +1,26 @@
+expectation Parent {
+	task("one to a hundred million", $where = m/.*/) {
+		task("subtask", $where);
+	}
+	task("has an event", $where) {
+		notice("the event", $where);
+	}
+}
+
+expectation Child {
+	task("child's hundred million", m/.*/);
+}
+
+expectation Both {
+	repeat between 1 and 2 {
+		task(m/.*/, m/.*/) {
+			xor {
+				branch:
+					task(m/.*/, m/.*/);
+				branch:
+					notice(m/.*/, m/.*/);
+				branch:
+			}
+		}
+	}
+}

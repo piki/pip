@@ -20,6 +20,7 @@ public:
 	virtual const timeval &start(void) const = 0;
 	virtual const timeval &end(void) const = 0;
 };
+typedef std::vector<PathEvent *> PathEventList;
 
 class PathTask : public PathEvent {
 public:
@@ -39,7 +40,7 @@ public:
 	char *name;
 	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
 
-	std::vector<PathEvent *> children;
+	PathEventList children;
 
 private:
 	timeval ts_start, ts_end;
@@ -81,12 +82,12 @@ public:
 	void insert(PathMessage *pm) { insert(pm, children); }
 	void print(FILE *fp = stdout) const;
 
-	std::vector<PathEvent *> children;
+	PathEventList children;
 
 private:
-	void insert(PathTask *pt, std::vector<PathEvent *> &where);
-	void insert(PathNotice *pn, std::vector<PathEvent *> &where);
-	void insert(PathMessage *pm, std::vector<PathEvent *> &where);
+	void insert(PathTask *pt, PathEventList &where);
+	void insert(PathNotice *pn, PathEventList &where);
+	void insert(PathMessage *pm, PathEventList &where);
 };
 
 #endif

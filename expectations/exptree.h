@@ -61,20 +61,17 @@ public:
 	// searches if we could have matched a varying number
 	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs) const = 0;
 };
+typedef std::vector<ExpEvent*> ExpEventList;
 
-class ExpContainer : public ExpEvent {
-public:
-	std::vector<ExpEvent *> children;
-};
-
-class ExpTask : public ExpContainer {
+class ExpTask : public ExpEvent {
 public:
 	ExpTask(const OperatorNode *onode);
 	virtual ~ExpTask(void);
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs) const;
 
 	Match *name, *host;
+	ExpEventList children;
 };
 
 class ExpNotice : public ExpEvent {
@@ -82,7 +79,7 @@ public:
 	ExpNotice(const OperatorNode *onode);
 	virtual ~ExpNotice(void) { delete name; delete host; }
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs) const;
 
 	Match *name, *host;
 };
@@ -91,18 +88,29 @@ class ExpMessage : public ExpEvent {
 public:
 	virtual ~ExpMessage(void) {}
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs) const;
 	ExpTask *recip;
 };
 
-class ExpRepeat : public ExpContainer {
+class ExpRepeat : public ExpEvent {
 public:
 	ExpRepeat(const OperatorNode *onode);
 	virtual ~ExpRepeat(void);
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs) const;
 
 	int min, max;
+	ExpEventList children;
+};
+
+class ExpXor : public ExpEvent {
+public:
+	ExpXor(const OperatorNode *onode);
+	virtual ~ExpXor(void);
+	virtual void print(FILE *fp, int depth) const;
+	virtual int check(const PathEventList &test, unsigned int ofs) const;
+
+	std::vector<ExpEventList> branches;
 };
 
 class Recognizer {
@@ -110,12 +118,12 @@ public:
 	Recognizer(const Node *node);
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
-	void add_statements(const ListNode *node, ExpContainer *where);
+	void add_statements(const ListNode *node, ExpEventList *where);
 	bool check(const Path &path) const;
-	static int check(const std::vector<PathEvent*> &test, const std::vector<ExpEvent*> &list, int ofs);
+	static int check(const PathEventList &test, const ExpEventList &list, int ofs);
 
 	Symbol *name;
-	std::vector<ExpEvent *> children;
+	ExpEventList children;
 	bool complete;  /* match full paths (true) or fragments (false) */
 };
 

@@ -64,7 +64,7 @@ void ExpTask::print(FILE *fp, int depth) const {
 	}
 }
 
-int ExpTask::check(const std::vector<PathEvent*> &test, unsigned int ofs) const {
+int ExpTask::check(const PathEventList &test, unsigned int ofs) const {
 	if (ofs == test.size()) return -1;  // we need at least one
 	if (test[ofs]->type() != PEV_TASK) return -1;
 	PathTask *pt = (PathTask*)test[ofs];
@@ -87,7 +87,7 @@ void ExpNotice::print(FILE *fp, int depth) const {
 		depth*2, "", name->to_string(), host->to_string());
 }
 
-int ExpNotice::check(const std::vector<PathEvent*> &test, unsigned int ofs) const {
+int ExpNotice::check(const PathEventList &test, unsigned int ofs) const {
 	if (ofs == test.size()) return -1;  // we need at least one
 	if (test[ofs]->type() != PEV_NOTICE) return -1;
 	PathNotice *pn = (PathNotice*)test[ofs];
@@ -100,7 +100,7 @@ void ExpMessage::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<message />\n", depth*2, "");
 }
 
-int ExpMessage::check(const std::vector<PathEvent*> &test, unsigned int ofs) const {
+int ExpMessage::check(const PathEventList &test, unsigned int ofs) const {
 	return 1;
 }
 
@@ -130,7 +130,7 @@ void ExpRepeat::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s</repeat>\n", depth*2, "");
 }
 
-int ExpRepeat::check(const std::vector<PathEvent*> &test, unsigned int ofs) const {
+int ExpRepeat::check(const PathEventList &test, unsigned int ofs) const {
 	int count, my_ofs=ofs;
 	for (count=0; count<=max; count++) {
 		int res = Recognizer::check(test, children, my_ofs);
@@ -138,6 +138,37 @@ int ExpRepeat::check(const std::vector<PathEvent*> &test, unsigned int ofs) cons
 		my_ofs += res;
 	}
 	if (count >= min) return my_ofs - ofs;
+	return -1;
+}
+
+ExpXor::ExpXor(const OperatorNode *onode) {
+	assert(onode->op == XOR);
+	assert(onode->noperands == 1);
+	assert(onode->operands[0]->type() == NODE_LIST);
+}
+
+ExpXor::~ExpXor(void) {
+	for (unsigned int i=0; i<branches.size(); i++)
+		for (unsigned int j=0; j<branches[i].size(); j++)
+			delete branches[i][j];
+}
+
+void ExpXor::print(FILE *fp, int depth) const {
+	fprintf(fp, "%*s<xor>\n", depth*2, "");
+	for (unsigned int i=0; i<branches.size(); i++) {
+		printf("%*s<branch>\n", (depth+1)*2, "");
+		for (unsigned int j=0; j<branches[i].size(); j++)
+			branches[i][j]->print(fp, depth+2);
+		printf("%*s</branch>\n", (depth+1)*2, "");
+	}
+	fprintf(fp, "%*s</xor>\n", depth*2, "");
+}
+
+int ExpXor::check(const PathEventList &test, unsigned int ofs) const {
+	for (unsigned int i=0; i<branches.size(); i++) {
+		int res = Recognizer::check(test, branches[i], ofs);
+		if (res != -1) return res;  // !! greedy, continuation needed
+	}
 	return -1;
 }
 
@@ -151,15 +182,16 @@ Recognizer::Recognizer(const Node *node) {
 	assert(onode->operands[1]->type() == NODE_LIST);
 	name = ((IdentifierNode*)onode->operands[0])->sym;
 	const ListNode *statements = (ListNode*)onode->operands[1];
-	add_statements(statements, NULL);
+	add_statements(statements, &children);
 }
 
 Recognizer::~Recognizer(void) {
 	for (unsigned int i=0; i<children.size(); i++) delete children[i];
 }
 
-void Recognizer::add_statements(const ListNode *list, ExpContainer *where) {
+void Recognizer::add_statements(const ListNode *list, ExpEventList *where) {
 	unsigned int i;
+	assert(where != NULL);
 	for (i=0; i<list->size(); i++) {
 		const Node *node = (*list)[i];
 		switch (node->type()) {
@@ -173,30 +205,42 @@ void Recognizer::add_statements(const ListNode *list, ExpContainer *where) {
 								ExpTask *new_task = new ExpTask(onode);
 								if (onode->operands[2]) {
 									assert(onode->operands[2]->type() == NODE_LIST);
-									add_statements((ListNode*)onode->operands[2], new_task);
+									add_statements((ListNode*)onode->operands[2],
+										&new_task->children);
 								}
-								if (where) where->children.push_back(new_task);
-									else children.push_back(new_task);
+								where->push_back(new_task);
 							}
 							break;
 						case NOTICE:
-							if (where)
-								where->children.push_back(new ExpNotice(onode));
-							else
-								children.push_back(new ExpNotice(onode));
+							where->push_back(new ExpNotice(onode));
 							break;
 						case REPEAT:{
 								ExpRepeat *new_repeat = new ExpRepeat(onode);
 								assert(onode->operands[1]->type() == NODE_LIST);
-								add_statements((ListNode*)onode->operands[1], new_repeat);
-								if (where) where->children.push_back(new_repeat);
-									else children.push_back(new_repeat);
+								add_statements((ListNode*)onode->operands[1],
+									&new_repeat->children);
+								where->push_back(new_repeat);
+							}
+							break;
+						case XOR:{
+								ExpXor *new_xor = new ExpXor(onode);
+								ListNode *lnode = (ListNode*)onode->operands[0];
+								for (unsigned int j=0; j<lnode->size(); j++) {
+									assert((*lnode)[j]->type() == NODE_OPERATOR);
+									OperatorNode *branch = (OperatorNode*)(*lnode)[j];
+									assert(branch->op == BRANCH);
+									assert(branch->noperands == 1);
+									assert(branch->operands[0]->type() == NODE_LIST);
+									new_xor->branches.push_back(ExpEventList());
+									add_statements((ListNode*)branch->operands[0],
+										&new_xor->branches[j]);
+								}
+								where->push_back(new_xor);
 							}
 							break;
 						case MESSAGE:
 						case REVERSE:
 						case CALL:
-						case XOR:
 							fprintf(stderr, "op %s not implemented yet\n", get_op_name(onode->op));
 					}
 				}
@@ -220,7 +264,7 @@ bool Recognizer::check(const Path &p) const {
 	return check(p.children, children, 0) == (int)p.children.size();
 }
 
-int Recognizer::check(const std::vector<PathEvent*> &test, const std::vector<ExpEvent*> &list, int ofs) {
+int Recognizer::check(const PathEventList &test, const ExpEventList &list, int ofs) {
 	unsigned int my_ofs = ofs;
 	unsigned int i;
 	for (i=0; i<list.size(); i++) {
