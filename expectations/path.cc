@@ -53,6 +53,12 @@ void PathMessage::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<message />\n", depth*2, "");
 }
 
+Path::Path(void) : utime(0), stime(0), major_fault(0), minor_fault(0),
+		vol_cs(0), invol_cs(0), size(0) {
+	ts_start.tv_sec = ts_start.tv_usec = 0;
+	ts_end.tv_sec = ts_end.tv_usec = 0;
+}
+
 Path::~Path(void) {
 	for (unsigned int i=0; i<children.size(); i++)
 		delete children[i];
@@ -91,6 +97,7 @@ static OverlapType tvcmp(const PathEvent *eva, const PathEvent *evb) {
 }
 
 void Path::insert(PathTask *pt, std::vector<PathEvent *> &where) {
+	// !! really only need to compare against last child
 	for (unsigned int i=0; i<where.size(); i++) {
 		switch (tvcmp(where[i], pt)) {
 			case OV_START:
@@ -141,4 +148,35 @@ void Path::insert(PathMessage *pm, std::vector<PathEvent *> &where) {
 void Path::print(FILE *fp) const {
 	for (unsigned int i=0; i<children.size(); i++)
 		children[i]->print(fp, 0);
+}
+
+void Path::done_inserting(void) {
+	if (children.size() == 0) return;
+	ts_start = children[0]->start();
+	ts_end = children[children.size()-1]->end();
+	tally(&children);
+}
+
+void Path::tally(const PathEventList *list) {
+	for (unsigned int i=0; i<list->size(); i++) {
+		const PathEvent *ev = (*list)[i];
+		switch (ev->type()) {
+			case PEV_TASK:
+				utime += ((PathTask*)ev)->utime;
+				stime += ((PathTask*)ev)->stime;
+				major_fault += ((PathTask*)ev)->major_fault;
+				minor_fault += ((PathTask*)ev)->minor_fault;
+				vol_cs += ((PathTask*)ev)->vol_cs;
+				invol_cs += ((PathTask*)ev)->invol_cs;
+				tally(&((PathTask*)ev)->children);
+				break;
+			case PEV_NOTICE:
+				break;
+			case PEV_MESSAGE:
+				size += ((PathMessage*)ev)->size;
+				break;
+			default:
+				assert(!"invalid PathEventType");
+		}
+	}
 }

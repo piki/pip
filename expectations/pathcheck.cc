@@ -73,12 +73,22 @@ int main(int argc, char **argv) {
 	printf("%d paths to check\n", path.size());
 	for (std::map<int, Path>::iterator p=path.begin(); p!=path.end(); p++) {
 		int count = 0;
-		printf("%d:\n", p->first);
-		p->second.print();
+		p->second.done_inserting();
+//		p->second.print();
+		bool printed = false;
 		for (i=0; i<recognizers.size(); i++) {
-			if (recognizers[i]->check(p->second)) {
+			bool resources = true;
+			if (recognizers[i]->check(p->second, &resources)) {
 				count++;
-				printf("  %d (%s) matched!\n", i, recognizers[i]->name->name.c_str());
+				if (!resources) {
+					if (!printed) {
+						printed = true;
+						printf("%d:\n", p->first);
+						p->second.print();
+					}
+					printf("  %d (%s) matched, resources false\n",
+						i, recognizers[i]->name->name.c_str());
+				}
 			}
 		}
 		if (!count)

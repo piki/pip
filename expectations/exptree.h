@@ -47,14 +47,23 @@ private:
 
 class Limit { 
 public:
+	enum Metric { REAL_TIME=0, UTIME, STIME, CPU_TIME, MAJOR_FAULTS,
+		MINOR_FAULTS, VOL_CS, INVOL_CS, LATENCY, SIZE, LAST };
+
 	Limit(const OperatorNode *onode);
+	void print(FILE *fp, int depth) const;
+	bool check(const PathTask &test) const;
+	bool check(const PathMessage &test) const;
+	bool check(const Path &test) const;
+	bool check(float n) const { return n >= min && n <= max; }
 private:
 	float min, max;
+	Metric metric;
 };
+typedef std::vector<Limit*> LimitList;
 
 class ExpNotice;
 class ExpMessage;
-class ExpLimit;
 
 class ExpEvent {
 public:
@@ -66,7 +75,8 @@ public:
 	// -1.
 	// !! we need a way to return a continuation, i.e., for recursive
 	// searches if we could have matched a varying number
-	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs) const = 0;
+	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs,
+			bool *resources) const = 0;
 };
 typedef std::vector<ExpEvent*> ExpEventList;
 
@@ -75,10 +85,11 @@ public:
 	ExpTask(const OperatorNode *onode);
 	virtual ~ExpTask(void);
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const PathEventList &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
 
 	Match *name, *host;
-	std::vector<Limit*> limits;
+	LimitList limits;
 	ExpEventList children;
 };
 
@@ -87,17 +98,20 @@ public:
 	ExpNotice(const OperatorNode *onode);
 	virtual ~ExpNotice(void) { delete name; delete host; }
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const PathEventList &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
 
 	Match *name, *host;
 };
 
 class ExpMessage : public ExpEvent {
 public:
-	virtual ~ExpMessage(void) {}
+	virtual ~ExpMessage(void);
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const PathEventList &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
 	ExpTask *recip;
+	LimitList limits;
 };
 
 class ExpRepeat : public ExpEvent {
@@ -105,7 +119,8 @@ public:
 	ExpRepeat(const OperatorNode *onode);
 	virtual ~ExpRepeat(void);
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const PathEventList &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
 
 	int min, max;
 	ExpEventList children;
@@ -116,7 +131,8 @@ public:
 	ExpXor(const OperatorNode *onode);
 	virtual ~ExpXor(void);
 	virtual void print(FILE *fp, int depth) const;
-	virtual int check(const PathEventList &test, unsigned int ofs) const;
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
 
 	std::vector<ExpEventList> branches;
 };
@@ -126,12 +142,13 @@ public:
 	Recognizer(const Node *node);
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
-	void add_statements(const ListNode *node, ExpEventList *where);
-	bool check(const Path &path) const;
-	static int check(const PathEventList &test, const ExpEventList &list, int ofs);
+	bool check(const Path &path, bool *resources) const;
+	static int check(const PathEventList &test, const ExpEventList &list, int ofs,
+			bool *resources);
 
 	Symbol *name;
 	ExpEventList children;
+	LimitList limits;
 	bool complete;  /* match full paths (true) or fragments (false) */
 };
 

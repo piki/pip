@@ -8,7 +8,7 @@
 
 typedef enum { NODE_INT, NODE_STRING, NODE_REGEX, NODE_IDENTIFIER, NODE_OPERATOR, NODE_LIST, NODE_UNITS } NodeType;
 typedef enum {
-	SYM_UNBOUND, SYM_RECOGNIZER, SYM_PATH_VAR, SYM_STRING_VAR, SYM_BRANCH
+	SYM_METRIC, SYM_RECOGNIZER, SYM_PATH_VAR, SYM_STRING_VAR, SYM_BRANCH
 } SymbolType;
 
 class Symbol {
@@ -73,7 +73,8 @@ public:
 	OperatorNode(int which, int argc, ...);
 	~OperatorNode(void);
 	inline NodeType type(void) const { return NODE_OPERATOR; }
-	int op, noperands;
+	inline unsigned int nops(void) const { return operands.size(); }
+	int op;
 	std::vector<Node*> operands;
 };
 

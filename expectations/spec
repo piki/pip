@@ -1,4 +1,5 @@
 expectation E1 {
+	limit(REAL_TIME, 15s);
 	{ notice("FOO", "BAR"); }
   task("PARSE_REQUEST", "www.hp.com")
     limit(CPU_TIME, {0s-2s});
@@ -27,7 +28,9 @@ expectation E3 {
 expectation DHT_recursive_shortcut {
   task(m/^DHT/, $SRC=m/.*/);
   repeat between 1 and 5 {
-    message();
+    message()
+      limit(SIZE, 1kb)
+			limit(LATENCY, 0.5s);
     task("DHT", m/.*/);
   }
   message();

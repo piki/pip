@@ -52,7 +52,6 @@ Symbol *Symbol::find(const char *name, SymbolType type) {
 
 OperatorNode::OperatorNode(int which, int argc, ...) {
 	op = which;
-	noperands = argc;
 	va_list args;
 	va_start(args, argc);
 	for (int i=0; i<argc; i++)
@@ -99,7 +98,28 @@ static UnitType get_unit_by_name(const char *sym) {
 }
 
 UnitsNode::UnitsNode(float _amt, const char *_name) : amt(_amt) {
-	unit = _name ? get_unit_by_name(_name) : UNIT_NONE;
+	if (!_name) {
+		unit = UNIT_NONE;
+		return;
+	}
+
+	unit = get_unit_by_name(_name);
+	switch (unit) {
+		case UNIT_HOUR: amt *= 3600*1000000; unit = UNIT_USEC; break;
+		case UNIT_MIN:  amt *= 60*1000000; unit = UNIT_USEC; break;
+		case UNIT_SEC:  amt *= 1000000; unit = UNIT_USEC; break;
+		case UNIT_MSEC: amt *= 1000; unit = UNIT_USEC; break;
+		case UNIT_USEC: break;
+		case UNIT_NSEC: amt /= 1000; unit = UNIT_USEC; break;
+		case UNIT_BYTE: break;
+		case UNIT_KB:   amt *= 1024; unit = UNIT_BYTE; break;
+		case UNIT_MB:   amt *= 1048576; unit = UNIT_BYTE; break;
+		case UNIT_GB:   amt *= 1073741824; unit = UNIT_BYTE; break;
+		case UNIT_TB:   amt *= 1099511627776.0; unit = UNIT_BYTE; break;
+		default:
+			fprintf(stderr, "Invalid unit: %d\n", (int)unit);
+			exit(1);
+	}
 }
 
 ListNode::~ListNode(void) {
@@ -154,6 +174,8 @@ struct {
 };
 
 const char *get_op_name(int op) {
+	static char buf[2] = " ";
+	if (op <= 255) { buf[0] = op; return buf; }
 	for (int i=0; opmap[i].op > 0; i++)
 		if (op == opmap[i].op)
 			return opmap[i].name;
@@ -232,7 +254,7 @@ void print_tree(const Node *node, int depth) {
 					printf(");\n");
 					break;
 				case TASK:
-					switch (onode->noperands) {
+					switch (onode->nops()) {
 						case 2:
 							TAB printf("task(");
 							print_tree(onode->operands[0], depth);
@@ -413,7 +435,7 @@ void print_tree(const Node *node, int depth) {
 }
 #else
 void print_tree(const Node *node, int depth) {
-	int i;
+	unsigned int i;
 	printf("%*sNode %p: ", depth*2, "", node);
 	if (!node) { printf("NULL\n"); return; }
 	switch (node->type()) {
@@ -443,7 +465,7 @@ void print_tree(const Node *node, int depth) {
 				printf("operator %d (%c)\n", onode->op, onode->op);
 			else
 				printf("operator %d (%s)\n", onode->op, get_op_name(onode->op));
-			for (i=0; i<onode->noperands; i++)
+			for (i=0; i<onode->nops(); i++)
 				print_tree(onode->operands[i], depth+1);
 			break;}
 		case NODE_UNITS:{

@@ -78,8 +78,8 @@ bool yy_success = true;
 %%
 
 program:
-		program pathdecl													{ if (yy_success) { add_recognizer($2); print_tree($2, 0); } delete $2; }
-		| program assertdecl											{ if (yy_success) { add_assert($2); print_tree($2, 0); } delete $2; }
+		program pathdecl													{ if (yy_success) { add_recognizer($2); } delete $2; }
+		| program assertdecl											{ if (yy_success) { add_assert($2); } delete $2; }
 		|
 		;
 
@@ -100,7 +100,7 @@ statement_list:
 		
 statement:
 		REVERSE '(' path_expr ')' ';'							{ $$ = opr(REVERSE, 1, $3); }
-		| MESSAGE '(' ')' ';'											{ $$ = opr(MESSAGE, 0); }
+		| MESSAGE '(' ')' limit_list ';'					{ $$ = opr(MESSAGE, 1, $4); }
 		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }
 		| event ';'
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
@@ -109,6 +109,7 @@ statement:
 		| path_expr
 		| SPLIT '{' thread_list '}' JOIN '(' ANY branch_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $8); }
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
+		| limit ';'
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
 		;
@@ -147,11 +148,11 @@ limit_list:
 		;
 
 limit:
-		LIMIT '(' IDENTIFIER ',' limit_range ')'	{ $$ = opr(LIMIT, 2, idcg($3,UNBOUND), $5); }
+		LIMIT '(' IDENTIFIER ',' limit_range ')'	{ $$ = opr(LIMIT, 2, idcg($3,METRIC), $5); }
 		;
 
 limit_range:
-		unit_qty																	{ $$ = opr(RANGE, 2, 0, $1); }
+		unit_qty																	{ $$ = opr(RANGE, 2, new UnitsNode(0, NULL), $1); }
 		| '{' unit_qty '-' unit_qty '}'						{ $$ = opr(RANGE, 2, $2, $4); }
 		| '{' unit_qty '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
 		;
@@ -229,14 +230,14 @@ bool_expr:
 
 float_expr:
 		int_expr
-		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
-		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, idcg($3,UNBOUND), $5); }
-		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
-		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, idcg($3,UNBOUND), $5); }
-		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
-		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, idcg($3,UNBOUND), $5); }
-		| F_MIN '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MIN, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
-		| F_MIN '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MIN, 2, idcg($3,UNBOUND), $5); }
+		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), $5); }
+		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, idcg($3,METRIC), $5); }
+		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, idcg($3,METRIC), $5); }
+		| F_MIN '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MIN, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
+		| F_MIN '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MIN, 2, idcg($3,METRIC), $5); }
 		;
 
 int_expr:

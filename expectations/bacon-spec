@@ -11,7 +11,7 @@ expectation Link {
 		xor {
 			branch:   // cache miss
 				notice("cache miss", $where);
-				task("shortest path", $where) limit(CPU_TIME, 1.5s);
+				task("shortest path", $where) limit(CPU_TIME, 1.0s);
 			branch:   // cache hit
 				notice("cache hit", $where);
 			branch:   // actor not found
@@ -40,6 +40,7 @@ expectation ShowCache {
 }
 
 expectation ByNumber {
+	limit(REAL_TIME, 0.2s);
 	task("by number", $where = m/.*/) {
 		repeat between 0 and 1 {
 			task("fuzzy find", $where);

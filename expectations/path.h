@@ -39,11 +39,9 @@ public:
 
 	char *name;
 	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
+	timeval ts_start, ts_end;
 
 	PathEventList children;
-
-private:
-	timeval ts_start, ts_end;
 };
 
 class PathNotice : public PathEvent {
@@ -63,31 +61,41 @@ public:
 
 class PathMessage : public PathEvent {
 public:
-	PathMessage(const timeval &_ts) : recip(NULL), ts(_ts) {}
+	PathMessage(const timeval &_ts_send, const timeval &_ts_recv, int _size) :
+		recip(NULL), ts_send(_ts_send), ts_recv(_ts_recv), size(_size) {}
 	~PathMessage(void) { if (recip) delete recip; }
 	virtual PathEventType type(void) const { return PEV_MESSAGE; }
-	virtual const timeval &start(void) const { return ts; }
-	virtual const timeval &end(void) const { return ts; }
+	virtual const timeval &start(void) const { return ts_send; }
+	virtual const timeval &end(void) const { return ts_send; }
+	// end() returns ts_send rather than ts_recv because messages are
+	// children of their senders, sorted by send timestamp only
 	void print(FILE *fp = stdout, int depth = 0) const;
 
 	PathTask *recip;
-	timeval ts;
+	timeval ts_send, ts_recv;
+	int size;
 };
 
 class Path {
 public:
+	Path(void);
 	~Path(void);
 	void insert(PathTask *pt) { insert(pt, children); }
 	void insert(PathNotice *pn) { insert(pn, children); }
 	void insert(PathMessage *pm) { insert(pm, children); }
 	void print(FILE *fp = stdout) const;
+	void done_inserting(void);
 
 	PathEventList children;
 
+	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
+	timeval ts_start, ts_end;
+	int size;
 private:
 	void insert(PathTask *pt, PathEventList &where);
 	void insert(PathNotice *pn, PathEventList &where);
 	void insert(PathMessage *pm, PathEventList &where);
+	void tally(const PathEventList *list);
 };
 
 #endif
