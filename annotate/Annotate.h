@@ -33,10 +33,18 @@ JNIEXPORT void JNICALL Java_Annotate_endTask
 
 /*
  * Class:     Annotate
- * Method:    setRequest
+ * Method:    setPathID
  * Signature: (I)V
  */
-JNIEXPORT void JNICALL Java_Annotate_setRequest
+JNIEXPORT void JNICALL Java_Annotate_setPathID
+  (JNIEnv *, jclass, jint);
+
+/*
+ * Class:     Annotate
+ * Method:    endPathID
+ * Signature: (I)V
+ */
+JNIEXPORT void JNICALL Java_Annotate_endPathID
   (JNIEnv *, jclass, jint);
 
 /*

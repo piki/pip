@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,37 +14,42 @@
 
 typedef struct {
 	FILE *fp;
+	int procfd;
 	int path_id;
 } ThreadContext;
 
 #ifdef THREADS
+#include <linux/unistd.h>
 #include <pthread.h>
+
+_syscall0(pid_t,gettid)
+
 static pthread_key_t ctx_key;
 #define GET_CTX ({ ThreadContext *_pctx = pthread_getspecific(ctx_key); \
 		if (!_pctx) _pctx = new_context(); \
 		_pctx; })
-ThreadContext *new_context() {
-	ThreadContext *pctx = malloc(sizeof(ThreadContext));
-	char fn[256];
-	sprintf(fn, BASEPATH"/trace-%d-%x", getpid(), (int)pthread_self());
-	pctx->fp = fopen(fn, "w");
-	if (!pctx->fp) { perror(fn); exit(1); }
-	pctx->path_id = -1;
-	pthread_setspecific(ctx_key, pctx);
-	return pctx;
-}
+#define GETRUSAGE proc_getrusage
+static int proc_getrusage(int ign, struct rusage *ru);
+static ThreadContext *new_context();
+static void free_ctx(void *ctx);
+static void gather_header(void);
+static void output_header(FILE *fp);
+
 #else  /* no threads */
 static ThreadContext ctx;
 #define GET_CTX &ctx
+#define GETRUSAGE getrusage
 #endif
 
 typedef enum { STRING, CHAR, INT, END } OutType;
 static void output(FILE *fp, ...);
 
+static char *hostname, *processname;
+
 void ANNOTATE_INIT(void) {
 #ifdef THREADS
 	ThreadContext *pctx = malloc(sizeof(ThreadContext));
-	pthread_key_create(&ctx_key, free);
+	pthread_key_create(&ctx_key, free_ctx);
 	pthread_setspecific(ctx_key, pctx);
 #else
 	ThreadContext *pctx = &ctx;
@@ -55,54 +61,29 @@ void ANNOTATE_INIT(void) {
 	pctx->fp = fopen(fn, "w");
 	if (!pctx->fp) { perror(fn); exit(1); }
 	pctx->path_id = -1;
+	pctx->procfd = -1;
+
+#if 0    /* performance test */
+	struct timeval tv1, tv2;
+	int q;
+	struct rusage ru;
+	gettimeofday(&tv1, NULL);
+	for (q=0; q<100000; q++)
+		getrusage(RUSAGE_SELF, &ru);
+	gettimeofday(&tv2, NULL);
+	printf("getrusage syscall: %ld\n",
+		1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec);
+	gettimeofday(&tv1, NULL);
+	for (q=0; q<100000; q++)
+		proc_getrusage(RUSAGE_SELF, &ru);
+	gettimeofday(&tv2, NULL);
+	printf("getrusage in proc: %ld\n",
+		1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec);
+#endif
 
 	/* prepare values for the header */
-	char hostname[1024];
-	char processbuf[1024], *processname = NULL;
-	FILE *inp;
-	struct timeval tv;
-	struct timezone tz;
-	pid_t pid, ppid;
-	uid_t uid;
-
-	gethostname(hostname, sizeof(hostname));
-	gettimeofday(&tv, &tz);
-	pid = getpid();
-	ppid = getppid();
-	uid = getuid();
-#ifdef linux
-	inp = fopen("/proc/self/status", "r");  /* Linuxism! */
-	if (inp) {
-		while (fgets(processbuf, sizeof(processbuf), inp)) {
-			if (!strncasecmp(processbuf, "Name:", 5)) {
-				char *p;
-				p = strchr(processbuf, '\n');
-				*p = '\0';
-				p = strchr(processbuf, ':');
-				++p;
-				while (*p == ' ' || *p == '\t')  p++;
-				processname = p;
-				break;
-			}
-		}
-		fclose(inp);
-	}
-#else
-#warning The process name will not be present on non-Linux platforms
-#endif
-	
-	output(pctx->fp,
-		CHAR, 'H',
-		INT, MAGIC,
-		INT, VERSION,
-		STRING, hostname,
-		INT, tv.tv_sec, INT, tv.tv_usec,
-		INT, tz.tz_minuteswest,
-		INT, pid,
-		INT, ppid,
-		INT, uid,
-		STRING, processname ? processname : "",
-		END);
+	gather_header();
+	output_header(pctx->fp);
 }
 
 void ANNOTATE_START_TASK(const char *name) {
@@ -110,7 +91,7 @@ void ANNOTATE_START_TASK(const char *name) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	gettimeofday(&tv, NULL);
-	getrusage(RUSAGE_SELF, &ru);
+	GETRUSAGE(RUSAGE_SELF, &ru);
 	output(pctx->fp,
 		CHAR, 'T',
 		INT, pctx->path_id,
@@ -130,7 +111,7 @@ void ANNOTATE_END_TASK(const char *name) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	gettimeofday(&tv, NULL);
-	getrusage(RUSAGE_SELF, &ru);
+	GETRUSAGE(RUSAGE_SELF, &ru);
 	output(pctx->fp,
 		CHAR, 't',
 		INT, pctx->path_id,
@@ -153,7 +134,7 @@ void ANNOTATE_SET_PATH_ID(unsigned int path_id) {
 	struct rusage ru;
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	getrusage(RUSAGE_SELF, &ru);
+	GETRUSAGE(RUSAGE_SELF, &ru);
 	output(pctx->fp,
 		CHAR, 'P',
 		INT, pctx->path_id,
@@ -262,4 +243,107 @@ loop_break:
 	buf[1] = len & 0xFF;
 	fwrite(buf, len, 1, fp);
 	fflush(fp);
+}
+
+#ifdef THREADS
+static ThreadContext *new_context() {
+	ThreadContext *pctx = malloc(sizeof(ThreadContext));
+	char fn[256];
+	sprintf(fn, BASEPATH"/trace-%d-%x", getpid(), (int)pthread_self());
+	pctx->fp = fopen(fn, "w");
+	if (!pctx->fp) { perror(fn); exit(1); }
+	output_header(pctx->fp);
+	pctx->path_id = -1;
+	pctx->procfd = -1;
+	pthread_setspecific(ctx_key, pctx);
+	return pctx;
+}
+
+static void free_ctx(void *ctx) {
+	ThreadContext *pctx = ctx;
+	if (pctx->fp) fclose(pctx->fp);
+	if (pctx->procfd != -1) close(pctx->procfd);
+	free(pctx);
+}
+
+static int proc_getrusage(int ign, struct rusage *ru) {
+	ThreadContext *pctx = GET_CTX;
+	if (pctx->procfd == -1) {
+		char fn[256];
+		sprintf(fn, "/proc/%d/task/%d/stat", getpid(), gettid());
+		pctx->procfd = open(fn, O_RDONLY);
+		if (pctx->procfd == -1) { perror(fn); exit(1); }
+	}
+	else {
+		lseek(pctx->procfd, 0, SEEK_SET);
+	}
+
+	char buf[512];
+	int len = read(pctx->procfd, buf, sizeof(buf));
+	if (len == -1) { perror("read"); return -1; }
+	buf[len] = '\0';
+	int skip, tmp;
+	const char *p = buf;
+	for (skip=9; skip>0 && *p; p++) if (*p == ' ') skip--;
+	ru->ru_minflt = atoi(p);
+	for (skip=2; skip>0 && *p; p++) if (*p == ' ') skip--;
+	ru->ru_majflt = atoi(p);
+	for (skip=2; skip>0 && *p; p++) if (*p == ' ') skip--;
+	tmp = atoi(p);  /* utime in jiffies */
+	ru->ru_utime.tv_sec = tmp / 100;
+	ru->ru_utime.tv_usec = (tmp % 100) * 10000;
+	for (skip=1; skip>0 && *p; p++) if (*p == ' ') skip--;
+	tmp = atoi(p);  /* utime in jiffies */
+	ru->ru_stime.tv_sec = tmp / 100;
+	ru->ru_stime.tv_usec = (tmp % 100) * 10000;
+	ru->ru_nvcsw = ru->ru_nivcsw = 0;   /* proc doesn't have these? */
+
+	return 0;
+}
+#endif
+
+static void gather_header(void) {
+	char buf[1024];
+	FILE *inp;
+	gethostname(buf, sizeof(buf));
+	hostname = strdup(buf);
+#ifdef linux
+	inp = fopen("/proc/self/status", "r");  /* Linuxism! */
+	if (inp) {
+		while (fgets(buf, sizeof(buf), inp)) {
+			if (!strncasecmp(buf, "Name:", 5)) {
+				char *p;
+				p = strchr(buf, '\n');
+				*p = '\0';
+				p = strchr(buf, ':');
+				++p;
+				while (*p == ' ' || *p == '\t')  p++;
+				processname = strdup(p);
+				break;
+			}
+		}
+		fclose(inp);
+	}
+#else
+#warning The process name will not be present on non-Linux platforms
+#endif
+}
+
+static void output_header(FILE *fp) {
+	struct timeval tv;
+	struct timezone tz;
+	gettimeofday(&tv, &tz);
+	output(fp,
+		CHAR, 'H',
+		INT, MAGIC,
+		INT, VERSION,
+		STRING, hostname,
+		INT, tv.tv_sec, INT, tv.tv_usec,
+		INT, tz.tz_minuteswest,
+		INT, getpid(),
+		INT, gettid(),
+		INT, getppid(),
+		INT, getuid(),
+		STRING, processname ? processname : "",
+		END);
 }
