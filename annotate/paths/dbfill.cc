@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
 		"start bigint, tz int)", table_threads.c_str());
 	run_sql("CREATE TABLE %s (pathid int, ts_send bigint, ts_recv bigint, "
 		"size int, thread_send int, thread_recv int)", table_messages.c_str());
-	run_sql("CREATE TABLE %s (pathid int, pathblob varchar(512))", table_paths.c_str());
+	run_sql("CREATE TABLE %s (pathid int, pathblob varchar(255))", table_paths.c_str());
 
 	for (int i=2; i<argc; i++)
 		read_file(argv[i]);
