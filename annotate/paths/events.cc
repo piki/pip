@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,10 +29,22 @@ bool IDBlock::operator< (const IDBlock &test) const {
 }
 
 const char *IDBlock::to_string(void) const {
-	static char buf[512];
-	for (int i=0; i<len; i++)
-		sprintf(&buf[i*2], "%02x", (unsigned char)data[i]);
-	buf[len*2] = '\0';
+	static char buf[1024];
+	char *p = buf;
+	bool inbin = false;
+	for (int i=0; i<len; i++) {
+		if (isalpha(data[i])) {
+			if (inbin) { *(p++) = '>'; inbin = false; }
+			*(p++) = data[i];
+		}
+		else {
+			if (!inbin) { *(p++) = '<'; inbin = true; }
+			sprintf(p, "%02x", (unsigned char)data[i]);
+			p += 2;
+		}
+	}
+	if (inbin) { *(p++) = '>'; inbin = false; }
+	*p = '\0';
 	return buf;
 }
 

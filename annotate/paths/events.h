@@ -24,7 +24,7 @@ public:
 
 class Event {
 public:
-	virtual void print(FILE *fp = stdin) = 0;
+	virtual void print(FILE *fp = stdout) = 0;
 	virtual ~Event(void) {}
 	virtual EventType type(void) = 0;
 	bool operator< (const Event &test) const { return tv < test.tv; }
