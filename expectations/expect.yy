@@ -79,7 +79,7 @@ bool yy_success = true;
 
 program:
 		program pathdecl													{ if (yy_success) { add_recognizer($2); } delete $2; }
-		| program assertdecl											{ if (yy_success) { add_assert($2); } delete $2; }
+		| program assertdecl											{ if (yy_success) { add_aggregate($2); } }
 		|
 		;
 
@@ -153,13 +153,13 @@ limit:
 
 limit_range:
 		unit_qty																	{ $$ = opr(RANGE, 2, new UnitsNode(0, NULL), $1); }
-		| '{' unit_qty '-' unit_qty '}'						{ $$ = opr(RANGE, 2, $2, $4); }
+		| '{' unit_qty ',' unit_qty '}'						{ $$ = opr(RANGE, 2, $2, $4); }
 		| '{' unit_qty '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
 		;
 
 count_range:
-		'{' INTEGER '-' INTEGER '}'								{ $$ = opr(RANGE, 2, new IntNode($2), new IntNode($4)); }
-		| '{' INTEGER '+' '}'											{ $$ = opr(RANGE, 2, new IntNode($2), NULL); }
+		'{' int_expr ',' int_expr '}'							{ $$ = opr(RANGE, 2, $2, $4); }
+		| '{' int_expr '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
 		;
 
 unit_qty:
@@ -189,12 +189,14 @@ event:
 		;
 
 string_literal:
-		STRING																		{ $$ = new StringNode(false, $1); }
-		| REGEX																		{ $$ = new StringNode(true, $1); }
+		STRING																		{ $$ = new StringNode(NODE_STRING, $1); }
+		| REGEX																		{ $$ = new StringNode(NODE_REGEX, $1); }
+		| '*'																			{ $$ = new StringNode(NODE_WILDCARD, NULL); }
 		;
 
 string_expr:
-		string_literal
+		'!' string_expr														{ $$ = opr('!', 1, $2); }
+		| string_literal
 		| STRINGVAR																{ $$ = idf($1,STRING_VAR); }
 		| STRINGVAR '=' string_expr								{ $$ = opr('=', 2, idcl($1,STRING_VAR), $3); }
 		;
@@ -230,6 +232,7 @@ bool_expr:
 
 float_expr:
 		int_expr
+		| FLOAT																						{ $$ = new FloatNode($1); }
 		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }
 		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, idcg($3,METRIC), $5); }
 		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, idcg($3,METRIC), idf($5,RECOGNIZER)); }

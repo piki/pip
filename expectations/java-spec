@@ -1,5 +1,5 @@
 expectation Parent {
-	task("one to a hundred million", $where = m/.*/) {
+	task("one to a hundred million", $where = *) {
 		task("subtask", $where);
 	}
 	task("has an event", $where) {
@@ -8,17 +8,17 @@ expectation Parent {
 }
 
 expectation Child {
-	task("child's hundred million", m/.*/);
+	task("child's hundred million", *);
 }
 
 expectation Both {
 	repeat between 1 and 2 {
-		task(m/.*/, m/.*/) {
+		task(*, *) {
 			xor {
 				branch:
-					task(m/.*/, m/.*/);
+					task(*, *);
 				branch:
-					notice(m/.*/, m/.*/);
+					notice(*, *);
 				branch:
 			}
 		}

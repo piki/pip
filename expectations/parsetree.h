@@ -1,15 +1,14 @@
 #ifndef PARSE_TREE_H
 #define PARSE_TREE_H
 
+#include <map>
 #include <string>
 #include <vector>
 
 #define RANGE_INF -1
 
-typedef enum { NODE_INT, NODE_STRING, NODE_REGEX, NODE_IDENTIFIER, NODE_OPERATOR, NODE_LIST, NODE_UNITS } NodeType;
-typedef enum {
-	SYM_METRIC, SYM_RECOGNIZER, SYM_PATH_VAR, SYM_STRING_VAR, SYM_BRANCH
-} SymbolType;
+typedef enum { NODE_INT, NODE_FLOAT, NODE_STRING, NODE_REGEX, NODE_WILDCARD, NODE_IDENTIFIER, NODE_OPERATOR, NODE_LIST, NODE_UNITS } NodeType;
+typedef enum { SYM_METRIC, SYM_RECOGNIZER, SYM_PATH_VAR, SYM_STRING_VAR, SYM_BRANCH } SymbolType;
 
 class Symbol {
 public:
@@ -44,10 +43,17 @@ public:
 	int value;
 };
 
+class FloatNode : public Node {
+public:
+	FloatNode(float _value) : value(_value) {}
+	inline NodeType type(void) const { return NODE_FLOAT; }
+	float value;
+};
+
 class StringNode : public Node {
 public:
-	StringNode(bool regex, const char *_s) :
-		s(strdup(_s)), _type(regex?NODE_REGEX:NODE_STRING) {}
+	StringNode(NodeType type, const char *_s) :
+		s(type == NODE_WILDCARD ? NULL : strdup(_s)), _type(type) {}
 	~StringNode(void) { free(s); }
 	inline NodeType type(void) const { return _type; }
 	char *s;    /* string or regex */
@@ -106,6 +112,12 @@ private:
 const char *get_op_name(int op);
 void print_tree(const Node *node, int depth);
 void add_recognizer(const Node *node);
-void add_assert(const Node *node);
+void add_aggregate(Node *node);
+
+class Recognizer;
+class Aggregate;
+extern std::map<std::string, Recognizer*> recognizers;
+extern std::vector<Aggregate*> aggregates;
+extern bool expect_parse(const char *filename);
 
 #endif

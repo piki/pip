@@ -442,6 +442,9 @@ void print_tree(const Node *node, int depth) {
 		case NODE_INT:
 			printf("int: %d\n", ((IntNode*)node)->value);
 			break;
+		case NODE_FLOAT:
+			printf("float: %f\n", ((FloatNode*)node)->value);
+			break;
 		case NODE_STRING:
 			printf("string: \"%s\"\n", ((StringNode*)node)->s);
 			break;
@@ -479,148 +482,15 @@ void print_tree(const Node *node, int depth) {
 }
 #endif
 
-#undef TAB
-#define TAB
-void add_assert(const Node *node) {
-	return;
-	if (!node) { return; }
-	switch (node->type()) {
-		case NODE_INT:
-			printf("%d", ((IntNode*)node)->value);
-			break;
-		case NODE_STRING:
-			printf("\"%s\"", ((StringNode*)node)->s);
-			break;
-		case NODE_REGEX:
-			printf("m/%s/", ((StringNode*)node)->s);
-			break;
-		case NODE_IDENTIFIER:
-			printf("%s", ((IdentifierNode*)node)->sym->name.c_str());
-			break;
-		case NODE_OPERATOR:{
-			OperatorNode *onode = (OperatorNode*)node;
-			switch (onode->op) {
-				case ASSERT:
-					TAB printf("assert( ");
-					add_assert(onode->operands[0]);
-					printf(" )\n");
-					break;
-				case RANGE:
-					printf("{");
-					add_assert(onode->operands[0]);
-					printf("...");
-					if (onode->operands[1]) add_assert(onode->operands[1]);
-					printf("}");
-					break;
-				case '<':
-				case '>':
-					add_assert(onode->operands[0]);
-					printf(" %c ", onode->op);
-					add_assert(onode->operands[1]);
-					break;
-				case DURING:
-					TAB printf("during(");
-					add_assert(onode->operands[0]);
-					printf(") ");
-					add_assert(onode->operands[1]);
-					break;
-				case ANY:
-					printf("any ");
-					add_assert(onode->operands[0]);
-					break;
-				case B_AND:
-					add_assert(onode->operands[0]);
-					printf(" && ");
-					add_assert(onode->operands[1]);
-					break;
-				case B_OR:
-					add_assert(onode->operands[0]);
-					printf(" || ");
-					add_assert(onode->operands[1]);
-					break;
-				case IMPLIES:
-					add_assert(onode->operands[0]);
-					printf(" -> ");
-					add_assert(onode->operands[1]);
-					break;
-				case IN:
-					add_assert(onode->operands[0]);
-					printf(" in ");
-					add_assert(onode->operands[1]);
-					break;
-				case LE:
-					add_assert(onode->operands[0]);
-					printf(" <= ");
-					add_assert(onode->operands[1]);
-					break;
-				case GE:
-					add_assert(onode->operands[0]);
-					printf(" >= ");
-					add_assert(onode->operands[1]);
-					break;
-				case EQ:
-					add_assert(onode->operands[0]);
-					printf(" == ");
-					add_assert(onode->operands[1]);
-					break;
-				case NE:
-					add_assert(onode->operands[0]);
-					printf(" != ");
-					add_assert(onode->operands[1]);
-					break;
-				case '!':
-					printf("!");
-					add_assert(onode->operands[0]);
-					break;
-				case INSTANCES:
-					printf("instances(");
-					add_assert(onode->operands[0]);
-					printf(")");
-					break;
-				case UNIQUE:
-					printf("unique(");
-					add_assert(onode->operands[0]);
-					printf(")");
-					break;
-				case F_MAX:
-					printf("max(");
-					add_assert(onode->operands[0]);
-					printf(", ");
-					add_assert(onode->operands[1]);
-					printf(")");
-					break;
-				case AVERAGE:
-					printf("average(");
-					add_assert(onode->operands[0]);
-					printf(", ");
-					add_assert(onode->operands[1]);
-					printf(")");
-					break;
-				case STDDEV:
-					printf("stddev(");
-					add_assert(onode->operands[0]);
-					printf(", ");
-					add_assert(onode->operands[1]);
-					printf(")");
-					break;
-				default:
-					printf("\n\n\nunhandled operator: ");
-					if (onode->op <= 255)
-						printf("%d (%c)\n", onode->op, onode->op);
-					else
-						printf("%d (%s)\n", onode->op, get_op_name(onode->op));
-					exit(1);
-			}
-			break;}
-		default:
-			fprintf(stderr, "invalid node type %d\n", node->type());
-			assert(!"not reached");
-	}
-}
-
-std::vector<Recognizer*> recognizers;
+std::map<std::string, Recognizer*> recognizers;
+std::vector<Aggregate*> aggregates;
 
 void add_recognizer(const Node *node) {
 	Recognizer *r = new Recognizer(node);
-	recognizers.push_back(r);
+	recognizers[r->name->name] = r;
+}
+
+void add_aggregate(Node *node) {
+	Aggregate *a = new Aggregate(node);
+	aggregates.push_back(a);
 }

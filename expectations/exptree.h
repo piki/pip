@@ -5,20 +5,24 @@
 #include <vector>
 #include <stdio.h>
 #include <pcre.h>
+#include "aggregates.h"
 #include "parsetree.h"
 #include "path.h"
 
 class Match {
 public:
+	Match(bool _negate) : negate(_negate) {}
 	virtual ~Match(void) {}
 	virtual const char *to_string(void) const = 0;
 	virtual bool check(const std::string &test) const = 0;
-	static Match *create(StringNode *node);
+	static Match *create(Node *node, bool negate);
+protected:
+	bool negate;
 };
 
 class StringMatch : public Match {
 public:
-	StringMatch(const std::string &_data) : data(_data) {}
+	StringMatch(const std::string &_data, bool _negate) : Match(_negate), data(_data) {}
 	virtual const char *to_string(void) const { return data.c_str(); }
 	virtual bool check(const std::string &test) const;
 private:
@@ -27,7 +31,7 @@ private:
 
 class RegexMatch : public Match {
 public:
-	RegexMatch(const std::string &_data);
+	RegexMatch(const std::string &_data, bool _negate);
 	virtual ~RegexMatch(void);
 	virtual const char *to_string(void) const { return "m/.../"; }
 	virtual bool check(const std::string &test) const;
@@ -36,9 +40,16 @@ private:
 	pcre_extra *study;
 };
 
+class AnyMatch : public Match {
+public:
+	AnyMatch(bool _negate) : Match(_negate) {}
+	virtual const char *to_string(void) const { return "*"; }
+	virtual bool check(const std::string &test) const { return !negate; }
+};
+
 class VarMatch : public Match {
 public:
-	VarMatch(const Symbol *_sym) : sym(_sym) {}
+	VarMatch(const Symbol *_sym, bool _negate) : Match(_negate), sym(_sym) {}
 	virtual const char *to_string(void) const { return sym->name.c_str(); }
 	virtual bool check(const std::string &test) const;
 private:
@@ -52,9 +63,9 @@ public:
 
 	Limit(const OperatorNode *onode);
 	void print(FILE *fp, int depth) const;
-	bool check(const PathTask &test) const;
-	bool check(const PathMessage &test) const;
-	bool check(const Path &test) const;
+	bool check(const PathTask *test) const;
+	bool check(const PathMessageSend *test) const;
+	bool check(const Path *test) const;
 	bool check(float n) const { return n >= min && n <= max; }
 private:
 	float min, max;
@@ -137,12 +148,23 @@ public:
 	std::vector<ExpEventList> branches;
 };
 
+class ExpCall : public ExpEvent {
+public:
+	ExpCall(const OperatorNode *onode);
+	virtual void print(FILE *fp, int depth) const;
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
+
+	std::string target;
+};
+
 class Recognizer {
 public:
 	Recognizer(const Node *node);
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
-	bool check(const Path &path, bool *resources) const;
+	bool check(const Path *path, bool *resources) const;
+	int check(const PathEventList &test, int ofs, bool *resources) const;
 	static int check(const PathEventList &test, const ExpEventList &list, int ofs,
 			bool *resources);
 

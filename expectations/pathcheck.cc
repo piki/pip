@@ -1,29 +1,34 @@
+#include <assert.h>
 #include <string>
 #include <stdarg.h>
 #include <stdio.h>
 #include "path.h"
 #include <mysql/mysql.h>
 #include <map>
+#include "aggregates.h"
 #include "exptree.h"
 
+static void check_path(const char *base, int pathid);
+static void run_sql(const char *fmt, ...)
+	__attribute__((__format__(printf,1,2)));
 inline static timeval tv(long long ts) {
 	timeval ret;
 	ret.tv_sec = ts/1000000;
 	ret.tv_usec = ts%1000000;
 	return ret;
 }
-static void run_sql(const char *fmt, ...)
-	__attribute__((__format__(printf,1,2)));
 struct ltstr {
   bool operator()(const char* s1, const char* s2) const {
     return strcmp(s1, s2) < 0;
   }
 };
 static MYSQL mysql;
+static std::vector<int> match_tally;     // how many paths matched N recognizers
+static std::vector<int> match_count;     // how many paths matched recognizer N
+static std::vector<int> resources_count; // # paths matching N, but over limits
 
-extern bool expect_parse(const char *filename);
-extern std::vector<Recognizer*> recognizers;
 int main(int argc, char **argv) {
+	std::map<std::string,Recognizer*>::const_iterator rp;
 	unsigned int i;
 
 	if (argc != 3) {
@@ -33,13 +38,18 @@ int main(int argc, char **argv) {
 
 	if (!expect_parse(argv[2])) return 1;
 	printf("%d recognizers registered:\n", recognizers.size());
-	for (i=0; i<recognizers.size(); i++)
-		recognizers[i]->print();
-	printf("------\n");
-	
-	std::string base(argv[1]);
-	std::string table_tasks = base + "_tasks";
-	std::string table_notices = base + "_notices";
+	for (rp=recognizers.begin(); rp!=recognizers.end(); rp++)
+		rp->second->print();
+	printf("----------------------------------------------------------------\n");
+	printf("%d aggregates registered:\n", aggregates.size());
+	for (i=0; i<aggregates.size(); i++)
+		aggregates[i]->print();
+	printf("----------------------------------------------------------------\n");
+	match_tally.insert(match_tally.end(), recognizers.size()+1, 0);
+	match_count.insert(match_count.end(), recognizers.size(), 0);
+	resources_count.insert(resources_count.end(), recognizers.size(), 0);
+
+	const char *base = argv[1];
 
 	mysql_init(&mysql);
 	if (!mysql_real_connect(&mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
@@ -47,57 +57,37 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	/* !! "order by" is expensive -- better to allow inserting children first */
-	std::map<int, Path> path;
-	run_sql("SELECT * FROM %s order by start", table_tasks.c_str());
+	std::vector<int> pathids;
+	fprintf(stderr, "Reading pathids...");
+	run_sql("SELECT pathid from %s_paths", base);
 	MYSQL_RES *res = mysql_use_result(&mysql);
 	MYSQL_ROW row;
 	while ((row = mysql_fetch_row(res)) != NULL) {
-		int path_id = atoi(row[0]);
-		PathTask *pt = new PathTask(row);
-		path[path_id].insert(pt);
+		pathids.push_back(atoi(row[0]));
 	}
 	mysql_free_result(res);
+	fprintf(stderr, " done: %d found.\n", pathids.size());
 
-	run_sql("SELECT * FROM %s", table_notices.c_str());
+	fprintf(stderr, "Reading threads...");
+	run_sql("SELECT * from %s_threads", base);
 	res = mysql_use_result(&mysql);
 	while ((row = mysql_fetch_row(res)) != NULL) {
-		int path_id = atoi(row[0]);
-		PathNotice *pn = new PathNotice(row);
-		path[path_id].insert(pn);
+		threads[atoi(row[0])] = new PathThread(row);
 	}
 	mysql_free_result(res);
+	fprintf(stderr, " done: %d found.\n", threads.size());
 
-	int match_count[recognizers.size()+1];
-	bzero(match_count, sizeof(int)*(recognizers.size()+1));
-	printf("%d paths to check\n", path.size());
-	for (std::map<int, Path>::iterator p=path.begin(); p!=path.end(); p++) {
-		int count = 0;
-		p->second.done_inserting();
-//		p->second.print();
-		bool printed = false;
-		for (i=0; i<recognizers.size(); i++) {
-			bool resources = true;
-			if (recognizers[i]->check(p->second, &resources)) {
-				count++;
-				if (!resources) {
-					if (!printed) {
-						printed = true;
-						printf("%d:\n", p->first);
-						p->second.print();
-					}
-					printf("  %d (%s) matched, resources false\n",
-						i, recognizers[i]->name->name.c_str());
-				}
-			}
-		}
-		if (!count)
-			printf("  nothing matched\n");
-		match_count[count]++;
-	}
+	for (i=0; i<pathids.size(); i++)
+		check_path(base, pathids[i]);
 
 	for (i=0; i<=recognizers.size(); i++)
-		printf("paths matching %d recognizer(s): %d\n", i, match_count[i]);
+		printf("paths matching %d recognizer(s): %d\n", i, match_tally[i]);
+	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); rp++,i++)
+		printf("paths matching recognizer \"%s\": %d (%d over limits)\n",
+			rp->second->name->name.c_str(), match_count[i], resources_count[i]);
+
+	for (i=0; i<aggregates.size(); i++)
+		printf("aggregate %d: %d\n", i, aggregates[i]->check());
 
 	mysql_close(&mysql);
 	return 0;
@@ -109,11 +99,81 @@ static void run_sql(const char *fmt, ...) {
 	va_start(arg, fmt);
 	vsprintf(query, fmt, arg);
 	va_end(arg);
-	//puts(query);
+	//fprintf(stderr, "SQL(\"%s\")\n", query);
 	if (mysql_query(&mysql, query) != 0) {
 		fprintf(stderr, "Database error:\n");
 		fprintf(stderr, "  QUERY: \"%s\"\n", query);
 		fprintf(stderr, "  MySQL error: \"%s\"\n", mysql_error(&mysql));
 		exit(1);
 	}
+}
+
+static void check_path(const char *base, int pathid) {
+	Path path;
+	std::map<std::string,Recognizer*>::const_iterator rp;
+	unsigned int i;
+
+	path.path_id = pathid;
+
+	/* !! "order by" is expensive -- better to allow inserting children first */
+	run_sql("SELECT * FROM %s_tasks WHERE pathid=%d ORDER BY start", base, pathid);
+	MYSQL_RES *res = mysql_use_result(&mysql);
+	MYSQL_ROW row;
+	while ((row = mysql_fetch_row(res)) != NULL) {
+		assert(atoi(row[0]) == pathid);
+		PathTask *pt = new PathTask(row);
+		path.insert(pt);
+	}
+	mysql_free_result(res);
+
+	run_sql("SELECT * FROM %s_notices WHERE pathid=%d", base, pathid);
+	res = mysql_use_result(&mysql);
+	while ((row = mysql_fetch_row(res)) != NULL) {
+		assert(atoi(row[0]) == pathid);
+		PathNotice *pn = new PathNotice(row);
+		path.insert(pn);
+	}
+	mysql_free_result(res);
+
+	run_sql("SELECT * FROM %s_messages WHERE pathid=%d", base, pathid);
+	res = mysql_use_result(&mysql);
+	while ((row = mysql_fetch_row(res)) != NULL) {
+		assert(atoi(row[0]) == pathid);
+		PathMessage *pm = new PathMessage(row);
+		path.insert(pm);
+	}
+	mysql_free_result(res);
+
+	int tally = 0;
+	path.done_inserting();
+	bool printed = false;
+	//printf("# path %d\n", pathid);
+	//path.print();
+	//printed = true;
+	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++) {
+		bool resources = true;
+		if (rp->second->check(&path, &resources)) {
+			printf("-----> matched %s\n", rp->second->name->name.c_str());
+			match_count[i]++;
+			tally++;
+			if (!resources) {
+				resources_count[i]++;
+				if (!printed) {
+					printed = true;
+					printf("%d:\n", pathid);
+					path.print();
+				}
+				printf("  %d (%s) matched, resources false\n",
+					i, rp->second->name->name.c_str());
+			}
+		}
+	}
+	if (!tally) {
+		if (!printed) {
+			printf("%d:\n", pathid);
+			path.print();
+		}
+		printf("-----> nothing matched\n");
+	}
+	match_tally[tally]++;
 }

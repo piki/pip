@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+
+while (<>) {
+	if (/^# path/) {
+		my $fn = "graph".($n++).".dot";
+		print STDERR "$fn...";
+		open(OP, ">$fn") || die "$fn: $!";
+		$lines = 1;
+		print OP;
+	}
+	elsif (/^}/) {
+		$lines++;
+		print STDERR " $lines lines\n";
+		$lines = 0;
+		print OP;
+		close(OP);
+	}
+	elsif ($lines) { print OP; $lines++; }
+}

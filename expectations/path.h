@@ -4,13 +4,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/time.h>
+#include <map>
+#include <utility>
 #include <vector>
 #include <mysql/mysql.h>
+#include <string>
 
 class PathNotice;
-class PathMessage;
+class PathMessageSend;
+class PathMessageRecv;
 
-enum PathEventType { PEV_TASK, PEV_NOTICE, PEV_MESSAGE };
+enum PathEventType { PEV_TASK, PEV_NOTICE, PEV_MESSAGE_SEND, PEV_MESSAGE_RECV };
 
 class PathEvent {
 public:
@@ -24,12 +29,6 @@ typedef std::vector<PathEvent *> PathEventList;
 
 class PathTask : public PathEvent {
 public:
-	PathTask(const char *_name, const timeval &_ts_start, const timeval &_ts_end,
-		int _utime, int _stime, int _major_fault, int _minor_fault, int _vol_cs,
-		int _invol_cs) :
-		name(strdup(_name)), utime(_utime), stime(_stime),
-		major_fault(_major_fault), minor_fault(_minor_fault), vol_cs(_vol_cs),
-		invol_cs(_invol_cs), ts_start(_ts_start), ts_end(_ts_end) {}
 	PathTask(const MYSQL_ROW &row);
 	~PathTask(void);
 	virtual PathEventType type(void) const { return PEV_TASK; }
@@ -38,16 +37,15 @@ public:
 	void print(FILE *fp = stdout, int depth = 0) const;
 
 	char *name;
-	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
+	int tdiff, utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
 	timeval ts_start, ts_end;
+	int thread_start, thread_end;
 
 	PathEventList children;
 };
 
 class PathNotice : public PathEvent {
 public:
-	PathNotice(const char *_name, const timeval &_ts) :
-		name(strdup(_name)), ts(_ts) {}
 	PathNotice(const MYSQL_ROW &row);
 	~PathNotice(void) { free(name); }
 	virtual PathEventType type(void) const { return PEV_NOTICE; }
@@ -57,32 +55,72 @@ public:
 
 	char *name;
 	timeval ts;
+	int thread_id;
 };
 
-class PathMessage : public PathEvent {
+class PathMessageSend : public PathEvent {
 public:
-	PathMessage(const timeval &_ts_send, const timeval &_ts_recv, int _size) :
-		recip(NULL), ts_send(_ts_send), ts_recv(_ts_recv), size(_size) {}
-	~PathMessage(void) { if (recip) delete recip; }
-	virtual PathEventType type(void) const { return PEV_MESSAGE; }
+	PathMessageSend(const MYSQL_ROW &row);
+	virtual PathEventType type(void) const { return PEV_MESSAGE_SEND; }
 	virtual const timeval &start(void) const { return ts_send; }
 	virtual const timeval &end(void) const { return ts_send; }
-	// end() returns ts_send rather than ts_recv because messages are
-	// children of their senders, sorted by send timestamp only
 	void print(FILE *fp = stdout, int depth = 0) const;
 
-	PathTask *recip;
-	timeval ts_send, ts_recv;
-	int size;
+	PathEventList *dest;
+	PathMessageRecv *pred;   // closest predecessor in current thread
+	timeval ts_send;
+	int size, thread_send;
+};
+
+class PathMessageRecv : public PathEvent {
+public:
+	PathMessageRecv(const MYSQL_ROW &row);
+	virtual PathEventType type(void) const { return PEV_MESSAGE_RECV; }
+	virtual const timeval &start(void) const { return ts_recv; }
+	virtual const timeval &end(void) const { return ts_recv; }
+	void print(FILE *fp = stdout, int depth = 0) const;
+
+	PathMessageSend *send;
+	timeval ts_recv;
+	int thread_recv;
+};
+
+class PathThread {
+public:
+	PathThread(const MYSQL_ROW &row);
+	void print(FILE *fp = stdout, int depth = 0) const;
+
+	int thread_id;
+	std::string host, prog;
+	int pid, tid, ppid, uid;
+	timeval start;
+	int tz;
+};
+
+class PathMessage {
+public:
+	PathMessage(const MYSQL_ROW &row) {
+		send = new PathMessageSend(row);
+		recv = new PathMessageRecv(row);
+		recv->send = send;
+	}
+	PathMessageSend *send;
+	PathMessageRecv *recv;
 };
 
 class Path {
 public:
 	Path(void);
 	~Path(void);
-	void insert(PathTask *pt) { insert(pt, children); }
-	void insert(PathNotice *pn) { insert(pn, children); }
-	void insert(PathMessage *pm) { insert(pm, children); }
+	// !! thread can start/end in different threads
+	void insert(PathTask *pt) { insert_task(pt, children_map[pt->thread_start]); }
+	void insert(PathNotice *pn) { insert_event(pn, children_map[pn->thread_id]); }
+	void insert(PathMessage *pm) {
+		insert_event(pm->send, children_map[pm->send->thread_send]);
+		insert_event(pm->recv, children_map[pm->recv->thread_recv]);
+		pm->send->dest = &children_map[pm->recv->thread_recv];
+		delete pm;  // does not delete its children
+	}
 	void print(FILE *fp = stdout) const;
 	void done_inserting(void);
 
@@ -90,12 +128,15 @@ public:
 
 	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
 	timeval ts_start, ts_end;
-	int size;
+	int size, path_id;
 private:
-	void insert(PathTask *pt, PathEventList &where);
-	void insert(PathNotice *pn, PathEventList &where);
-	void insert(PathMessage *pm, PathEventList &where);
-	void tally(const PathEventList *list);
+	void insert_task(PathTask *pt, PathEventList &where);
+	void insert_event(PathEvent *pn, PathEventList &where);  // notices, msg-send, msg-recv
+	void tally(const PathEventList *list, bool toplevel);
+
+	std::map<int,PathEventList> children_map;
 };
+
+extern std::map<int, PathThread*> threads;
 
 #endif

@@ -6,32 +6,44 @@
 static void add_statements(const ListNode *list, ExpEventList *where,
 		LimitList *limits);
 
-Match *Match::create(StringNode *node) {
+Match *Match::create(Node *node, bool negate) {
 	if (node->type() == NODE_STRING)
-		return new StringMatch(((StringNode*)node)->s);
+		return new StringMatch(((StringNode*)node)->s, negate);
 	else if (node->type() == NODE_REGEX)
-		return new RegexMatch(((StringNode*)node)->s);
+		return new RegexMatch(((StringNode*)node)->s, negate);
 	else if (node->type() == NODE_IDENTIFIER)
-		return new VarMatch(((IdentifierNode*)node)->sym);
+		return new VarMatch(((IdentifierNode*)node)->sym, negate);
+	else if (node->type() == NODE_WILDCARD)
+		return new AnyMatch(negate);
 	else if (node->type() == NODE_OPERATOR) {
 		OperatorNode *onode = (OperatorNode*)node;
-		assert(onode->op == '=');
-		assert(onode->nops() == 2);
-		fprintf(stderr, "string_expr assignment not yet supported\n");
-		return create((StringNode*)onode->operands[1]);
+		switch (onode->op) {
+			case '=':
+				assert(onode->nops() == 2);
+				fprintf(stderr, "string_expr assignment not yet supported\n");
+				return create((StringNode*)onode->operands[1], negate);
+				break;
+			case '!':
+				assert(onode->nops() == 1);
+				return create((StringNode*)onode->operands[0], !negate);
+				break;
+			default:
+				fprintf(stderr, "invalid operator when expecting string: %s\n", get_op_name(onode->op));
+				abort();
+		}
 	}
 	else {
 		fprintf(stderr, "invalid type where string_expr expected: %d\n",
 			node->type());
-		assert(!"not reached");
+		abort();
 		return NULL;
 	}
 }
 
-RegexMatch::RegexMatch(const std::string &_data) {}
+RegexMatch::RegexMatch(const std::string &_data, bool _negate) : Match(_negate) {}
 RegexMatch::~RegexMatch(void) {}
 bool RegexMatch::check(const std::string &text) const { return true; }
-bool StringMatch::check(const std::string &text) const { return data == text; }
+bool StringMatch::check(const std::string &text) const { bool ret = data == text; return negate ? !ret : ret; }
 bool VarMatch::check(const std::string &text) const { return true; }
 
 static const char *metric_name[] = {
@@ -77,16 +89,16 @@ void Limit::print(FILE *fp, int depth) const {
 		depth*2, "", metric_name[(int)metric], min, max);
 }
 
-bool Limit::check(const PathTask &test) const {
+bool Limit::check(const PathTask *test) const {
 	switch (metric) {
-		case REAL_TIME:      return check(test.ts_end - test.ts_start);
-		case UTIME:          return check(test.utime);
-		case STIME:          return check(test.stime);
-		case CPU_TIME:       return check(test.utime + test.stime);
-		case MAJOR_FAULTS:   return check(test.major_fault);
-		case MINOR_FAULTS:   return check(test.minor_fault);
-		case VOL_CS:         return check(test.vol_cs);
-		case INVOL_CS:       return check(test.invol_cs);
+		case REAL_TIME:      return check(test->ts_end - test->ts_start);
+		case UTIME:          return check(test->utime);
+		case STIME:          return check(test->stime);
+		case CPU_TIME:       return check(test->utime + test->stime);
+		case MAJOR_FAULTS:   return check(test->major_fault);
+		case MINOR_FAULTS:   return check(test->minor_fault);
+		case VOL_CS:         return check(test->vol_cs);
+		case INVOL_CS:       return check(test->invol_cs);
 		case LATENCY:
 		case SIZE:
 		default:
@@ -96,10 +108,11 @@ bool Limit::check(const PathTask &test) const {
 	}
 }
 
-bool Limit::check(const PathMessage &test) const {
+bool Limit::check(const PathMessageSend *test) const {
 	switch (metric) {
-		case LATENCY:    return check(test.ts_recv - test.ts_send);
-		case SIZE:       return check(test.size);
+		// !!
+		//case LATENCY:    return check(test->recv->ts_recv - test->ts_send);
+		case SIZE:       return check(test->size);
 		case REAL_TIME:
 		case UTIME:
 		case STIME:
@@ -115,17 +128,17 @@ bool Limit::check(const PathMessage &test) const {
 	}
 }
 
-bool Limit::check(const Path &test) const {
+bool Limit::check(const Path *test) const {
 	switch (metric) {
-		case REAL_TIME:      return check(test.ts_end - test.ts_start);
-		case UTIME:          return check(test.utime);
-		case STIME:          return check(test.stime);
-		case CPU_TIME:       return check(test.utime + test.stime);
-		case MAJOR_FAULTS:   return check(test.major_fault);
-		case MINOR_FAULTS:   return check(test.minor_fault);
-		case VOL_CS:         return check(test.vol_cs);
-		case INVOL_CS:       return check(test.invol_cs);
-		case SIZE:           return check(test.size);
+		case REAL_TIME:      return check(test->ts_end - test->ts_start);
+		case UTIME:          return check(test->utime);
+		case STIME:          return check(test->stime);
+		case CPU_TIME:       return check(test->utime + test->stime);
+		case MAJOR_FAULTS:   return check(test->major_fault);
+		case MINOR_FAULTS:   return check(test->minor_fault);
+		case VOL_CS:         return check(test->vol_cs);
+		case INVOL_CS:       return check(test->invol_cs);
+		case SIZE:           return check(test->size);
 		case LATENCY:
 		default:
 			fprintf(stderr, "Metric %d unknown when checking Path\n", metric);
@@ -141,8 +154,8 @@ ExpTask::ExpTask(const OperatorNode *onode) {
 	assert(task_decl->op == TASK);
 	assert(task_decl->nops() == 2);
 
-	name = Match::create((StringNode*)task_decl->operands[0]);
-	host = Match::create((StringNode*)task_decl->operands[1]);
+	name = Match::create((StringNode*)task_decl->operands[0], false);
+	host = Match::create((StringNode*)task_decl->operands[1], false);
 
 	ListNode *limit_list = (ListNode*)onode->operands[1];
 	for (unsigned int i=0; i<limit_list->size(); i++)
@@ -187,7 +200,7 @@ int ExpTask::check(const PathEventList &test, unsigned int ofs,
 	// !! host
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
-			if (!limits[i]->check(*pt)) {
+			if (!limits[i]->check(pt)) {
 				*resources = false;
 				break;
 			}
@@ -201,8 +214,8 @@ ExpNotice::ExpNotice(const OperatorNode *onode) {
 	assert(onode->op == NOTICE);
 	assert(onode->nops() == 2);
 
-	name = Match::create((StringNode*)onode->operands[0]);
-	host = Match::create((StringNode*)onode->operands[1]);
+	name = Match::create((StringNode*)onode->operands[0], false);
+	host = Match::create((StringNode*)onode->operands[1], false);
 }
 
 void ExpNotice::print(FILE *fp, int depth) const {
@@ -237,12 +250,13 @@ void ExpMessage::print(FILE *fp, int depth) const {
 
 int ExpMessage::check(const PathEventList &test, unsigned int ofs,
 		bool *resources) const {
+	// !! rewrite this now that send+recv are different classes
 	if (ofs == test.size()) return -1;  // we need at least one
-	if (test[ofs]->type() != PEV_MESSAGE) return -1;
-	PathMessage *pm = (PathMessage*)test[ofs];
+	if (test[ofs]->type() != PEV_MESSAGE_SEND) return -1;
+	PathMessageSend *pms = (PathMessageSend*)test[ofs];
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
-			if (!limits[i]->check(*pm)) {
+			if (!limits[i]->check(pms)) {
 				*resources = false;
 				break;
 			}
@@ -335,6 +349,32 @@ int ExpXor::check(const PathEventList &test, unsigned int ofs,
 	return -1;
 }
 
+ExpCall::ExpCall(const OperatorNode *onode) {
+	assert(onode->op == CALL);
+	assert(onode->nops() == 1);
+	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
+
+	target = ((IdentifierNode*)onode->operands[0])->sym->name;
+}
+
+void ExpCall::print(FILE *fp, int depth) const {
+	fprintf(fp, "%*s<call target=\"%s\" />\n", depth*2, "", target.c_str());
+}
+
+int ExpCall::check(const PathEventList &test, unsigned int ofs,
+		bool *resources) const {
+	Recognizer *r = recognizers[target];
+	if (!r) {
+		fprintf(stderr, "call(%s): recognizer not found\n", target.c_str());
+		exit(1);
+	}
+	printf("calling %s (%p)...", r->name->name.c_str(), r);
+	int ret = r->check(test, ofs, resources);
+	printf(" ret=%d\n", ret);
+	return ret;
+	// !! if the called recognizer sets whole-path limits, check those
+}
+
 Recognizer::Recognizer(const Node *node) {
 	assert(node->type() == NODE_OPERATOR);
 	const OperatorNode *onode = (OperatorNode*)node;
@@ -364,15 +404,19 @@ void Recognizer::print(FILE *fp) const {
 	fprintf(fp, "</recognizer>\n");
 }
 
-bool Recognizer::check(const Path &p, bool *resources) const {
+bool Recognizer::check(const Path *p, bool *resources) const {
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
 			if (!limits[i]->check(p)) {
 				*resources = false;
 				break;
 			}
-	int res = check(p.children, children, 0, resources);
-	return res == (int)p.children.size();
+	int res = check(p->children, 0, resources);
+	return res == (int)p->children.size();
+}
+
+int Recognizer::check(const PathEventList &test, int ofs, bool *resources) const {
+	return check(test, children, ofs, resources);
 }
 
 int Recognizer::check(const PathEventList &test, const ExpEventList &list,
@@ -417,16 +461,20 @@ static void add_statements(const ListNode *list, ExpEventList *where,
 							assert(limits);
 							limits->push_back(new Limit(onode));
 							break;
-						case MESSAGE:
-						case REVERSE:
 						case CALL:
+							where->push_back(new ExpCall(onode));
+							break;
+						case MESSAGE:
+							//where->push_back(new ExpMessage(onode));
+							break;
+						case REVERSE:
 						case SPLIT:
 						case '=':
 							fprintf(stderr, "op %s not implemented yet\n", get_op_name(onode->op));
 							break;
 						default:
 							fprintf(stderr, "unknown op %s (%d)\n", get_op_name(onode->op), onode->op);
-							assert(!"bang");
+							abort();
 					}
 				}
 				break;

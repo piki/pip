@@ -1,57 +1,73 @@
 expectation Init {
-	task("reading database", $where = m/.*/);
+	task("reading database", $where = *);
 	task("jump tables", $where);
 }
 
 expectation Link {
-	task("link", $where = m/.*/) {
-		repeat between 0 and 2 {
-			task("fuzzy find", $where) limit(CPU_TIME, 400ms);
+	task("link", *) {
+		message();
+		task("link", $where = *) {
+			repeat between 0 and 2 {
+				task("fuzzy find", $where) limit(CPU_TIME, 400ms);
+			}
+			xor {
+				branch:   // cache miss
+					notice("cache miss", $where);
+					task("shortest path", $where) limit(CPU_TIME, 1.0s);
+				branch:   // cache hit
+					notice("cache hit", $where);
+				branch:   // actor not found
+			}
 		}
-		xor {
-			branch:   // cache miss
-				notice("cache miss", $where);
-				task("shortest path", $where) limit(CPU_TIME, 1.0s);
-			branch:   // cache hit
-				notice("cache hit", $where);
-			branch:   // actor not found
-		}
+		message();
 	}
 }
 
 expectation Center {
-	task("center", $where = m/.*/) {
-		repeat between 0 and 2 {
-			task("fuzzy find", $where);
+	task("center", $where = *) {
+		message();
+		task("center", $where = *) {
+			repeat between 0 and 2 {
+				task("fuzzy find", $where);
+			}
+			xor {
+				branch:   // cache miss
+					notice("cache miss", $where);
+					task("shortest path", $where) limit(CPU_TIME, 1.0s);
+				branch:   // cache hit
+					notice("cache hit", $where);
+				branch:   // actor not found
+			}
 		}
-		xor {
-			branch:   // cache miss
-				notice("cache miss", $where);
-				task("shortest path", $where);
-			branch:   // cache hit
-				notice("cache hit", $where);
-			branch:   // actor not found
-		}
+		message();
 	}
 }
 
 expectation ShowCache {
-	task("show cache", m/.*/);
+	task("show cache", *) {
+		message();
+		task("show cache", *);
+		message();
+	}
 }
 
 expectation ByNumber {
 	limit(REAL_TIME, 0.2s);
-	task("by number", $where = m/.*/) {
-		repeat between 0 and 1 {
-			task("fuzzy find", $where);
+	task("by number", $where = *) {
+		message();
+		task("by number", $where = *) {
+			repeat between 0 and 1 {
+				task("fuzzy find", $where);
+			}
+			xor {
+				branch:   // cache miss
+					notice("cache miss", $where);
+					task("shortest path", $where) limit(CPU_TIME, 1.0s);
+				branch:   // cache hit
+					notice("cache hit", $where);
+				branch:   // actor not found
+			}
 		}
-		xor {
-			branch:   // cache miss
-				notice("cache miss", $where);
-				task("shortest path", $where);
-			branch:   // cache hit
-				notice("cache hit", $where);
-			branch:   // actor not found
-		}
+		message();
 	}
 }

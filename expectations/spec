@@ -2,17 +2,17 @@ expectation E1 {
 	limit(REAL_TIME, 15s);
 	{ notice("FOO", "BAR"); }
   task("PARSE_REQUEST", "www.hp.com")
-    limit(CPU_TIME, {0s-2s});
+    limit(CPU_TIME, {0s, 2s});
   task("REVERSE_DNS_LOOKUP", "www.hp.com")
     limit(REAL_TIME, {10s+});
-  notice("CACHE_MISS", m/.*/);
-  notice(m/^FOO/, m/.*/);
-  task("LINK", $HERE=m/.*/) {
+  notice("CACHE_MISS", m/^www.*/);
+  notice(m/^FOO/, *);
+  task("LINK", $HERE=*) {
     task("SP_TREE", $HERE);
   }
   xor {
-    branch: notice("THIS", m/.*/);
-    branch: notice("THAT", m/.*/);
+    branch: notice("THIS", *);
+    branch: notice("THAT", *);
   }
 }
 
@@ -26,83 +26,84 @@ expectation E3 {
 }
 
 expectation DHT_recursive_shortcut {
-  task(m/^DHT/, $SRC=m/.*/);
+	limit(SIZE, 10kb);
+  task(m/^DHT/, $SRC=*);
   repeat between 1 and 5 {
     message()
       limit(SIZE, 1kb)
 			limit(LATENCY, 0.5s);
-    task("DHT", m/.*/);
+    task("DHT", !$SRC);
   }
   message();
   task("DHT", $SRC);
 }
 
 expectation DHT_iterative {
-  task("DHT", $SRC=m/.*/);
+  task("DHT", $SRC=*);
   repeat between 1 and 5 {
     message();
-    task("DHT", m/.*/);
+    task("DHT", *);
     message();
     task("DHT", $SRC);
   }
 }
 
 expectation DHT_recursive {
-  task("DHT", $SRC=m/.*/);
+  task("DHT", $SRC=*);
   message();
   @PATH = repeat between 1 and 5 {
-    task("DHT", m/.*/);
+    task("DHT", *);
     message();
   }
-  task("DHT", m/.*/);
+  task("DHT", *);
   reverse(@PATH);
   message();
   task("DHT", $SRC);
 }
 
 expectation DHT_Coral {
-  task("DHT", $SRC=m/.*/);
+  task("DHT", $SRC=*);
   message();
-  task("DHT", m/.*/);
+  task("DHT", *);
   message();
   repeat 2 {
     split {
       branch T1:
         message();
-        task("DHT", m/.*/);
+        task("DHT", *);
         message();
       branch T2:
         message();
-        task("DHT", m/.*/);
+        task("DHT", *);
         message();
       branch T3:
         message();
-        task("DHT", m/.*/);
+        task("DHT", *);
         message();
     } join(any 2);
     task("DHT", $SRC);
   }
   message();
-  task("DHT", m/.*/);
+  task("DHT", *);
   message();
   task("DHT", $SRC)
 		limit(CPU_TIME, 10s);
 }
 
 fragment Timer {
-  notice("timer", m/.*/);
+  notice("timer", *);
 }
 
-assert( instances(E1) in { 1-5 } )
+assert( instances(E1) in { 1, 5 } )
 assert( instances(E1) < 5 )
 assert( instances(E1) > 1 )
 assert( instances(E1) >= 1 )
 assert( instances(E1) <= 5 )
 assert( instances(E1) != 0 )
-during(any 0) assert( unique(E1) == unique(E2) )
-during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 )
-during(1, 10) assert( unique($HERE) == 1 )
+//during(any 0) assert( unique(E1) == unique(E2) )
+//during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 )
+//during(1, 10) assert( unique($HERE) == 1 )
 assert( average(CPU_TIME, E1) < 5 )
 assert( stddev(IO_OPS, E1) < 5 )
-assert( max(REAL_TIME, "DHT") in { 0-10 } )
-assert( min(REAL_TIME, "DHT") in { 0-10 } )
+assert( max(REAL_TIME, "DHT") in { 0, 10 } )
+assert( min(REAL_TIME, "DHT") in { 0, 10 } )
