@@ -34,18 +34,26 @@ JNIEXPORT void JNICALL Java_Annotate_endTask
 /*
  * Class:     Annotate
  * Method:    setPathID
- * Signature: (I)V
+ * Signature: ([B)V
  */
 JNIEXPORT void JNICALL Java_Annotate_setPathID
-  (JNIEnv *, jclass, jint);
+  (JNIEnv *, jclass, jbyteArray);
+
+/*
+ * Class:     Annotate
+ * Method:    getPathID
+ * Signature: ()[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_Annotate_getPathID
+  (JNIEnv *, jclass);
 
 /*
  * Class:     Annotate
  * Method:    endPathID
- * Signature: (I)V
+ * Signature: ([B)V
  */
 JNIEXPORT void JNICALL Java_Annotate_endPathID
-  (JNIEnv *, jclass, jint);
+  (JNIEnv *, jclass, jbyteArray);
 
 /*
  * Class:     Annotate
@@ -58,18 +66,18 @@ JNIEXPORT void JNICALL Java_Annotate_notice
 /*
  * Class:     Annotate
  * Method:    send
- * Signature: (II)V
+ * Signature: ([BI)V
  */
 JNIEXPORT void JNICALL Java_Annotate_send
-  (JNIEnv *, jclass, jint, jint);
+  (JNIEnv *, jclass, jbyteArray, jint);
 
 /*
  * Class:     Annotate
  * Method:    receive
- * Signature: (II)V
+ * Signature: ([BI)V
  */
 JNIEXPORT void JNICALL Java_Annotate_receive
-  (JNIEnv *, jclass, jint, jint);
+  (JNIEnv *, jclass, jbyteArray, jint);
 
 #ifdef __cplusplus
 }

@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 	run_sql("CREATE TABLE %s (thread_id int auto_increment primary key, "
 		"host varchar(255), prog varchar(255), pid int, tid int, ppid int, uid int, "
 		"start bigint, tz int)", table_threads.c_str());
-	run_sql("CREATE TABLE %s (pathid int, ts_send bigint, ts_recv bigint, "
+	run_sql("CREATE TABLE %s (pathid int, msgid varchar(255), ts_send bigint, ts_recv bigint, "
 		"size int, thread_send int, thread_recv int)", table_messages.c_str());
 	run_sql("CREATE TABLE %s (pathid int, pathblob varchar(255))", table_paths.c_str());
 
@@ -227,8 +227,8 @@ static void reconcile(Message *send, Message *recv, bool is_send, int thread_id,
 			//abort();
 			errors++;
 		}
-		run_sql("INSERT INTO %s VALUES (%d, %lld, %lld, %d, %d, %d)",
-			table_messages.c_str(), path_id, ts(send->tv), ts(recv->tv),
+		run_sql("INSERT INTO %s VALUES (%d, '%s', %lld, %lld, %d, %d, %d)",
+			table_messages.c_str(), path_id, send->msgid.to_string(), ts(send->tv), ts(recv->tv),
 			send->size, send->thread_id, recv->thread_id);
 		if (is_send)
 			receives.erase(recv->msgid);

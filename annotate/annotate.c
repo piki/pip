@@ -135,6 +135,8 @@ void ANNOTATE_END_TASK(const char *name) {
 void ANNOTATE_SET_PATH_ID(const void *path_id, int idsz) {
 	ThreadContext *pctx = GET_CTX;
 
+	if (pctx->path_id_len == idsz && memcmp(path_id, pctx->path_id, idsz) == 0) return;  // already set
+
 	struct rusage ru;
 	struct timeval tv;
 	gettimeofday(&tv, NULL);

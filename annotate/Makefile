@@ -4,12 +4,12 @@ CXXFLAGS = $(CFLAGS)
 OBJS = annotate.o
 CPPFLAGS += -DTHREADS
 
-all: libannotate.a libjannotate.so threadtest
+all: libannotate.a libjannotate.so threadtest AnnTest.class
 
 Annotate.h: Annotate.class
-	javah Annotate
+	javah Annotate && touch $@
 
-Annotate.class: Annotate.java
+%.class: %.java
 	javac $<
 
 threadtest: threadtest.c
