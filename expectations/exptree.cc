@@ -49,7 +49,9 @@ ExpTask::ExpTask(const OperatorNode *onode) {
 ExpTask::~ExpTask(void) {
 	delete name;
 	delete host;
-	for (unsigned int i=0; i<children.size(); i++) delete children[i];
+	unsigned int i;
+	for (i=0; i<children.size(); i++) delete children[i];
+	for (i=0; i<limits.size(); i++) delete limits[i];
 }
 
 void ExpTask::print(FILE *fp, int depth) const {
@@ -229,10 +231,11 @@ void Recognizer::add_statements(const ListNode *list, ExpEventList *where) {
 									assert((*lnode)[j]->type() == NODE_OPERATOR);
 									OperatorNode *branch = (OperatorNode*)(*lnode)[j];
 									assert(branch->op == BRANCH);
-									assert(branch->noperands == 1);
-									assert(branch->operands[0]->type() == NODE_LIST);
+									assert(branch->noperands == 2);
+									assert(branch->operands[0] == NULL);  // no named branches
+									assert(branch->operands[1]->type() == NODE_LIST);
 									new_xor->branches.push_back(ExpEventList());
-									add_statements((ListNode*)branch->operands[0],
+									add_statements((ListNode*)branch->operands[1],
 										&new_xor->branches[j]);
 								}
 								where->push_back(new_xor);

@@ -17,7 +17,6 @@ letter	[A-Za-z_]
 
 %%
 
-{digit}+												{ yylval.iValue = atoi(yytext); return INTEGER; }
 "<="														return LE;
 ">="														return GE;
 "=="														return EQ;
@@ -28,7 +27,6 @@ letter	[A-Za-z_]
 [-+()=/*;:{},><!]								return *yytext;
 [ \t]                         
 \n															yylno++;
-\.\.\.													return ELLIPSIS;
 "expectation"										return EXPECTATION;
 "fragment"											return FRAGMENT;
 "repeat"												return REPEAT;
@@ -53,9 +51,12 @@ letter	[A-Za-z_]
 "average"												return AVERAGE;
 "stddev"												return STDDEV;
 "max"														return F_MAX;
-\${letter}({letter}|{digit})*		{ yylval.symbol = symbol_lookup(yytext); return STRINGVAR; }
-\@{letter}({letter}|{digit})* 	{ yylval.symbol = symbol_lookup(yytext); return PATHVAR; }
-{letter}({letter}|{digit})*			{ yylval.symbol = symbol_lookup(yytext); return IDENTIFIER; }
+"min"														return F_MIN;
+\${letter}({letter}|{digit})*		{ yylval.sValue = strdup(yytext); return STRINGVAR; }
+\@{letter}({letter}|{digit})* 	{ yylval.sValue = strdup(yytext); return PATHVAR; }
+{letter}({letter}|{digit})*			{ yylval.sValue = strdup(yytext); return IDENTIFIER; }
+{digit}+												{ yylval.iValue = atoi(yytext); return INTEGER; }
+{digit}\.{digit}*								{ yylval.fValue = atof(yytext); return FLOAT; }
 
 \/\*														BEGIN S_COMMENT_BLOCK;
 <S_COMMENT_BLOCK>\*\/						BEGIN 0;

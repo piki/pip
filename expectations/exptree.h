@@ -45,6 +45,13 @@ private:
 	const Symbol *sym;
 };
 
+class Limit { 
+public:
+	Limit(const OperatorNode *onode);
+private:
+	float min, max;
+};
+
 class ExpNotice;
 class ExpMessage;
 class ExpLimit;
@@ -71,6 +78,7 @@ public:
 	virtual int check(const PathEventList &test, unsigned int ofs) const;
 
 	Match *name, *host;
+	std::vector<Limit*> limits;
 	ExpEventList children;
 };
 

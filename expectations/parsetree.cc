@@ -9,11 +9,43 @@
 
 static std::map<std::string, Symbol*> symbol_table;
 
-Symbol *symbol_lookup(const char *name) {
+Symbol::Symbol(char *_name, SymbolType _type, bool _global)
+		: type(_type), name(_name), global(_global) {
+	memset(_name, 'X', strlen(_name));  // help check for use-after-free
+	free(_name);  // lex file strdups it, we free it.  ugly.
+}
+
+extern bool yy_success;
+extern int yylno;
+extern char *yyfilename;
+
+Symbol *Symbol::create(char *name, SymbolType type, bool global,
+		bool excl) {
+	Symbol *sym = symbol_table[name];
+	if (sym) {
+		if (excl) {
+			fprintf(stderr, "%s:%d: symbol \"%s\" redefined\n",
+				yyfilename, yylno, name);
+			yy_success = false;
+		}
+		else if (sym->type != type) {
+			fprintf(stderr, "%s:%d: symbol \"%s\" type mismatch\n",
+				yyfilename, yylno, name);
+			yy_success = false;
+		}
+	}
+	else {
+		sym = new Symbol(name, type, global);
+		symbol_table[sym->name] = sym;
+	}
+	return sym;
+}
+
+Symbol *Symbol::find(const char *name, SymbolType type) {
 	Symbol *sym = symbol_table[name];
 	if (!sym) {
-		sym = new Symbol(name);
-		symbol_table[name] = sym;
+		fprintf(stderr, "%s:%d: undefined symbol: %s\n", yyfilename, yylno, name);
+		yy_success = false;
 	}
 	return sym;
 }
@@ -30,7 +62,44 @@ OperatorNode::OperatorNode(int which, int argc, ...) {
 
 OperatorNode::~OperatorNode(void) {
 	for (unsigned int i=0; i<operands.size(); i++)
-		delete operands[i];
+		if (operands[i]) delete operands[i];
+}
+
+static const struct {
+	const char *name;
+	UnitType unit;
+} unit_map[] = {
+	{ "h", UNIT_HOUR },
+	{ "m", UNIT_MIN },
+	{ "s", UNIT_SEC },
+	{ "ms", UNIT_MSEC },
+	{ "us", UNIT_USEC },
+	{ "ns", UNIT_NSEC },
+	{ "b", UNIT_BYTE },
+	{ "kb", UNIT_KB },
+	{ "mb", UNIT_MB },
+	{ "gb", UNIT_GB },
+	{ "tb", UNIT_TB },
+	{ NULL, UNIT_NONE }
+};
+
+static const char *get_unit_name(UnitType unit) {
+	for (int i=0; unit_map[i].name; i++)
+		if (unit == unit_map[i].unit) return unit_map[i].name;
+	return "!UNKNOWN!";
+}
+
+static UnitType get_unit_by_name(const char *sym) {
+	for (int i=0; unit_map[i].name; i++)
+		if (!strcasecmp(sym, unit_map[i].name))
+			return unit_map[i].unit;
+	fprintf(stderr, "%s:%d: invalid unit: %s\n", yyfilename, yylno, sym);
+	yy_success = false;
+	return UNIT_NONE;
+}
+
+UnitsNode::UnitsNode(float _amt, const char *_name) : amt(_amt) {
+	unit = _name ? get_unit_by_name(_name) : UNIT_NONE;
 }
 
 ListNode::~ListNode(void) {
@@ -61,6 +130,7 @@ struct {
 	{ AVERAGE, "AVERAGE" },
 	{ STDDEV, "STDDEV" },
 	{ F_MAX, "F_MAX" },
+	{ F_MIN, "F_MIN" },
 	{ GE, "GE" },
 	{ LE, "LE" },
 	{ EQ, "EQ" },
@@ -73,7 +143,6 @@ struct {
 	{ TASK, "TASK" },
 	{ NOTICE, "NOTICE" },
 	{ LIMIT, "LIMIT" },
-	{ ELLIPSIS, "ELLIPSIS" },
 	{ RANGE, "RANGE" },
 	{ STRING, "STRING" },
 	{ REGEX, "REGEX" },
@@ -214,20 +283,10 @@ void print_tree(const Node *node, int depth) {
 					printf("}");
 					break;
 				case BRANCH:
-					switch (onode->noperands) {
-						case 1:
-							TAB printf("branch:\n");
-							print_tree(onode->operands[0], depth+1);
-							break;
-						case 2:
-							TAB printf("branch ");
-							print_tree(onode->operands[0], depth);
-							printf(":\n");
-							print_tree(onode->operands[1], depth+1);
-							break;
-						default:
-							assert(!"invalid number of operands for BRANCH");
-					}
+					TAB printf("branch ");
+					print_tree(onode->operands[0], depth);
+					printf(":\n");
+					print_tree(onode->operands[1], depth+1);
 					break;
 				case SPLIT:
 					TAB printf("split {\n");
@@ -386,6 +445,10 @@ void print_tree(const Node *node, int depth) {
 				printf("operator %d (%s)\n", onode->op, get_op_name(onode->op));
 			for (i=0; i<onode->noperands; i++)
 				print_tree(onode->operands[i], depth+1);
+			break;}
+		case NODE_UNITS:{
+			UnitsNode *unode = (UnitsNode*)node;
+			printf("%f %s\n", unode->amt, get_unit_name(unode->unit));
 			break;}
 		default:
 			fprintf(stderr, "unknown node type %d\n", node->type());

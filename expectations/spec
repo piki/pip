@@ -1,10 +1,9 @@
 expectation E1 {
 	{ notice("FOO", "BAR"); }
   task("PARSE_REQUEST", "www.hp.com")
-    limit(IO_OPS, {5...100})
-    limit(CPU_TIME, {0...2});
+    limit(CPU_TIME, {0s-2s});
   task("REVERSE_DNS_LOOKUP", "www.hp.com")
-    limit(REAL_TIME, {10...});
+    limit(REAL_TIME, {10s+});
   notice("CACHE_MISS", m/.*/);
   notice(m/^FOO/, m/.*/);
   task("LINK", $HERE=m/.*/) {
@@ -15,6 +14,8 @@ expectation E1 {
     branch: notice("THAT", m/.*/);
   }
 }
+
+expectation E2 { }
 
 expectation E3 {
   xor {
@@ -75,20 +76,21 @@ expectation DHT_Coral {
         message();
         task("DHT", m/.*/);
         message();
-    } join(2);
+    } join(any 2);
     task("DHT", $SRC);
   }
   message();
   task("DHT", m/.*/);
   message();
-  task("DHT", $SRC);
+  task("DHT", $SRC)
+		limit(CPU_TIME, 10s);
 }
 
 fragment Timer {
   notice("timer", m/.*/);
 }
 
-assert( instances(E1) in { 1...5 } )
+assert( instances(E1) in { 1-5 } )
 assert( instances(E1) < 5 )
 assert( instances(E1) > 1 )
 assert( instances(E1) >= 1 )
@@ -99,4 +101,5 @@ during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 )
 during(1, 10) assert( unique($HERE) == 1 )
 assert( average(CPU_TIME, E1) < 5 )
 assert( stddev(IO_OPS, E1) < 5 )
-assert( max(REAL_TIME, "DHT") in { 0...10 } )
+assert( max(REAL_TIME, "DHT") in { 0-10 } )
+assert( min(REAL_TIME, "DHT") in { 0-10 } )

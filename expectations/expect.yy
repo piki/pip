@@ -3,8 +3,8 @@
 %}
 %union {
 	int iValue;
+	float fValue;
 	char *sValue;
-	Symbol *symbol;
 	Node *nPtr;
 	ListNode *nList;
 };
@@ -29,6 +29,7 @@
 %token AVERAGE
 %token STDDEV
 %token F_MAX
+%token F_MIN
 // operators
 %token GE
 %token LE
@@ -44,19 +45,19 @@
 %token NOTICE
 %token LIMIT
 // tokens
-%token ELLIPSIS
 %token RANGE
 %token <sValue> STRING
 %token <sValue> REGEX
 %token <iValue> INTEGER
-%token <symbol> IDENTIFIER
-%token <symbol> STRINGVAR
-%token <symbol> PATHVAR
-%type <nList> ident_list limit_list statement_list thread_list xor_list
+%token <fValue> FLOAT
+%token <sValue> IDENTIFIER
+%token <sValue> STRINGVAR
+%token <sValue> PATHVAR
+%type <nList> branch_list limit_list statement_list thread_list xor_list
 %type <nPtr> pathdecl statement thread
-%type <nPtr> thread_set repeat limit range repeat_range path_expr
+%type <nPtr> branch_set repeat limit limit_range repeat_range path_expr
 %type <nPtr> string_expr event xor task assert assertdecl bool_expr
-%type <nPtr> int_expr window float_expr string_literal
+%type <nPtr> int_expr window float_expr string_literal unit_qty count_range
 
 %left B_AND B_OR IMPLIES
 %left '<' '>' LE GE EQ NE
@@ -70,25 +71,26 @@ void yyerror(const char *fmt, ...);
 int yylex(void);
 extern int yylno;
 extern FILE *yyin;
-char *filename;
+char *yyfilename;
+bool yy_success = true;
 %}
 
 %%
 
 program:
-		program pathdecl													{ add_recognizer($2); delete $2; }
-		| program assertdecl											{ add_assert($2); delete $2; }
+		program pathdecl													{ if (yy_success) { add_recognizer($2); print_tree($2, 0); } delete $2; }
+		| program assertdecl											{ if (yy_success) { add_assert($2); print_tree($2, 0); } delete $2; }
 		|
 		;
 
 pathdecl:
-		EXPECTATION IDENTIFIER '{' statement_list '}'	{ $$ = opr(EXPECTATION, 2, id($2), $4); }
-		| FRAGMENT IDENTIFIER '{' statement_list '}'	{ $$ = opr(FRAGMENT, 2, id($2), $4); }
+		EXPECTATION IDENTIFIER '{' statement_list '}'	{ $$ = opr(EXPECTATION, 2, idcge($2,RECOGNIZER), $4); }
+		| FRAGMENT IDENTIFIER '{' statement_list '}'	{ $$ = opr(FRAGMENT, 2, idcge($2,RECOGNIZER), $4); }
 		;
 
-ident_list:
-		ident_list ',' IDENTIFIER									{ $$ = $1; ($$)->add(id($3)); }
-		| IDENTIFIER															{ $$ = new ListNode; ($$)->add(id($1)); }
+branch_list:
+		branch_list ',' IDENTIFIER								{ $$ = $1; ($$)->add(idf($3,BRANCH)); }
+		| IDENTIFIER															{ $$ = new ListNode; ($$)->add(idf($1,BRANCH)); }
 		;
 
 statement_list:
@@ -99,13 +101,13 @@ statement_list:
 statement:
 		REVERSE '(' path_expr ')' ';'							{ $$ = opr(REVERSE, 1, $3); }
 		| MESSAGE '(' ')' ';'											{ $$ = opr(MESSAGE, 0); }
-		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, id($3)); }
+		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }
 		| event ';'
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
 		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
 		| string_expr
 		| path_expr
-		| SPLIT '{' thread_list '}' JOIN '(' thread_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $7); }
+		| SPLIT '{' thread_list '}' JOIN '(' ANY branch_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $8); }
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
@@ -117,7 +119,7 @@ xor_list:
 		;
 
 xor:
-		BRANCH ':' statement_list									{	$$ = opr(BRANCH, 1, $3); }
+		BRANCH ':' statement_list									{	$$ = opr(BRANCH, 2, NULL, $3); }
 		;
 
 thread_list:
@@ -126,11 +128,12 @@ thread_list:
 		;
 
 thread:
-		BRANCH IDENTIFIER ':' statement_list			{	$$ = opr(BRANCH, 2, id($2), $4); }
+		BRANCH ':' statement_list									{	$$ = opr(BRANCH, 2, NULL, $3); }
+		| BRANCH IDENTIFIER ':' statement_list		{	$$ = opr(BRANCH, 2, idcle($2,BRANCH), $4); }
 		;
 
-thread_set:
-		ident_list																{ $$ = $1; }
+branch_set:
+		branch_list																{ $$ = $1; }
 		| INTEGER																	{ $$ = new IntNode($1); }
 		;
 
@@ -144,12 +147,25 @@ limit_list:
 		;
 
 limit:
-		LIMIT '(' IDENTIFIER ',' range ')'				{ $$ = opr(LIMIT, 2, id($3), $5); }
+		LIMIT '(' IDENTIFIER ',' limit_range ')'	{ $$ = opr(LIMIT, 2, idcg($3,UNBOUND), $5); }
 		;
 
-range:
-		'{' float_expr ELLIPSIS float_expr '}'		{ $$ = opr(RANGE, 2, $2, $4); }
-		| '{' float_expr ELLIPSIS '}'							{ $$ = opr(RANGE, 2, $2, NULL); }
+limit_range:
+		unit_qty																	{ $$ = opr(RANGE, 2, 0, $1); }
+		| '{' unit_qty '-' unit_qty '}'						{ $$ = opr(RANGE, 2, $2, $4); }
+		| '{' unit_qty '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
+		;
+
+count_range:
+		'{' INTEGER '-' INTEGER '}'								{ $$ = opr(RANGE, 2, new IntNode($2), new IntNode($4)); }
+		| '{' INTEGER '+' '}'											{ $$ = opr(RANGE, 2, new IntNode($2), NULL); }
+		;
+
+unit_qty:
+		INTEGER																		{ $$ = new UnitsNode($1, NULL); }
+		| FLOAT																		{ $$ = new UnitsNode($1, NULL); }
+		| INTEGER IDENTIFIER											{ $$ = new UnitsNode($1, $2); }
+		| FLOAT IDENTIFIER												{ $$ = new UnitsNode($1, $2); }
 		;
 
 repeat_range:
@@ -159,8 +175,8 @@ repeat_range:
 
 path_expr:
 		repeat
-		| PATHVAR																	{ $$ = id($1); }
-		| PATHVAR '=' path_expr										{ $$ = opr('=', 2, id($1), $3); }
+		| PATHVAR																	{ $$ = idf($1,PATH_VAR); }
+		| PATHVAR '=' path_expr										{ $$ = opr('=', 2, idcl($1,PATH_VAR), $3); }
 		;
 
 task:
@@ -178,8 +194,8 @@ string_literal:
 
 string_expr:
 		string_literal
-		| STRINGVAR																{ $$ = id($1); }
-		| STRINGVAR '=' string_expr								{ $$ = opr('=', 2, id($1), $3); }
+		| STRINGVAR																{ $$ = idf($1,STRING_VAR); }
+		| STRINGVAR '=' string_expr								{ $$ = opr('=', 2, idcl($1,STRING_VAR), $3); }
 		;
 
 assertdecl:
@@ -202,7 +218,7 @@ bool_expr:
 		| bool_expr IMPLIES bool_expr							{ $$ = opr(IMPLIES, 2, $1, $3); }
 		| '!' bool_expr														{ $$ = opr('!', 1, $2); }
 		| '(' bool_expr ')'												{ $$ = $2; }
-		| float_expr IN range											{ $$ = opr(IN, 2, $1, $3); }
+		| float_expr IN count_range								{ $$ = opr(IN, 2, $1, $3); }
 		| float_expr '<' float_expr								{ $$ = opr('<', 2, $1, $3); }
 		| float_expr '>' float_expr								{ $$ = opr('>', 2, $1, $3); }
 		| float_expr LE float_expr								{ $$ = opr(LE, 2, $1, $3); }
@@ -213,28 +229,28 @@ bool_expr:
 
 float_expr:
 		int_expr
-		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, id($3), id($5)); }
-		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, id($3), $5); }
-		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, id($3), id($5)); }
-		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, id($3), $5); }
-		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, id($3), id($5)); }
-		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, id($3), $5); }
+		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
+		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, idcg($3,UNBOUND), $5); }
+		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
+		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, idcg($3,UNBOUND), $5); }
+		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
+		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, idcg($3,UNBOUND), $5); }
+		| F_MIN '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MIN, 2, idcg($3,UNBOUND), idf($5,RECOGNIZER)); }
+		| F_MIN '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MIN, 2, idcg($3,UNBOUND), $5); }
 		;
 
 int_expr:
 		INTEGER																		{ $$ = new IntNode($1); }
-		| INSTANCES '(' IDENTIFIER ')'						{ $$ = opr(INSTANCES, 1, id($3)); }
-		| UNIQUE '(' IDENTIFIER ')'								{ $$ = opr(UNIQUE, 1, id($3)); }
-		| UNIQUE '(' STRINGVAR ')'								{ $$ = opr(UNIQUE, 1, id($3)); }
+		| INSTANCES '(' IDENTIFIER ')'						{ $$ = opr(INSTANCES, 1, idf($3,RECOGNIZER)); }
+		| UNIQUE '(' IDENTIFIER ')'								{ $$ = opr(UNIQUE, 1, idf($3,RECOGNIZER)); }
+		| UNIQUE '(' STRINGVAR ')'								{ $$ = opr(UNIQUE, 1, idf($3,STRING_VAR)); }
 		;
 
 %%
 
-static bool yy_success = true;
-
 void yyerror(const char *fmt, ...) {
 	va_list args;
-	fprintf(stderr, "%s:%d: ", filename, yylno);
+	fprintf(stderr, "%s:%d: ", yyfilename, yylno);
 	va_start(args, fmt);
 	vfprintf(stderr, fmt, args);
 	va_end(args);
@@ -243,6 +259,7 @@ void yyerror(const char *fmt, ...) {
 }
 
 bool expect_parse(const char *filename) {
+	yyfilename = strdup(filename);
 	yyin = fopen(filename, "r");
 	if (!yyin) {
 		perror(filename);

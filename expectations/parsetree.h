@@ -6,16 +6,29 @@
 
 #define RANGE_INF -1
 
-typedef enum { NODE_INT, NODE_STRING, NODE_REGEX, NODE_IDENTIFIER, NODE_OPERATOR, NODE_LIST } NodeType;
+typedef enum { NODE_INT, NODE_STRING, NODE_REGEX, NODE_IDENTIFIER, NODE_OPERATOR, NODE_LIST, NODE_UNITS } NodeType;
 typedef enum {
-	SYM_UNBOUND, SYM_PATH_DECL, SYM_PATH_VAR, SYM_STRING_VAR
+	SYM_UNBOUND, SYM_RECOGNIZER, SYM_PATH_VAR, SYM_STRING_VAR, SYM_BRANCH
 } SymbolType;
 
 class Symbol {
 public:
-	Symbol(const std::string &_name) : type(SYM_UNBOUND), name(_name) {}
+	Symbol(char *_name, SymbolType _type, bool _global);
+
+	// Look for a symbol with the given name.  If none is found, create it.
+	// If "excl" is set and the symbol already exists, it's an error
+	static Symbol *create(char *name, SymbolType type, bool global,
+			bool excl);
+	// Look for a symbol with the given name.
+	// If the symbol exists with a different type, it's an error
+	static Symbol *find(const char *name, SymbolType type);
+
+	// Clear out all non-global variables
+	static void clear_locals(void);
+
 	SymbolType type;
 	std::string name;
+	bool global;
 };
 
 class Node {
@@ -42,7 +55,11 @@ private:
 	NodeType _type;
 };
 
-#define id(X) new IdentifierNode(X)
+#define idf(X,T) new IdentifierNode(Symbol::find(X,SYM_##T))
+#define idcge(X,T) new IdentifierNode(Symbol::create(X,SYM_##T,true,true))
+#define idcle(X,T) new IdentifierNode(Symbol::create(X,SYM_##T,false,true))
+#define idcg(X,T) new IdentifierNode(Symbol::create(X,SYM_##T,true,false))
+#define idcl(X,T) new IdentifierNode(Symbol::create(X,SYM_##T,false,false))
 class IdentifierNode : public Node {
 public:
 	IdentifierNode(Symbol *_sym) : sym(_sym) {}
@@ -60,6 +77,20 @@ public:
 	std::vector<Node*> operands;
 };
 
+enum UnitType {
+	UNIT_NONE,
+	UNIT_HOUR, UNIT_MIN, UNIT_SEC, UNIT_MSEC, UNIT_USEC, UNIT_NSEC,
+	UNIT_BYTE, UNIT_KB, UNIT_MB, UNIT_GB, UNIT_TB,
+	UNIT_LAST
+};
+class UnitsNode : public Node {
+public:
+	UnitsNode(float _amt, const char *_name);
+	inline NodeType type(void) const { return NODE_UNITS; }
+	float amt;
+	UnitType unit;
+};
+
 class ListNode : public Node {
 public:
 	~ListNode(void);
@@ -70,12 +101,6 @@ public:
 private:
 	std::vector<Node*> data;
 };
-
-void symbols_init(void);
-/* Look for a symbol with the given name.  If none is found, create it. */
-/* If an existing symbol is found with a different type, NULL is returned,
- * indicating error. */
-Symbol *symbol_lookup(const char *name);
 
 const char *get_op_name(int op);
 void print_tree(const Node *node, int depth);

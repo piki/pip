@@ -101,8 +101,9 @@ static void run_sql(const char *fmt, ...) {
 	va_end(arg);
 	//puts(query);
 	if (mysql_query(&mysql, query) != 0) {
-		printf("Database error:\n");
-		printf("  QUERY: \"%s\"\n", query);
-		printf("  MySQL error: \"%s\"\n", mysql_error(&mysql));
+		fprintf(stderr, "Database error:\n");
+		fprintf(stderr, "  QUERY: \"%s\"\n", query);
+		fprintf(stderr, "  MySQL error: \"%s\"\n", mysql_error(&mysql));
+		exit(1);
 	}
 }

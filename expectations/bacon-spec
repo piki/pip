@@ -6,12 +6,12 @@ expectation Init {
 expectation Link {
 	task("link", $where = m/.*/) {
 		repeat between 0 and 2 {
-			task("fuzzy find", $where);
+			task("fuzzy find", $where) limit(CPU_TIME, 400ms);
 		}
 		xor {
 			branch:   // cache miss
 				notice("cache miss", $where);
-				task("shortest path", $where);
+				task("shortest path", $where) limit(CPU_TIME, 1.5s);
 			branch:   // cache hit
 				notice("cache hit", $where);
 			branch:   // actor not found
