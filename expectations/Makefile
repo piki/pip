@@ -1,24 +1,11 @@
 CFLAGS = -g -Wall
 CPPFLAGS = -I.
-PROGS = devowel lineno calc expect
+PROGS = expect
 LDLIBS = -lm
 YACC = bison
 LEX = flex
 
 all: $(PROGS)
-
-devowel: devowel.l
-	$(LEX) $<
-	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c -o $@ -lfl
-
-lineno: lineno.l
-	$(LEX) $<
-	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c -o $@ -lfl
-
-calc: calc.l calc.y
-	$(YACC) -d calc.y
-	$(LEX) calc.l
-	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c calc.tab.c -o $@ -lm
 
 expect: expect.l expect.yy parsetree.cc
 	$(YACC) -d expect.yy

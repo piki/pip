@@ -6,6 +6,7 @@
 	char *sValue;
 	Symbol *symbol;
 	Node *nPtr;
+	ListNode *nList;
 };
 
 // keywords
@@ -37,11 +38,10 @@
 %token B_OR
 %token IMPLIES
 %token IN
-%token LIST
 // operations
 %token MESSAGE
 %token TASK
-%token EVENT
+%token NOTICE
 %token LIMIT
 // tokens
 %token ELLIPSIS
@@ -52,9 +52,10 @@
 %token <symbol> IDENTIFIER
 %token <symbol> STRINGVAR
 %token <symbol> PATHVAR
-%type <nPtr> pathdecl ident_list statement statement_list thread_list thread
-%type <nPtr> thread_set repeat limit_list limit range repeat_range path_expr
-%type <nPtr> string_expr event xor_list xor task assert assertdecl bool_expr
+%type <nList> ident_list limit_list statement_list thread_list xor_list
+%type <nPtr> pathdecl statement thread
+%type <nPtr> thread_set repeat limit range repeat_range path_expr
+%type <nPtr> string_expr event xor task assert assertdecl bool_expr
 %type <nPtr> int_expr window float_expr string_literal
 
 %left B_AND B_OR IMPLIES
@@ -86,13 +87,13 @@ pathdecl:
 		;
 
 ident_list:
-		ident_list ',' IDENTIFIER									{ $$ = opr(',', 2, $1, id($3)); }
-		| IDENTIFIER															{ $$ = id($1); }
+		ident_list ',' IDENTIFIER									{ $$ = $1; ($$)->add(id($3)); }
+		| IDENTIFIER															{ $$ = new ListNode; ($$)->add(id($1)); }
 		;
 
 statement_list:
-		statement_list statement									{ $$ = opr(';', 2, $1, $2); }
-		|																					{ $$ = NULL; }
+		statement_list statement									{ $$ = $1; ($$)->add($2); }
+		|																					{ $$ = new ListNode; }
 		;
 		
 statement:
@@ -104,15 +105,15 @@ statement:
 		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
 		| string_expr
 		| path_expr
-		| SPLIT '{' thread_list '}' JOIN '(' thread_set ')' ';'		{ $$ = opr(SPLIT, 2, $3, $7); }
+		| SPLIT '{' thread_list '}' JOIN '(' thread_set ')' ';'			{ $$ = opr(SPLIT, 2, $3, $7); }
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
 		;
 
 xor_list:
-		xor_list xor															{ $$ = opr(LIST, 2, $1, $2); }
-		|																					{ $$ = NULL; }
+		xor_list xor															{ $$ = $1; ($$)->add($2); }
+		|																					{ $$ = new ListNode; }
 		;
 
 xor:
@@ -120,8 +121,8 @@ xor:
 		;
 
 thread_list:
-		thread_list thread												{ $$ = opr(LIST, 2, $1, $2); }
-		|																					{ $$ = NULL; }
+		thread_list thread												{ $$ = $1; ($$)->add($2); }
+		|																					{ $$ = new ListNode; }
 		;
 
 thread:
@@ -129,7 +130,7 @@ thread:
 		;
 
 thread_set:
-		ident_list
+		ident_list																{ $$ = $1; }
 		| INTEGER																	{ $$ = new IntNode($1); }
 		;
 
@@ -138,8 +139,8 @@ repeat:
 		;
 
 limit_list:
-		limit_list limit													{ $$ = opr(LIST, 2, $1, $2); }
-		|																					{ $$ = NULL; }
+		limit_list limit													{ $$ = $1; ($$)->add($2); }
+		|																					{ $$ = new ListNode; }
 		;
 
 limit:
@@ -163,11 +164,11 @@ path_expr:
 		;
 
 task:
-		TASK '(' string_expr ',' string_expr ')'			{ $$ = opr(TASK, 2, $3, $5); }
+		TASK '(' string_expr ',' string_expr ')'	{ $$ = opr(TASK, 2, $3, $5); }
 		;
 
 event:
-		EVENT '(' string_expr ',' string_expr ')'			{ $$ = opr(EVENT, 2, $3, $5); }
+		NOTICE '(' string_expr ',' string_expr ')'	{ $$ = opr(NOTICE, 2, $3, $5); }
 		;
 
 string_literal:
@@ -212,12 +213,12 @@ bool_expr:
 
 float_expr:
 		int_expr
-		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'		{ $$ = opr(AVERAGE, 2, id($3), id($5)); }
+		| AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(AVERAGE, 2, id($3), id($5)); }
 		| AVERAGE '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(AVERAGE, 2, id($3), $5); }
-		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'		{ $$ = opr(STDDEV, 2, id($3), id($5)); }
+		| STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(STDDEV, 2, id($3), id($5)); }
 		| STDDEV '(' IDENTIFIER ',' string_literal ')'		{ $$ = opr(STDDEV, 2, id($3), $5); }
-		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'				{ $$ = opr(F_MAX, 2, id($3), id($5)); }
-		| F_MAX '(' IDENTIFIER ',' string_literal ')'				{ $$ = opr(F_MAX, 2, id($3), $5); }
+		| F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'					{ $$ = opr(F_MAX, 2, id($3), id($5)); }
+		| F_MAX '(' IDENTIFIER ',' string_literal ')'			{ $$ = opr(F_MAX, 2, id($3), $5); }
 		;
 
 int_expr:

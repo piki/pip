@@ -39,7 +39,7 @@ letter	[A-Za-z_]
 "split"													return SPLIT;
 "branch"												return BRANCH;
 "join"													return JOIN;
-"event"													return EVENT;
+"notice"												return NOTICE;
 "xor"														return XOR;
 "call"													return CALL;
 "between"												return BETWEEN;

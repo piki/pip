@@ -1,25 +1,25 @@
-expectation P1 {
+expectation E1 {
   task("PARSE_REQUEST", "www.hp.com")
-		limit(IO_OPS, {5...100})
+    limit(IO_OPS, {5...100})
     limit(CPU_TIME, {0...2});
   task("REVERSE_DNS_LOOKUP", "www.hp.com")
     limit(REAL_TIME, {10...});
-	event("CACHE_MISS", m/.*/);
-	event(m/^FOO/, m/.*/);
-	task("LINK", $HERE=m/.*/) {
-		task("SP_TREE", $HERE);
-	}
-	xor {
-		branch: event("THIS", m/.*/);
-		branch: event("THAT", m/.*/);
-	}
+  notice("CACHE_MISS", m/.*/);
+  notice(m/^FOO/, m/.*/);
+  task("LINK", $HERE=m/.*/) {
+    task("SP_TREE", $HERE);
+  }
+  xor {
+    branch: notice("THIS", m/.*/);
+    branch: notice("THAT", m/.*/);
+  }
 }
 
-expectation P3 {
-	xor {
-		branch: call(P1);
-		branch: call(P2);
-	}
+expectation E3 {
+  xor {
+    branch: call(E1);
+    branch: call(E2);
+  }
 }
 
 expectation DHT_recursive_shortcut {
@@ -60,7 +60,7 @@ expectation DHT_Coral {
   message();
   task("DHT", m/.*/);
   message();
-	repeat 2 {
+  repeat 2 {
     split {
       branch T1:
         message();
@@ -84,18 +84,18 @@ expectation DHT_Coral {
 }
 
 fragment Timer {
-	event("timer", m/.*/);
+  notice("timer", m/.*/);
 }
 
-assert( instances(P1) in { 1...5 } )
-assert( instances(P1) < 5 )
-assert( instances(P1) > 1 )
-assert( instances(P1) >= 1 )
-assert( instances(P1) <= 5 )
-assert( instances(P1) != 0 )
-during(any 0) assert( unique(P1) == unique(P2) )
-during(any 5) assert( instances(P1) > 0 -> instances(P2) == 0 )
+assert( instances(E1) in { 1...5 } )
+assert( instances(E1) < 5 )
+assert( instances(E1) > 1 )
+assert( instances(E1) >= 1 )
+assert( instances(E1) <= 5 )
+assert( instances(E1) != 0 )
+during(any 0) assert( unique(E1) == unique(E2) )
+during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 )
 during(1, 10) assert( unique($HERE) == 1 )
-assert( average(CPU_TIME, P1) < 5 )
-assert( stddev(IO_OPS, P1) < 5 )
+assert( average(CPU_TIME, E1) < 5 )
+assert( stddev(IO_OPS, E1) < 5 )
 assert( max(REAL_TIME, "DHT") in { 0...10 } )

@@ -28,6 +28,13 @@ OperatorNode::OperatorNode(int which, int argc, ...) {
 }
 
 OperatorNode::~OperatorNode(void) {
+	for (unsigned int i=0; i<operands.size(); i++)
+		delete operands[i];
+}
+
+ListNode::~ListNode(void) {
+	for (unsigned int i=0; i<data.size(); i++)
+		delete data[i];
 }
 
 struct {
@@ -63,7 +70,7 @@ struct {
 	{ IN, "IN" },
 	{ MESSAGE, "MESSAGE" },
 	{ TASK, "TASK" },
-	{ EVENT, "EVENT" },
+	{ NOTICE, "NOTICE" },
 	{ LIMIT, "LIMIT" },
 	{ ELLIPSIS, "ELLIPSIS" },
 	{ RANGE, "RANGE" },
@@ -105,6 +112,13 @@ void print_tree(const Node *node, int depth) {
 		case NODE_IDENTIFIER:
 			printf("%s", ((IdentifierNode*)node)->sym->name.c_str());
 			break;
+		case NODE_LIST:{
+				ListNode *lnode = (ListNode*)node;										 	
+				for (unsigned int i=0; i<lnode->size(); i++) {
+					print_tree((*lnode)[i], depth);
+				}
+			}
+			break;
 		case NODE_OPERATOR:{
 			OperatorNode *onode = (OperatorNode*)node;
 			switch (onode->op) {
@@ -126,19 +140,6 @@ void print_tree(const Node *node, int depth) {
 					TAB printf("assert( ");
 					print_tree(onode->operands[0], depth);
 					printf(" )\n");
-					break;
-				case LIST:
-					print_tree(onode->operands[0], depth);
-					print_tree(onode->operands[1], depth);
-					break;
-				case ',':
-					print_tree(onode->operands[0], depth);
-					printf(", ");
-					print_tree(onode->operands[1], depth);
-					break;
-				case ';':
-					print_tree(onode->operands[0], depth);
-					print_tree(onode->operands[1], depth);
 					break;
 				case REVERSE:
 					TAB printf("reverse(");
@@ -177,8 +178,8 @@ void print_tree(const Node *node, int depth) {
 							assert(!"invalid number of operands for TASK");
 					}
 					break;
-				case EVENT:
-					TAB printf("event(");
+				case NOTICE:
+					TAB printf("notice(");
 					print_tree(onode->operands[0], depth);
 					printf(", ");
 					print_tree(onode->operands[1], depth);

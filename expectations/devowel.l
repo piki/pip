@@ -1,2 +1,0 @@
-%%
-[aeiouAEIOU]	putchar('*');
