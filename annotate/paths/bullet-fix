@@ -63,6 +63,7 @@ foreach (@Q) {
 }
 print " done.\n";
 
+# Delete Ryan's "GARBAGE" catch-all
 $query = $dbh->prepare("DELETE FROM bullet_paths WHERE pathblob LIKE 'GARBAGE%'");
 $query->execute();
 
