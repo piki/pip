@@ -1,24 +1,28 @@
 public class AnnTest implements Runnable {
 	public static void main(String[] args) {
 		Annotate.init();
-		Annotate.setPathID(5040);
+		Annotate.setPathID(null, 0, 5040);
 		System.out.println("parent's pathid is "+Annotate.getPathIDInt());
-		System.out.println("      as an object "+Annotate.getPathIDObj());
-		System.out.println("   as a byte array "+Annotate.getPathID());
+		System.out.print("   as a byte array { ");
+		byte[] ba = Annotate.getPathID();
+		for (int i=0; i<ba.length; i++)
+			System.out.print((ba[i]<0 ? ba[i]+256 : ba[i])+" ");
+		System.out.println("}");
+
 		new Thread(new AnnTest()).start();
-		Annotate.startTask("one to a hundred million");
+		Annotate.startTask("counting", 0, "one to a hundred million");
 		for (int i=0; i<100000000; i++) {}
-		Annotate.startTask("subtask");
-		Annotate.endTask("subtask");
-		Annotate.endTask("one to a hundred million");
-		Annotate.startTask("has an event");
-		Annotate.notice("the event");
-		Annotate.endTask("has an event");
+		Annotate.startTask("subtasks", 1, "subtask");
+		Annotate.endTask("subtasks", 1, "subtask");
+		Annotate.endTask("counting", 0, "one to a hundred million");
+		Annotate.startTask(null, 0, "has an event");
+		Annotate.notice(null, 0, "the event");
+		Annotate.endTask(null, 0, "has an event");
 	}
 	public void run() {
-		Annotate.setPathID(8712);
-		Annotate.startTask("child's hundred million");
+		Annotate.setPathID(null, 0, 8712);
+		Annotate.startTask("counting", 0, "child's hundred million");
 		for (int i=0; i<100000000; i++) {}
-		Annotate.endTask("child's hundred million");
+		Annotate.endTask("counting", 0, "child's hundred million");
 	}
 }

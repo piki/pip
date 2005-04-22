@@ -2,32 +2,37 @@ import java.io.*;
 
 public class Annotate {
 	public static native void init();
-	public static native void startTask(String name);
-	public static native void endTask(String name);
-	public static native void setPathID(byte[] pathid);
-	public static void setPathID(int pathid) { setPathID(pickle(pathid)); }
-	public static void setPathID(Serializable pathid) { setPathID(pickle(pathid)); }
+	public static native void startTask(String roles, int level, String name);
+	public static native void endTask(String roles, int level, String name);
+	public static native void setPathID(String roles, int level, byte[] pathid);
 	public static native byte[] getPathID();
+	public static native void endPathID(String roles, int level, byte[] pathid);
+	public static native void notice(String roles, int level, String str);
+	public static native void send(String roles, int level, byte[] msgid, int size);
+	public static native void receive(String roles, int level, byte[] msgid, int size);
+
+	public static void setPathID(String roles, int level, int pathid) { setPathID(roles, level, pickle(pathid)); }
+	public static void setPathID(String roles, int level, Serializable pathid) { setPathID(roles, level, pickle(pathid)); }
 	public static Object getPathIDObj() { return unpickleObject(getPathID()); }
 	public static int getPathIDInt() { return unpickleInt(getPathID()); }
-	public static native void endPathID(byte[] pathid);
-	public static void endPathID(int pathid) { endPathID(pickle(pathid)); }
-	public static void endPathID(Serializable pathid) { endPathID(pickle(pathid)); }
-	public static native void notice(String str);
-	public static native void send(byte[] msgid, int size);
-	public static void send(int msgid, int size) { send(new Integer(msgid), size); }
-	public static void send(Serializable msgid, int size) { send(pickle(msgid), size); }
-	public static native void receive(byte[] msgid, int size);
-	public static void receive(int msgid, int size) { send(new Integer(msgid), size); }
-	public static void receive(Serializable msgid, int size) { receive(pickle(msgid), size); }
+	public static void endPathID(String roles, int level, int pathid) { endPathID(roles, level, pickle(pathid)); }
+	public static void endPathID(String roles, int level, Serializable pathid) { endPathID(roles, level, pickle(pathid)); }
+	public static void send(String roles, int level, int msgid, int size) { send(roles, level, new Integer(msgid), size); }
+	public static void send(String roles, int level, Serializable msgid, int size) { send(roles, level, pickle(msgid), size); }
+	public static void receive(String roles, int level, int msgid, int size) { receive(roles, level, new Integer(msgid), size); }
+	public static void receive(String roles, int level, Serializable msgid, int size) { receive(roles, level, pickle(msgid), size); }
 
 	private static byte[] pickle(Serializable obj) {
+		System.out.println("Pickling an object: "+obj);
 		ByteArrayOutputStream bo = null;
 		try {
 			bo = new ByteArrayOutputStream();
 			new ObjectOutputStream(bo).writeObject(obj);
+			System.out.println("  wrote it");
 		}
-		catch (Exception e) {}
+		catch (Exception e) {System.err.println(e);}
+		byte[] B = bo.toByteArray();
+		System.out.println("  returning byte array "+B+" of length "+B.length);
 		return bo.toByteArray();
 	}
 
@@ -37,7 +42,7 @@ public class Annotate {
 			bo = new ByteArrayOutputStream();
 			new DataOutputStream(bo).writeInt(i);
 		}
-		catch (Exception e) {}
+		catch (Exception e) {System.err.println(e);}
 		return bo.toByteArray();
 	}
 

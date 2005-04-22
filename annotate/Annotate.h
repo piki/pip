@@ -18,26 +18,26 @@ JNIEXPORT void JNICALL Java_Annotate_init
 /*
  * Class:     Annotate
  * Method:    startTask
- * Signature: (Ljava/lang/String;)V
+ * Signature: (Ljava/lang/String;ILjava/lang/String;)V
  */
 JNIEXPORT void JNICALL Java_Annotate_startTask
-  (JNIEnv *, jclass, jstring);
+  (JNIEnv *, jclass, jstring, jint, jstring);
 
 /*
  * Class:     Annotate
  * Method:    endTask
- * Signature: (Ljava/lang/String;)V
+ * Signature: (Ljava/lang/String;ILjava/lang/String;)V
  */
 JNIEXPORT void JNICALL Java_Annotate_endTask
-  (JNIEnv *, jclass, jstring);
+  (JNIEnv *, jclass, jstring, jint, jstring);
 
 /*
  * Class:     Annotate
  * Method:    setPathID
- * Signature: ([B)V
+ * Signature: (Ljava/lang/String;I[B)V
  */
 JNIEXPORT void JNICALL Java_Annotate_setPathID
-  (JNIEnv *, jclass, jbyteArray);
+  (JNIEnv *, jclass, jstring, jint, jbyteArray);
 
 /*
  * Class:     Annotate
@@ -50,34 +50,34 @@ JNIEXPORT jbyteArray JNICALL Java_Annotate_getPathID
 /*
  * Class:     Annotate
  * Method:    endPathID
- * Signature: ([B)V
+ * Signature: (Ljava/lang/String;I[B)V
  */
 JNIEXPORT void JNICALL Java_Annotate_endPathID
-  (JNIEnv *, jclass, jbyteArray);
+  (JNIEnv *, jclass, jstring, jint, jbyteArray);
 
 /*
  * Class:     Annotate
  * Method:    notice
- * Signature: (Ljava/lang/String;)V
+ * Signature: (Ljava/lang/String;ILjava/lang/String;)V
  */
 JNIEXPORT void JNICALL Java_Annotate_notice
-  (JNIEnv *, jclass, jstring);
+  (JNIEnv *, jclass, jstring, jint, jstring);
 
 /*
  * Class:     Annotate
  * Method:    send
- * Signature: ([BI)V
+ * Signature: (Ljava/lang/String;I[BI)V
  */
 JNIEXPORT void JNICALL Java_Annotate_send
-  (JNIEnv *, jclass, jbyteArray, jint);
+  (JNIEnv *, jclass, jstring, jint, jbyteArray, jint);
 
 /*
  * Class:     Annotate
  * Method:    receive
- * Signature: ([BI)V
+ * Signature: (Ljava/lang/String;I[BI)V
  */
 JNIEXPORT void JNICALL Java_Annotate_receive
-  (JNIEnv *, jclass, jbyteArray, jint);
+  (JNIEnv *, jclass, jstring, jint, jbyteArray, jint);
 
 #ifdef __cplusplus
 }
