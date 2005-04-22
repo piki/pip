@@ -273,7 +273,7 @@ static int scan(const char *buf, ...) {
 		int T = va_arg(arg, int);
 		switch (T) {
 			case STRING:
-				len = (*p << 8) + *(p+1);  p+=2;
+				len = ((*p << 8) + *(p+1)) & 0xFFFF;  p+=2;
 				s = va_arg(arg, char**);
 				if (len > 0) {
 					*s = new char[len+1];
@@ -287,7 +287,7 @@ static int scan(const char *buf, ...) {
 			case VOIDP:
 				s = va_arg(arg, char**);
 				lenp = va_arg(arg, int*);
-				len = *lenp = *(p++);
+				len = *lenp = *(p++) & 0xFF;
 				*s = new char[len];
 				memcpy(*s, p, len);
 				p += len;
