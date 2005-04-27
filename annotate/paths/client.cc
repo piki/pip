@@ -17,7 +17,6 @@ Client::Client(void) : handle(-1), buf(NULL), bufhead(0), buflen(0),
 		bufsiz(0), header(NULL), thread_id(-1), current_id(-1) { }
 
 void Client::append(const char *newbuf, int len) {
-	printf("append %d bytes\n", len);
 	assert(bufhead == 0);
 	if (buflen + len > bufsiz) {
 		bufsiz = MAX(bufsiz*2, buflen + len);
@@ -28,7 +27,6 @@ void Client::append(const char *newbuf, int len) {
 
 	Event *ev;
 	while ((ev = get_event()) != NULL) {
-		printf("  event\n");
 		handle_event(ev);
 	}
 	if (bufhead != 0) {

@@ -28,10 +28,11 @@ typedef struct {
 #include <linux/unistd.h>
 _syscall0(pid_t,gettid)
 
-#define GETRUSAGE(ru) ({int _n;if(rusage_who==0)_n=proc_getrusage(0,ru);else _n=getrusage(rusage_who,ru); _n;})
+#define USE_PROC 10
+#define GETRUSAGE(ru) ({int _n;if(rusage_who==USE_PROC)_n=proc_getrusage(0,ru);else _n=getrusage(rusage_who,ru); _n;})
 static int proc_getrusage(int ign, struct rusage *ru);
 #ifndef RUSAGE_THREAD
-#warning RUSAGE_THREAD not defined.  Assuming (-3)
+//#warning RUSAGE_THREAD not defined.  Assuming (-3)
 #define RUSAGE_THREAD (-3)
 #endif
 
@@ -132,6 +133,9 @@ void ANNOTATE_INIT(void) {
 	int minor = p ? atoi(p) : 0;
 	p = strtok(NULL, ".");
 	int micro = p ? atoi(p) : 0;
+	// kernels <= 2.6.5 -> use RUSAGE_SELF
+	// kernels > 2.6.5 that have been patched -> use RUSAGE_THREAD
+	// stock kernels > 2.6.5 -> use USE_PROC
 	if (major < 2) rusage_who = RUSAGE_SELF;
 	else if (major > 2) rusage_who = RUSAGE_THREAD;
 	else if (minor < 6) rusage_who = RUSAGE_SELF;
@@ -141,7 +145,7 @@ void ANNOTATE_INIT(void) {
 	if (rusage_who == RUSAGE_THREAD) {
 		struct rusage ru;
 		if (getrusage(RUSAGE_THREAD, &ru) == -1)
-			rusage_who = 0;  /* use proc */
+			rusage_who = USE_PROC;
 	}
 	fprintf(stderr, "Kernel %d.%d.%d, rusage_who=%d\n",
 		major, minor, micro, rusage_who);

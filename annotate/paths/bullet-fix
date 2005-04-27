@@ -36,7 +36,7 @@ while (my ($pathid, $ts_recv, $size, $thread_recv) = $query->fetchrow()) {
 	foreach my $tid (@{$threads{$host{$thread_recv}}}) {
 		next if $tid == $thread_recv;
 		next if !$sends{$pathid}{$tid};
-		$Q = "INSERT INTO $T_messages VALUES ($pathid, 'fake', ".inc($ts_recv,$amt).",".inc($ts_recv,$amt+1).",$size,$thread_recv,$tid)";
+		$Q = "INSERT INTO $T_messages VALUES ($pathid, null, 0, 'fake', ".inc($ts_recv,$amt).",".inc($ts_recv,$amt+1).",$size,$thread_recv,$tid)";
 		$amt += 2;
 		push @Q, $Q;
 	}
@@ -49,7 +49,7 @@ while (my ($pathid, $ts_send, $size) = $query->fetchrow()) {
 	foreach my $tid (@{$threads{$host{1}}}) {
 		next if $tid == 1;
 		next if !$sends{$pathid}{$tid};
-		$Q = "INSERT INTO $T_messages VALUES ($pathid, 'fake1', ".inc($ts_send,$amt).",".inc($ts_send,$amt+1).",$size,1,$tid)";
+		$Q = "INSERT INTO $T_messages VALUES ($pathid, null, 0, 'fake1', ".inc($ts_send,$amt).",".inc($ts_send,$amt+1).",$size,1,$tid)";
 		$amt += 2;
 		push @Q, $Q;
 	}
