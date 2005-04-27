@@ -5,7 +5,7 @@
 #include "dag.h"
 
 #define MARGIN 10
-#define CAPTION 40
+#define CAPTION 0
 #define NODE_WIDTH 40
 #define NODE_HEIGHT 22
 #define NODE_XGAP 10

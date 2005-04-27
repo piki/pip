@@ -49,6 +49,10 @@ int PathTask::compare(const PathEvent *_other) const {
 	return PCMP_EXACT;
 }
 
+std::string PathTask::to_string(void) const {
+	return std::string("Task(\"") + name + "\")";
+}
+
 void PathTask::print_dot(FILE *fp) const {
 	for (unsigned int i=0; i<children.size(); i++)
 		children[i]->print_dot(fp);
@@ -91,6 +95,10 @@ int PathNotice::compare(const PathEvent *_other) const {
 	return PCMP_EXACT;
 }
 
+std::string PathNotice::to_string(void) const {
+	return std::string("Notice(\"") + name + "\")";
+}
+
 void PathNotice::print_dot(FILE *fp) const { }
 
 void PathNotice::print(FILE *fp, int depth) const {
@@ -127,6 +135,13 @@ int PathMessageSend::compare(const PathEvent *_other) const {
 	if (size > other->size) return PCMP_NAMES;
 
 	return PCMP_EXACT;
+}
+
+std::string PathMessageSend::to_string(void) const {
+	char buf[256];
+	snprintf(buf, sizeof(buf), "Send(%d->%d, %d bytes)",
+		thread_send, recv->thread_recv, size);
+	return std::string(buf);
 }
 
 void PathMessageSend::print_dot(FILE *fp) const {
@@ -167,6 +182,13 @@ int PathMessageRecv::compare(const PathEvent *_other) const {
 	//if (send->thread_send > other->send->thread_send) return PCMP_NONE;
 
 	return PCMP_EXACT;
+}
+
+std::string PathMessageRecv::to_string(void) const {
+	char buf[256];
+	snprintf(buf, sizeof(buf), "Recv(%d->%d, %d bytes)",
+		send->thread_send, thread_recv, send->size);
+	return std::string(buf);
 }
 
 void PathMessageRecv::print_dot(FILE *fp) const {

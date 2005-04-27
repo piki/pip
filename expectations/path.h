@@ -24,6 +24,7 @@ public:
 	virtual ~PathEvent(void) {}
 	virtual PathEventType type(void) const = 0; 
 	virtual int compare(const PathEvent *other) const = 0;
+	virtual std::string to_string(void) const = 0;
 	virtual void print_dot(FILE *fp = stdout) const = 0;
 	virtual void print(FILE *fp = stdout, int depth = 0) const = 0;
 	virtual const timeval &start(void) const = 0;
@@ -39,6 +40,7 @@ public:
 	virtual int compare(const PathEvent *other) const;
 	virtual const timeval &start(void) const { return ts_start; }
 	virtual const timeval &end(void) const { return ts_end; }
+	virtual std::string to_string(void) const;
 	void print_dot(FILE *fp = stdout) const;
 	void print(FILE *fp = stdout, int depth = 0) const;
 
@@ -58,6 +60,7 @@ public:
 	virtual int compare(const PathEvent *other) const;
 	virtual const timeval &start(void) const { return ts; }
 	virtual const timeval &end(void) const { return ts; }
+	virtual std::string to_string(void) const;
 	void print_dot(FILE *fp = stdout) const;
 	void print(FILE *fp = stdout, int depth = 0) const;
 
@@ -73,6 +76,7 @@ public:
 	virtual int compare(const PathEvent *other) const;
 	virtual const timeval &start(void) const { return ts_send; }
 	virtual const timeval &end(void) const { return ts_send; }
+	virtual std::string to_string(void) const;
 	void print_dot(FILE *fp = stdout) const;
 	void print(FILE *fp = stdout, int depth = 0) const;
 
@@ -90,6 +94,7 @@ public:
 	virtual int compare(const PathEvent *other) const;
 	virtual const timeval &start(void) const { return ts_recv; }
 	virtual const timeval &end(void) const { return ts_recv; }
+	virtual std::string to_string(void) const;
 	void print_dot(FILE *fp = stdout) const;
 	void print(FILE *fp = stdout, int depth = 0) const;
 

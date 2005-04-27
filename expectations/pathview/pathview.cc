@@ -21,12 +21,14 @@
 #include "pathtl.h"
 #include "workqueue.h"
 
-#define WID(name) glade_xml_get_widget(xml, name)
-static GladeXML *xml;
+#define WID(name) glade_xml_get_widget(main_xml, name)
+#define WID_D(name) glade_xml_get_widget(dagpopup_xml, name)
+static GladeXML *main_xml, *dagpopup_xml = NULL;
 static char *table_base;
 MYSQL mysql;
 static GtkListStore *tasks, *hosts, *paths, *recognizers;
 static int status_bar_context;
+static Path *active_path = NULL;
 
 extern Path *read_path(const char *base, int pathid);
 static void init_tasks(GtkTreeView *tree);
@@ -38,6 +40,7 @@ static void fill_hosts(const char *search);
 static void fill_paths(const char *search);
 static void fill_recognizers(const char *search);
 static void fill_dag(GtkDAG *dag, const Path *path);
+static const char *itoa(int n);
 
 extern "C" {
 GtkWidget *create_dag(const char *wid);
@@ -70,9 +73,9 @@ int main(int argc, char **argv) {
 	}
 	table_base = argv[1];
   glade_init();
-  xml = glade_xml_new("pathview.glade", NULL, NULL);
-  glade_xml_signal_autoconnect(xml);
-  //gtk_object_unref(GTK_OBJECT(xml));
+  main_xml = glade_xml_new("pathview.glade", "main", NULL);
+  glade_xml_signal_autoconnect(main_xml);
+  //gtk_object_unref(GTK_OBJECT(main_xml));
 	mysql_init(&mysql);
 	if (!mysql_real_connect(&mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
 		fprintf(stderr, "Connection failed: %s\n", mysql_error(&mysql));
@@ -290,17 +293,79 @@ void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point) {
     printf("point cleared\n");
 }
 
+static GtkTreeStore *popup_events;
+static void popup_append_event(const PathEvent *ev, GtkTreeIter *iter, GtkTreeIter *parent) {
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%ld.%06ld", ev->start().tv_sec, ev->start().tv_usec);
+	std::string txt = ev->to_string();
+	gtk_tree_store_append(popup_events, iter, parent);
+	gtk_tree_store_set(popup_events, iter,
+		0, buf,
+		1, txt.c_str(),
+		-1);
+}
+
+static bool popup_fill_events(const PathEventList &list, PathMessageRecv *match, bool *found_start, GtkTreeIter *parent) {
+	GtkTreeIter iter;
+	for (unsigned int i=0; i<list.size(); i++) {
+		switch (list[i]->type()) {
+			case PEV_TASK:
+				if (*found_start) popup_append_event(list[i], &iter, parent);
+				if (popup_fill_events(((PathTask*)list[i])->children, match, found_start, &iter))
+					return true;  // if a child says we're done, we're done
+				break;
+			case PEV_MESSAGE_RECV:
+				if (*found_start) return true;  // found the next recv; we're done
+				if (list[i] == match) {
+					*found_start = TRUE;
+					popup_append_event(list[i], &iter, parent);
+				}
+				break;
+			default: ;
+				if (*found_start) popup_append_event(list[i], &iter, parent);
+		}
+	}
+	return false;
+}
+
 void dag_node_clicked(GtkDAG *dag, DAGNode *node) {
-	int thread_id = GPOINTER_TO_INT(node->user_data);
-	run_sqlf(&mysql, "SELECT * FROM %s_threads WHERE thread_id=%d", table_base, thread_id);
+	if (!dagpopup_xml) {
+		printf("initializing dagpopup\n");
+		dagpopup_xml = glade_xml_new("pathview.glade", "dagpopup", NULL);
+		glade_xml_signal_autoconnect(dagpopup_xml);
+
+		GtkTreeView *tree = GTK_TREE_VIEW(WID_D("dagpopup_list"));
+		popup_events = gtk_tree_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
+		gtk_tree_view_set_model(tree, GTK_TREE_MODEL(popup_events));
+		GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+		GtkTreeViewColumn *col = gtk_tree_view_column_new_with_attributes("Time", renderer, "text", 0, NULL);
+		gtk_tree_view_append_column(tree, col);
+		col = gtk_tree_view_column_new_with_attributes("Event", renderer, "text", 1, NULL);
+		gtk_tree_view_append_column(tree, col);
+	}
+	else {
+		printf("showing dagpopup\n");
+		gtk_widget_show(WID_D("dagpopup"));
+	}
+
+	PathMessageRecv *pmr = (PathMessageRecv*)node->user_data;
+	int thread_id = pmr ? pmr->thread_recv : active_path->root_thread;
+	run_sqlf(&mysql, "SELECT thread_id,host,prog FROM %s_threads WHERE thread_id=%d", table_base, thread_id);
 	MYSQL_RES *res = mysql_use_result(&mysql);
 	MYSQL_ROW row = mysql_fetch_row(res);
 	assert(row);
 	assert(atoi(row[0]) == thread_id);
-	PathThread thr(row);
+	gtk_label_set_text(GTK_LABEL(WID_D("label_thread")), itoa(thread_id));
+	gtk_label_set_text(GTK_LABEL(WID_D("label_host")), row[1]);
+	gtk_label_set_text(GTK_LABEL(WID_D("label_program")), row[2]);
+	gtk_label_set_text(GTK_LABEL(WID("label_host")), row[1]);
+	gtk_label_set_text(GTK_LABEL(WID("label_program")), row[2]);
 	mysql_free_result(res);
-	gtk_label_set_text(GTK_LABEL(WID("label_host")), thr.host.c_str());
-	gtk_label_set_text(GTK_LABEL(WID("label_program")), thr.prog.c_str());
+
+	gtk_tree_store_clear(popup_events);
+	bool found_start = pmr == NULL;
+	popup_fill_events(active_path->children.find(thread_id)->second, pmr, &found_start, NULL);
+	gtk_tree_view_expand_all(GTK_TREE_VIEW(WID_D("dagpopup_list")));
 }
 
 void tasks_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc) {
@@ -311,7 +376,6 @@ void hosts_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn 
 	printf("hosts_activate\n");
 }
 
-static Path *active_path = NULL;
 void paths_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc) {
 	GtkTreeIter iter;
 	int pathid;
@@ -319,6 +383,12 @@ void paths_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn 
 	gtk_tree_model_get(GTK_TREE_MODEL(paths), &iter, 0, &pathid, -1);
 	if (active_path) delete active_path;
 	active_path = new Path(&mysql, table_base, pathid);
+	if (!active_path->valid()) {
+		printf("malformed path -- not displaying\n");
+		delete active_path;
+		active_path = NULL;
+		return;
+	}
 	gtk_pathtl_set(GTK_PATHTL(WID("pathtl")), active_path);
 	fill_dag(GTK_DAG(WID("dag")), active_path);
 }
@@ -367,23 +437,30 @@ static const char *itoa(int n) {
 	return buf;
 }
 
-static DAGNode *fill_dag_one_message(GtkDAG *dag, const PathMessageRecv *pmr) {
+static void fill_dag_from_list(GtkDAG *dag, const PathEventList &list, const Path *path);
+
+static DAGNode *fill_dag_one_message(GtkDAG *dag, const PathMessageRecv *pmr, const Path *path) {
 	if (dag_nodes[pmr]) return dag_nodes[pmr];
 	DAGNode *parent = dag_nodes[pmr->send->pred];
-	if (!parent) parent = fill_dag_one_message(dag, pmr->send->pred);
+	//if (!parent) parent = fill_dag_one_message(dag, pmr->send->pred);
+	if (!parent) {
+		fill_dag_from_list(dag, path->children.find(pmr->send->thread_send)->second, path);
+		parent = dag_nodes[pmr->send->pred];
+	}
 	assert(parent);
-	dag_nodes[pmr] = gtk_dag_add_node(dag, itoa(pmr->thread_recv), parent, NULL, 0, GINT_TO_POINTER(pmr->thread_recv));
+	if (dag_nodes[pmr]) return dag_nodes[pmr];
+	dag_nodes[pmr] = gtk_dag_add_node(dag, itoa(pmr->thread_recv), parent, NULL, 0, (void*)pmr);
 	return dag_nodes[pmr];
 }
 
-static void fill_dag_from_list(GtkDAG *dag, const PathEventList &list) {
+static void fill_dag_from_list(GtkDAG *dag, const PathEventList &list, const Path *path) {
 	for (unsigned int i=0; i<list.size(); i++) {
 		switch (list[i]->type()) {
 			case PEV_TASK:
-				fill_dag_from_list(dag, ((PathTask*)list[i])->children);
+				fill_dag_from_list(dag, ((PathTask*)list[i])->children, path);
 				break;
 			case PEV_MESSAGE_RECV:
-				fill_dag_one_message(dag, ((PathMessageRecv*)list[i]));
+				fill_dag_one_message(dag, ((PathMessageRecv*)list[i]), path);
 				break;
 			default: ;
 		}
@@ -394,9 +471,9 @@ static void fill_dag(GtkDAG *dag, const Path *path) {
 	dag_nodes.clear();
 	gtk_dag_freeze(dag);
 	gtk_dag_clear(dag);
-	dag_nodes[NULL] = gtk_dag_add_root(dag, itoa(path->root_thread), NULL, 0, GINT_TO_POINTER(path->root_thread));
+	dag_nodes[NULL] = gtk_dag_add_root(dag, itoa(path->root_thread), NULL, 0, NULL);
 	std::map<int, PathEventList>::const_iterator thread;
 	for (thread=path->children.begin(); thread!=path->children.end(); thread++)
-		fill_dag_from_list(dag, thread->second);
+		fill_dag_from_list(dag, thread->second, path);
 	gtk_dag_thaw(dag);
 }
