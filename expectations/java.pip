@@ -1,25 +1,31 @@
-expectation Parent {
-	task("one to a hundred million", $where = *) {
-		task("subtask", $where);
-	}
-	task("has an event", $where) {
-		notice("the event", $where);
+validator Parent {
+	thread Root(*, 1) {
+		task("one to a hundred million") {
+			task("subtask");
+		}
+		task("has an event") {
+			notice("the event");
+		}
 	}
 }
 
-expectation Child {
-	task("child's hundred million", *);
+validator Child {
+	thread Root(*, 1) {
+		task("child's hundred million");
+	}
 }
 
-expectation Both {
-	repeat between 1 and 2 {
-		task(*, *) {
-			xor {
-				branch:
-					task(*, *);
-				branch:
-					notice(*, *);
-				branch:
+validator Both {
+	thread Root(*, 1) {
+		repeat between 1 and 2 {
+			task(*) {
+				xor {
+					branch:
+						task(*);
+					branch:
+						notice(*);
+					branch:
+				}
 			}
 		}
 	}

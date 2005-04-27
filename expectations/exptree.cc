@@ -6,8 +6,8 @@
 #include "expect.tab.hh"
 
 static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources);
-static void add_statements(const ListNode *list_node, ExpEventList *where,
-		LimitList *limits);
+static void add_statements(const ListNode *list_node, ExpEventList *where);
+static void add_limits(const ListNode *limit_list, LimitList *limits);
 
 Match *Match::create(Node *node, bool negate) {
 	if (node->type() == NODE_STRING)
@@ -43,15 +43,31 @@ Match *Match::create(Node *node, bool negate) {
 	}
 }
 
-RegexMatch::RegexMatch(const std::string &_data, bool _negate) : Match(_negate) {}
-RegexMatch::~RegexMatch(void) {}
-bool RegexMatch::check(const std::string &text) const { return true; }  // !!
+RegexMatch::RegexMatch(const std::string &_data, bool _negate) : Match(_negate) {
+	const char *err;
+	int errofs;
+	regex = pcre_compile(_data.c_str(), 0, &err, &errofs, NULL);
+	if (!regex) {
+		fprintf(stderr, "Error compiling regex: %s\n", err);
+		fprintf(stderr, "%s\n%*s^\n", _data.c_str(), errofs, "");
+		exit(1);
+	}
+}
+RegexMatch::~RegexMatch(void) {
+	assert(regex);
+	free(regex);
+}
+bool RegexMatch::check(const std::string &text) const {
+	assert(regex);
+	int ovector[30];
+	return pcre_exec(regex, NULL, text.c_str(), text.length(), 0, 0, ovector, 30) >= 0;
+}
 bool StringMatch::check(const std::string &text) const { bool ret = data == text; return negate ? !ret : ret; }
 bool VarMatch::check(const std::string &text) const { return true; }  // !!
 
 static const char *metric_name[] = {
 	"REAL_TIME", "UTIME", "STIME", "CPU_TIME", "MAJOR_FAULTS", "MINOR_FAULTS",
-	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", NULL
+	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", "MESSAGES", "DEPTH", "THREADS", NULL
 };
 
 Limit::Metric Limit::metric_by_name(const std::string &name) {
@@ -60,6 +76,20 @@ Limit::Metric Limit::metric_by_name(const std::string &name) {
 			return (Limit::Metric)i;
 	fprintf(stderr, "Invalid metric \"%s\"\n", name.c_str());
 	abort();
+}
+
+static float get_range_value(Node *n) {
+	if (n) {
+		switch (n->type()) {
+			case NODE_UNITS:  return ((UnitsNode*)n)->amt;
+			case NODE_INT:    return ((IntNode*)n)->value;
+			default:
+				fprintf(stderr, "Limit: expected unit or int, got %d\n", n->type());
+				abort();
+		}
+	}
+	else
+		return -1;
 }
 
 Limit::Limit(const OperatorNode *onode) : metric(LAST) {
@@ -71,19 +101,21 @@ Limit::Limit(const OperatorNode *onode) : metric(LAST) {
 	assert(onode->operands[1]->type() == NODE_OPERATOR);
 	OperatorNode *range = (OperatorNode*)onode->operands[1];
 	assert(range->op == RANGE);
-	assert(range->nops() == 2);
 
-	assert(range->operands[0]->type() == NODE_UNITS);
-	min = ((UnitsNode*)range->operands[0])->amt;
-	assert(min >= 0);
-	if (range->operands[1]) {
-		assert(range->operands[1]->type() == NODE_UNITS);
-		max = ((UnitsNode*)range->operands[1])->amt;
-		assert(max >= min);
-		assert(((UnitsNode*)range->operands[0])->amt >= ((UnitsNode*)range->operands[0])->amt);
+	switch (range->nops()) {
+		case 1:
+			min = max = get_range_value(range->operands[0]);
+			break;
+		case 2:
+			min = get_range_value(range->operands[0]);
+			assert(min == -1 || min >= 0);
+			max = get_range_value(range->operands[1]);
+			assert(max == -1 || max >= min);
+			break;
+		default:
+			fprintf(stderr, "Limit: invalid number of operands: %d\n", range->nops());
+			abort();
 	}
-	else
-		max = -1;
 }
 
 void Limit::print(FILE *fp, int depth) const {
@@ -103,9 +135,12 @@ bool Limit::check(const PathTask *test) const {
 		case INVOL_CS:       return check(test->invol_cs);
 		case LATENCY:
 		case SIZE:
+		case MESSAGES:
+		case DEPTH:
+		case THREADS:
 		default:
-			fprintf(stderr, "Metric %d invalid or unknown when checking Task\n",
-				metric);
+			fprintf(stderr, "Metric %s (%d) invalid or unknown when checking Task\n",
+				metric_name[metric], metric);
 			exit(1);
 	}
 }
@@ -123,9 +158,12 @@ bool Limit::check(const PathMessageSend *test) const {
 		case MINOR_FAULTS:
 		case VOL_CS:
 		case INVOL_CS:
+		case MESSAGES:
+		case DEPTH:
+		case THREADS:
 		default:
-			fprintf(stderr, "Metric %d invalid or unknown when checking Message\n",
-				metric);
+			fprintf(stderr, "Metric %s (%d) invalid or unknown when checking Message\n",
+				metric_name[metric], metric);
 			exit(1);
 	}
 }
@@ -141,9 +179,13 @@ bool Limit::check(const Path *test) const {
 		case VOL_CS:         return check(test->vol_cs);
 		case INVOL_CS:       return check(test->invol_cs);
 		case SIZE:           return check(test->size);
-		case LATENCY:
+		case DEPTH:          return check(test->depth);
+		case MESSAGES:       return check(test->messages);
+		case THREADS:        return check(test->children.size());
+		case LATENCY:        return check(test->ts_end - test->ts_start);
 		default:
-			fprintf(stderr, "Metric %d unknown when checking Path\n", metric);
+			fprintf(stderr, "Metric %s (%d) unknown when checking Path\n",
+				metric_name[metric], metric);
 			exit(1);
 	}
 }
@@ -151,7 +193,7 @@ bool Limit::check(const Path *test) const {
 ExpThread::ExpThread(const OperatorNode *onode) {
 	assert(onode->type() == NODE_OPERATOR);
 	assert(onode->op == THREAD);
-	assert(onode->nops() == 4);
+	assert(onode->nops() == 5);  // name, where, count-range, limits, statements
 
 	assert(onode->operands[2]->type() == NODE_OPERATOR);
 	const OperatorNode *range = (OperatorNode*)onode->operands[2];
@@ -163,22 +205,26 @@ ExpThread::ExpThread(const OperatorNode *onode) {
 	max = ((IntNode*)range->operands[1])->value;
 	assert(max >= min);
 
+	add_limits((ListNode*)onode->operands[3], &limits);
 	assert(onode->operands[3]->type() == NODE_LIST);
-	add_statements((ListNode*)onode->operands[3], &events, NULL);
+	add_statements((ListNode*)onode->operands[4], &events);
 }
 
-ExpThread::ExpThread(const ListNode *list, LimitList *limits) {
+ExpThread::ExpThread(const ListNode *limit_list, const ListNode *statements) {
 	min = 0;
 	max = 1<<30;
 	count = 0;
 
-	assert(list->type() == NODE_LIST);
-	add_statements(list, &events, limits);
+	assert(limit_list->type() == NODE_LIST);
+	assert(statements->type() == NODE_LIST);
+	add_limits(limit_list, &limits);
+	add_statements(statements, &events);
 }
 
 ExpThread::~ExpThread(void) {
-	for (unsigned int i=0; i<events.size(); i++)
-		delete events[i];
+	unsigned int i;
+	for (i=0; i<events.size(); i++) delete events[i];
+	for (i=0; i<limits.size(); i++) delete limits[i];
 }
 
 void ExpThread::print(FILE *fp) const {
@@ -188,6 +234,7 @@ void ExpThread::print(FILE *fp) const {
 }
 
 bool ExpThread::check(const PathEventList &test, int ofs, bool fragment, bool *resources) {
+	// !! check limits
 	bool match;
 	if (fragment)
 		match = check_fragment(test, events, ofs, resources);
@@ -207,13 +254,11 @@ ExpTask::ExpTask(const OperatorNode *onode) {
 
 	name = Match::create((StringNode*)task_decl->operands[0], false);
 
-	ListNode *limit_list = (ListNode*)onode->operands[1];
-	for (unsigned int i=0; i<limit_list->size(); i++)
-		limits.push_back(new Limit((OperatorNode*)(*limit_list)[i]));
+	add_limits((ListNode*)onode->operands[1], &limits);
 
 	if (onode->operands[2]) {
 		assert(onode->operands[2]->type() == NODE_LIST);
-		add_statements((ListNode*)onode->operands[2], &children, NULL);
+		add_statements((ListNode*)onode->operands[2], &children);
 	}
 }
 
@@ -284,12 +329,8 @@ ExpMessageSend::ExpMessageSend(const OperatorNode *onode) {
 	assert(onode->op == SEND);
 	assert(onode->nops() == 2);
 	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
-	if (onode->operands[1]) {
-		assert(onode->operands[1]->type() == NODE_LIST);
-		ListNode *limit_list = (ListNode*)onode->operands[1];
-		for (unsigned int i=0; i<limit_list->size(); i++)
-			limits.push_back(new Limit((OperatorNode*)(*limit_list)[i]));
-	}
+	if (onode->operands[1])
+		add_limits((ListNode*)onode->operands[1], &limits);
 }
 
 ExpMessageSend::~ExpMessageSend(void) {
@@ -328,12 +369,8 @@ ExpMessageRecv::ExpMessageRecv(const OperatorNode *onode) {
 	assert(onode->op == RECV);
 	assert(onode->nops() == 2);
 	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
-	if (onode->operands[1]) {
-		assert(onode->operands[1]->type() == NODE_LIST);
-		ListNode *limit_list = (ListNode*)onode->operands[1];
-		for (unsigned int i=0; i<limit_list->size(); i++)
-			limits.push_back(new Limit((OperatorNode*)(*limit_list)[i]));
-	}
+	if (onode->operands[1])
+		add_limits((ListNode*)onode->operands[1], &limits);
 }
 
 void ExpMessageRecv::print(FILE *fp, int depth) const {
@@ -364,7 +401,7 @@ ExpRepeat::ExpRepeat(const OperatorNode *onode) {
 	max = ((IntNode*)range->operands[1])->value;
 
 	assert(onode->operands[1]->type() == NODE_LIST);
-	add_statements((ListNode*)onode->operands[1], &children, NULL);
+	add_statements((ListNode*)onode->operands[1], &children);
 }
 
 ExpRepeat::~ExpRepeat(void) {
@@ -405,7 +442,7 @@ ExpXor::ExpXor(const OperatorNode *onode) {
 		assert(branch->operands[0] == NULL);  // no named branches
 		assert(branch->operands[1]->type() == NODE_LIST);
 		branches.push_back(ExpEventList());
-		add_statements((ListNode*)branch->operands[1], &branches[j], NULL);
+		add_statements((ListNode*)branch->operands[1], &branches[j]);
 	}
 }
 
@@ -447,8 +484,7 @@ void ExpCall::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<call target=\"%s\" />\n", depth*2, "", target.c_str());
 }
 
-int ExpCall::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+int ExpCall::check(const PathEventList &test, unsigned int ofs, bool *resources) const {
 	Recognizer *r = recognizers[target];
 	if (!r) {
 		fprintf(stderr, "call(%s): recognizer not found\n", target.c_str());
@@ -459,26 +495,28 @@ int ExpCall::check(const PathEventList &test, unsigned int ofs,
 	// !! if the called recognizer sets whole-path limits, check those
 }
 
-Recognizer::Recognizer(const IdentifierNode *ident, const ListNode *statements, bool _complete, bool _validating)
+Recognizer::Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements,
+		bool _complete, bool _validating)
 		: root(NULL), complete(_complete), validating(_validating), instances(0), unique(0) {
 	assert(ident->type() == NODE_IDENTIFIER);
 	name = ident->sym->name;
 
+	unsigned int i;
+
+	add_limits(limit_list, &limits);
+
 	assert(statements->type() == NODE_LIST);
 	if (complete)
-		for (unsigned int i=0; i<statements->size(); i++) {
+		for (i=0; i<statements->size(); i++) {
 			assert((*statements)[i]->type() == NODE_OPERATOR);
 			const OperatorNode *onode = (OperatorNode*)(*statements)[i];
 			switch (onode->op) {
 				case THREAD:
-					assert(onode->nops() == 4);
+					assert(onode->nops() == 5);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
 					threads[((IdentifierNode*)onode->operands[0])->sym->name] = new ExpThread(onode);
 					if (!root)
 						root = threads[((IdentifierNode*)onode->operands[0])->sym->name];
-					break;
-				case LIMIT:
-					limits.push_back(new Limit(onode));
 					break;
 				default:
 					fprintf(stderr, "Invalid operator %s (%d)\n", get_op_name(onode->op), onode->op);
@@ -486,7 +524,7 @@ Recognizer::Recognizer(const IdentifierNode *ident, const ListNode *statements, 
 			}
 		}
 	else
-		root = threads["(fragment)"] = new ExpThread(statements, &limits);
+		root = threads["(fragment)"] = new ExpThread(limit_list, statements);
 
 	assert(root);
 	if (complete) assert(root->max == 1);  // first thread is the root, can only appear once
@@ -536,9 +574,13 @@ bool Recognizer::check(const Path *p, bool *resources) {
 		min += tp->second->min;
 		max += tp->second->max;
 	}
+#if 0
 	printf("Recognizer %s\n", name.c_str());
+#endif
 	if (p->children.size() < min || p->children.size() > max) {
+#if 0
 		printf(" -> false, R.threads={%d,%d} P.threads=%d\n", min, max, p->children.size());
+#endif
 		return false;
 	}
 
@@ -554,31 +596,56 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++)
 		etp->second->count = 0;
 
+#if 0
 	printf("matching path-thread %d (root)\n", p->root_thread);
 	printf("  trying exp-thread <root>... ");
-	if (!root->check(p->children.find(p->root_thread)->second, 0, false, resources))
-		{ puts("no"); return false; }
+#endif
+	if (!root->check(p->children.find(p->root_thread)->second, 0, false,
+			resources)) {
+#if 0
+		puts("no");
+#endif
+		return false;
+	}
+#if 0
 	puts("yes");
+#endif
 
 	for (std::map<int,PathEventList>::const_iterator ptp=p->children.begin(); ptp!=p->children.end(); ptp++) {
 		if (ptp->first == p->root_thread) continue;
+#if 0
 		printf("matching path-thread %d\n", ptp->first);
+#endif
 		bool matched = false;
 		for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
 			if (etp->second == root) continue;
+#if 0
 			printf("  trying exp-thread \"%s\"... ", etp->first.c_str());
+#endif
 			if (etp->second->check(ptp->second, 0, false, resources)) {
+#if 0
 				puts("yes");
+#endif
 				matched = true;
 				break;
 			}
+#if 0
 			puts("no");
+#endif
 		}
 		if (!matched) return false;
 	}
 
-	for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++)
-		assert(etp->second->count >= etp->second->min && etp->second->count <= etp->second->max);
+	for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
+		if (etp->second->count > etp->second->max) {
+			printf("Rejected because there were too many of thread \"%s\"\n", etp->first.c_str());
+			return false;
+		}
+		if (etp->second->count < etp->second->min) {
+			printf("Rejected because there weren't enough of thread \"%s\"\n", etp->first.c_str());
+			return false;
+		}
+	}
 
 	instances++;
 	// unique++ if path or hosts different !!
@@ -590,7 +657,11 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	minor_fault.add(p->minor_fault);
 	vol_cs.add(p->vol_cs);
 	invol_cs.add(p->invol_cs);
+	latency.add(p->ts_end - p->ts_start);
 	size.add(p->size);
+	messages.add(p->messages);
+	depth.add(p->depth);
+	threadcount.add(p->children.size());
 	return true;
 }
 
@@ -600,15 +671,14 @@ int Recognizer::check(const PathEventList &test, const ExpEventList &list,
 	unsigned int i;
 	for (i=0; i<list.size(); i++) {
 		int res = list[i]->check(test, my_ofs, resources);
-		if (res == -1) return -1;
+		if (res == -1) { return -1; }
 		my_ofs += res;
 		assert(my_ofs <= test.size());
 	}
 	return my_ofs - ofs;
 }
 
-static void add_statements(const ListNode *list_node, ExpEventList *where,
-		LimitList *limits) {
+static void add_statements(const ListNode *list_node, ExpEventList *where) {
 	// !! now what?
 	unsigned int i;
 	assert(where != NULL);
@@ -617,7 +687,7 @@ static void add_statements(const ListNode *list_node, ExpEventList *where,
 		const Node *node = (*list_node)[i];
 		switch (node->type()) {
 			case NODE_LIST:
-				add_statements((ListNode*)node, local_where, NULL);
+				add_statements((ListNode*)node, local_where);
 				break;
 			case NODE_OPERATOR:{
 					OperatorNode *onode = (OperatorNode*)node;
@@ -633,10 +703,6 @@ static void add_statements(const ListNode *list_node, ExpEventList *where,
 							break;
 						case XOR:
 							local_where->push_back(new ExpXor(onode));
-							break;
-						case LIMIT:
-							assert(limits);
-							limits->push_back(new Limit(onode));
 							break;
 						case CALL:
 							local_where->push_back(new ExpCall(onode));
@@ -662,5 +728,13 @@ static void add_statements(const ListNode *list_node, ExpEventList *where,
 					node->type());
 				exit(1);
 		}
+	}
+}
+
+static void add_limits(const ListNode *limit_list, LimitList *limits) {
+	assert(limit_list->type() == NODE_LIST);
+	for (unsigned int i=0; i<limit_list->size(); i++) {
+		assert(((OperatorNode*)(*limit_list)[i])->op == LIMIT);
+		limits->push_back(new Limit((OperatorNode*)(*limit_list)[i]));
 	}
 }

@@ -1,117 +1,119 @@
-expectation E1 {
-	limit(REAL_TIME, 15s);
-	{ notice("FOO", "BAR"); }
-  task("PARSE_REQUEST", "www.hp.com")
-    limit(CPU_TIME, {0s, 2s});
-  task("REVERSE_DNS_LOOKUP", "www.hp.com")
-    limit(REAL_TIME, {10s+});
-  notice("CACHE_MISS", m/^www.*/);
-  notice(m/^FOO/, *);
-  task("LINK", $HERE=*) {
-    task("SP_TREE", $HERE);
-  }
-  xor {
-    branch: notice("THIS", *);
-    branch: notice("THAT", *);
-  }
+fragment recognizer E1 {
+limit(REAL_TIME, 15s);
+	{ notice("FOO"); }
+	task("PARSE_REQUEST")
+		limit(CPU_TIME, {0s, 2s});
+	task("REVERSE_DNS_LOOKUP")
+		limit(REAL_TIME, {10s+});
+	notice("CACHE_MISS");
+	notice(m/^FOO/);
+	task("LINK") {
+		task("SP_TREE");
+	}
+	xor {
+		branch: notice("THIS");
+		branch: notice("THAT");
+	}
 }
 
-expectation E2 { }
+fragment recognizer E2 { }
 
-expectation E3 {
+fragment recognizer E3 {
   xor {
     branch: call(E1);
     branch: call(E2);
   }
 }
 
-expectation E4 {
-	thread {
-		message();
-		thread;
-		message();
+validator E4 {
+	thread Client(*, 1) {
+		send(Client);
+		task("foo");
+		recv(Client);
 	}
 }
 
-expectation DHT_recursive_shortcut {
-	limit(SIZE, 10kb);
-  task(m/^DHT/, $SRC=*);
-  repeat between 1 and 5 {
-    message()
-      limit(SIZE, 1kb)
-			limit(LATENCY, 0.5s);
-    task("DHT", !$SRC);
-  }
-  message();
-  task("DHT", $SRC);
+validator DHT_recursive_shortcut {
+	thread Client(*, 1) {
+		limit(SIZE, 10kb);
+		task(m/^DHT/);
+		repeat between 1 and 5 {
+			send(Client)
+				limit(SIZE, 1kb)
+				limit(LATENCY, 0.5s);
+			task("DHT");
+		}
+		recv(Client);
+		task("DHT");
+	}
 }
 
-expectation DHT_iterative {
-  task("DHT", $SRC=*);
-  repeat between 1 and 5 {
-    message();
-    task("DHT", *);
-    message();
-    task("DHT", $SRC);
-  }
+validator DHT_iterative {
+	thread Client(*, 1) {
+		task("DHT");
+		repeat between 1 and 5 {
+			send(Client);
+			task("DHT");
+			recv(Client);
+			task("DHT");
+		}
+	}
 }
 
-expectation DHT_recursive {
-  task("DHT", $SRC=*);
-  message();
-  @PATH = repeat between 1 and 5 {
-    task("DHT", *);
-    message();
-  }
-  task("DHT", *);
-  reverse(@PATH);
-  message();
-  task("DHT", $SRC);
+validator DHT_recursive {
+	thread Client(*, 1) {
+		task("DHT");
+		send(Client);
+		@PATH = repeat between 1 and 5 {
+			task("DHT");
+			recv(Client);
+		}
+		task("DHT");
+		reverse(@PATH);
+		recv(Client);
+		task("DHT");
+	}
 }
 
-expectation DHT_Coral {
-  task("DHT", $SRC=*);
-  message();
-  task("DHT", *);
-  message();
-  repeat 2 {
-    split {
-      branch T1:
-        message();
-        task("DHT", *);
-        message();
-      branch T2:
-        message();
-        task("DHT", *);
-        message();
-      branch T3:
-        message();
-        task("DHT", *);
-        message();
-    } join(any 2);
-    task("DHT", $SRC);
-  }
-  message();
-  task("DHT", *);
-  message();
-  task("DHT", $SRC)
+validator DHT_Coral {
+	thread Client(*, 1) {
+		task("DHT");
+		send(Client);
+		task("DHT");
+		recv(Client);
+		repeat 2 {
+			send(Client);
+			task("DHT");
+			send(Client);
+			task("DHT");
+			send(Client);
+			task("DHT");
+		}
+		recv(Client);
+		task("DHT");
+		recv(Client);
+		task("DHT")
 		limit(CPU_TIME, 10s);
+	}
 }
 
-fragment Timer {
-  notice("timer", *);
+fragment recognizer Timer {
+  notice("timer");
 }
 
-assert( instances(E1) in { 1, 5 } )
-assert( instances(E1) < 5 )
-assert( instances(E1) > 1 )
-assert( instances(E1) >= 1 )
-assert( instances(E1) <= 5 )
-assert( instances(E1) != 0 )
-//during(any 0) assert( unique(E1) == unique(E2) )
-//during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 )
-//during(1, 10) assert( unique($HERE) == 1 )
-assert( average(CPU_TIME, E1) < 5s )
-assert( stddev(INVOL_CS, E1) < 5ms )
-//assert( max(REAL_TIME, "DHT") in { 0, 10 } )
-//assert( min(REAL_TIME, "DHT") in { 0, 10 } )
+assert( instances(E1) in { 1, 5 } );
+assert( instances(E1) < 5 );
+assert( instances(E1) > 1 );
+assert( instances(E1) >= 4 );
+assert( instances(E1) <= 5 );
+assert( instances(E1) != 0 );
+assert( 5. < 2.**3. );
+assert( exp(2.) < ln(10000.) );
+assert( log(1000000.) == 6. );
+//during(any 0) assert( unique(E1) == unique(E2) );
+//during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 );
+//during(1, 10) assert( unique($HERE) == 1 );
+assert( average(CPU_TIME, E1) < 5s );
+assert( stddev(INVOL_CS, E1) < 5ms );
+//assert( max(REAL_TIME, "DHT") in { 0, 10 } );
+//assert( min(REAL_TIME, "DHT") in { 0, 10 } );

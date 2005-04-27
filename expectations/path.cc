@@ -1,8 +1,7 @@
 #include <assert.h>
+#include <stdarg.h>
 #include "common.h"
 #include "path.h"
-
-#undef PRINT_DOT
 
 std::map<int, PathThread*> threads;
 
@@ -15,25 +14,47 @@ inline static timeval tv(long long ts) {
 
 PathTask::PathTask(const MYSQL_ROW &row) {
 	// pathid = atoi(row[0]);
-	name = strdup(row[1]);
-	ts_start = tv(strtoll(row[2], NULL, 10));
-	ts_end = tv(strtoll(row[3], NULL, 10));
-	tdiff = atoi(row[4]);
-	utime = atoi(row[5]);
-	stime = atoi(row[6]);
-	major_fault = atoi(row[7]);
-	minor_fault = atoi(row[8]);
-	vol_cs = atoi(row[9]);
-	invol_cs = atoi(row[10]);
-	thread_start = atoi(row[11]);
-	thread_end = atoi(row[11]);
+	// roles = row[1][0] ? strdup(row[1]) : NULL;
+	// level = atoi(row[2]);
+	name = strdup(row[3]);
+	ts_start = tv(strtoll(row[4], NULL, 10));
+	ts_end = tv(strtoll(row[5], NULL, 10));
+	tdiff = atoi(row[6]);
+	utime = atoi(row[7]);
+	stime = atoi(row[8]);
+	major_fault = atoi(row[9]);
+	minor_fault = atoi(row[10]);
+	vol_cs = atoi(row[11]);
+	invol_cs = atoi(row[12]);
+	thread_start = atoi(row[13]);
+	thread_end = atoi(row[14]);
+}
+
+int PathTask::compare(const PathEvent *_other) const {
+	if (_other->type() < PEV_TASK) return -PCMP_NONE;
+	if (_other->type() > PEV_TASK) return PCMP_NONE;
+	const PathTask *other = (PathTask*)_other;
+	if (children.size() < other->children.size()) return -PCMP_NONE;
+	if (children.size() > other->children.size()) return PCMP_NONE;
+	PathEventList::const_iterator evp, oevp;
+	for (evp = children.begin(), oevp = other->children.begin();
+			evp != children.end() && oevp != other->children.end();
+			evp++, oevp++) {
+		int res = (*evp)->compare(*oevp);
+		if (res != PCMP_EXACT) return res;
+	}
+	int res = strcmp(name, other->name);
+	if (res < 0) return -PCMP_NAMES;
+	if (res > 0) return PCMP_NAMES;
+	return PCMP_EXACT;
+}
+
+void PathTask::print_dot(FILE *fp) const {
+	for (unsigned int i=0; i<children.size(); i++)
+		children[i]->print_dot(fp);
 }
 
 void PathTask::print(FILE *fp, int depth) const {
-#ifdef PRINT_DOT
-	for (unsigned int i=0; i<children.size(); i++)
-		children[i]->print(fp, depth+1);
-#else
 	bool empty = children.size() == 0;
 
 	fprintf(fp, "%*s<task name=\"%s\" start=\"%ld.%06ld\" end=\"%ld.%06ld\"%s",
@@ -44,7 +65,6 @@ void PathTask::print(FILE *fp, int depth) const {
 			children[i]->print(fp, depth+1);
 		fprintf(fp, "%*s</task>\n", depth*2, "");
 	}
-#endif
 }
 
 PathTask::~PathTask(void) {
@@ -54,54 +74,102 @@ PathTask::~PathTask(void) {
 
 PathNotice::PathNotice(const MYSQL_ROW &row) {
 	// pathid = atoi(row[0]);
-	name = strdup(row[1]);
-	ts = tv(strtoll(row[2], NULL, 10));
-	thread_id = atoi(row[3]);
+	// roles = row[1][0] ? strdup(row[1]) : NULL;
+	// level = atoi(row[2]);
+	name = strdup(row[3]);
+	ts = tv(strtoll(row[4], NULL, 10));
+	thread_id = atoi(row[5]);
 }
 
+int PathNotice::compare(const PathEvent *_other) const {
+	if (_other->type() < PEV_NOTICE) return -PCMP_NONE;
+	if (_other->type() > PEV_NOTICE) return PCMP_NONE;
+	const PathNotice *other = (PathNotice*)_other;
+	int res = strcmp(name, other->name);
+	if (res < 0) return -PCMP_NAMES;
+	if (res > 0) return PCMP_NAMES;
+	return PCMP_EXACT;
+}
+
+void PathNotice::print_dot(FILE *fp) const { }
+
 void PathNotice::print(FILE *fp, int depth) const {
-#ifndef PRINT_DOT
 	fprintf(fp, "%*s<notice name=\"%s\" ts=\"%ld.%06ld\" />\n", depth*2, "",
 		name, ts.tv_sec, ts.tv_usec);
-#endif
 }
 
 PathMessageSend::PathMessageSend(const MYSQL_ROW &row) : dest(NULL), pred(NULL) {
 	// pathid = atoi(row[0]);
-	// msgid is row[1]
-	ts_send = tv(strtoll(row[2], NULL, 10));
-	// ts_recv is row[3]
-	size = atoi(row[4]);
-	thread_send = atoi(row[5]);
-	// thread_recv is row[6]
+	// roles = row[1][0] ? strdup(row[1]) : NULL;
+	// level = atoi(row[2]);
+	// msgid is row[3]
+	ts_send = tv(strtoll(row[4], NULL, 10));
+	// ts_recv is row[5]
+	size = atoi(row[6]);
+	thread_send = atoi(row[7]);
+	// thread_recv is row[8]
 }
 
-void PathMessageSend::print(FILE *fp, int depth) const {
-#ifdef PRINT_DOT
+int PathMessageSend::compare(const PathEvent *_other) const {
+	if (_other->type() < PEV_MESSAGE_SEND) return -PCMP_NONE;
+	if (_other->type() > PEV_MESSAGE_SEND) return PCMP_NONE;
+	const PathMessageSend *other = (PathMessageSend*)_other;
+	// !! this will have to change if we allow thread-reordering
+	// !! really should check to make sure the right thread receives the msg
+	// These checks are all messed up because 'thread_send' refers to the
+	// absolute thread_id (which can differ), not the position in our path's
+	// 'children' list (which should, maybe, be the same).
+	//assert(thread_send == other->thread_send);
+	//if (recv->thread_recv < other->recv->thread_recv) return -PCMP_NONE;
+	//if (recv->thread_recv > other->recv->thread_recv) return PCMP_NONE;
+
+	if (size < other->size) return -PCMP_NAMES;
+	if (size > other->size) return PCMP_NAMES;
+
+	return PCMP_EXACT;
+}
+
+void PathMessageSend::print_dot(FILE *fp) const {
 	if (!pred) {
 		PathThread *t = threads[thread_send];
 		fprintf(fp, "s%x [label = \"%d:%s/%s/%d\"];\n",
 			(int)this, thread_send, t->host.c_str(), t->prog.c_str(), t->tid);
 	}
 	//fprintf(fp, "r%x -> s%x;\n", (int)pred, (int)this);
-#else
+}
+
+void PathMessageSend::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<message_send size=\"%d\" send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" addr=\"%p\"/>\n",
 		depth*2, "", size, thread_send, recv->thread_recv, ts_send.tv_sec, ts_send.tv_usec, this);
-#endif
 }
 
 PathMessageRecv::PathMessageRecv(const MYSQL_ROW &row) : send(NULL) {
 	// pathid = atoi(row[0]);
-	// msgid is row[1]
-	// ts_send is row[2]
-	ts_recv = tv(strtoll(row[3], NULL, 10));
-	// size is row[4]
-	// thread_start is row[5]
-	thread_recv = atoi(row[6]);
+	// roles = row[1][0] ? strdup(row[1]) : NULL;
+	// level = atoi(row[2]);
+	// msgid is row[3]
+	// ts_send is row[4]
+	ts_recv = tv(strtoll(row[5], NULL, 10));
+	// size is row[6]
+	// thread_start is row[7]
+	thread_recv = atoi(row[8]);
 }
 
-void PathMessageRecv::print(FILE *fp, int depth) const {
-#ifdef PRINT_DOT
+int PathMessageRecv::compare(const PathEvent *_other) const {
+	if (_other->type() < PEV_MESSAGE_RECV) return -PCMP_NONE;
+	if (_other->type() > PEV_MESSAGE_RECV) return PCMP_NONE;
+	//const PathMessageRecv *other = (PathMessageRecv*)_other;
+	// !! this will have to change if we allow thread-reordering
+	// !! should check to make sure the right thread sends the msg
+	// Messed up, same as PathMessageSend::compare.
+	// assert(thread_recv == other->thread_recv);
+	//if (send->thread_send < other->send->thread_send) return -PCMP_NONE;
+	//if (send->thread_send > other->send->thread_send) return PCMP_NONE;
+
+	return PCMP_EXACT;
+}
+
+void PathMessageRecv::print_dot(FILE *fp) const {
 	PathThread *t = threads[thread_recv];
 	fprintf(fp, "r%x [label = \"%d:%s/%s/%d\"];\n",
 		(int)this, thread_recv, t->host.c_str(), t->prog.c_str(), t->tid);
@@ -109,10 +177,11 @@ void PathMessageRecv::print(FILE *fp, int depth) const {
 		fprintf(fp, "r%x -> r%x;\n", (int)send->pred, (int)this);
 	else
 		fprintf(fp, "s%x -> r%x;\n", (int)send, (int)this);
-#else
+}
+
+void PathMessageRecv::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<message_recv send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" send=\"%p\" />\n",
 		depth*2, "", send->thread_send, thread_recv, ts_recv.tv_sec, ts_recv.tv_usec, send);
-#endif
 }
 
 PathThread::PathThread(const MYSQL_ROW &row) {
@@ -129,12 +198,26 @@ PathThread::PathThread(const MYSQL_ROW &row) {
 
 void PathThread::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<thread id=\"%d\" host=\"%s\" prog=\"%s\" pid=\"%d\" tid=\"%d\" ppid=\"%d\" "
-		"uid=\"%d\" start=\"%ld.%06ld\" tz=\"%d\" />\n", thread_id, host.c_str(),
-		prog.c_str(), pid, tid, ppid, uid, start.tv_sec, start.tv_usec, tz);
+		"uid=\"%d\" start=\"%ld.%06ld\" tz=\"%s%02d%02d\" />\n", depth*2, "", thread_id, host.c_str(),
+		prog.c_str(), pid, tid, ppid, uid, start.tv_sec, start.tv_usec,
+		(tz < 0 ? "+" : "-"), abs(tz)/60, abs(tz)%60);
 }
 
-Path::Path(void) : utime(0), stime(0), major_fault(0), minor_fault(0),
-		vol_cs(0), invol_cs(0), size(0), root_thread(-1) {
+Path::Path(void) {
+	init();
+}
+
+Path::Path(MYSQL *mysql, const char *base, int _path_id) {
+	init();
+	read(mysql, base, _path_id);
+}
+
+void Path::init(void) {
+	utime = stime = 0;
+	major_fault = minor_fault = 0;
+	vol_cs = invol_cs = 0;
+	size = messages = depth = 0;
+	root_thread = -1;
 	ts_start.tv_sec = ts_start.tv_usec = 0;
 	ts_end.tv_sec = ts_end.tv_usec = 0;
 }
@@ -144,6 +227,41 @@ Path::~Path(void) {
 	for (thread=children.begin(); thread!=children.end(); thread++)
 		for (unsigned int i=0; i<thread->second.size(); i++)
 			delete thread->second[i];
+}
+
+void Path::read(MYSQL *mysql, const char *base, int _path_id) {
+	path_id = _path_id;
+
+	run_sqlf(mysql, "SELECT * FROM %s_tasks WHERE pathid=%d ORDER BY start",
+		base, path_id);
+	MYSQL_RES *res = mysql_use_result(mysql);
+	MYSQL_ROW row;
+	while ((row = mysql_fetch_row(res)) != NULL) {
+		assert(atoi(row[0]) == path_id);
+		PathTask *pt = new PathTask(row);
+		insert(pt);
+	}
+	mysql_free_result(res);
+
+	run_sqlf(mysql, "SELECT * FROM %s_notices WHERE pathid=%d", base, path_id);
+	res = mysql_use_result(mysql);
+	while ((row = mysql_fetch_row(res)) != NULL) {
+		assert(atoi(row[0]) == path_id);
+		PathNotice *pn = new PathNotice(row);
+		insert(pn);
+	}
+	mysql_free_result(res);
+
+	run_sqlf(mysql, "SELECT * FROM %s_messages WHERE pathid=%d", base, path_id);
+	res = mysql_use_result(mysql);
+	while ((row = mysql_fetch_row(res)) != NULL) {
+		assert(atoi(row[0]) == path_id);
+		PathMessage *pm = new PathMessage(row);
+		insert(pm);
+	}
+	mysql_free_result(res);
+
+	done_inserting();
 }
 
 enum OverlapType { OV_BEFORE, OV_START, OV_WITHIN, OV_END, OV_AFTER, OV_SPAN, OV_INVALID };
@@ -176,6 +294,33 @@ static OverlapType tvcmp(const PathEvent *eva, const PathEvent *evb) {
 	}
 	assert(!"not reached");
 	return OV_INVALID;  // quell warning
+}
+
+// returns negative numbers for us < them
+// returns PCMP_EXACT if shape + hostnames match
+// returns PCMP_NAMES if shapes match, task/notice names differ
+//   -> sign indicates order
+int Path::compare(const Path &other) const {
+	if (children.size() < other.children.size()) return -PCMP_NONE;
+	if (children.size() > other.children.size()) return PCMP_NONE;
+	std::map<int,PathEventList>::const_iterator cp, ocp;
+	// !! we may have to try threads in all orders, not sure
+	// it would be O(n^2), often less
+	for (cp = children.begin(),ocp = other.children.begin();
+			cp != children.end() && ocp != other.children.end();
+			cp++, ocp++) {
+		if (cp->second.size() < ocp->second.size()) return -PCMP_NONE;
+		if (cp->second.size() > ocp->second.size()) return PCMP_NONE;
+
+		PathEventList::const_iterator evp, oevp;
+		for (evp = cp->second.begin(), oevp = ocp->second.begin();
+				evp != cp->second.end() && oevp != ocp->second.end();
+				evp++, oevp++) {
+			int res = (*evp)->compare(*oevp);
+			if (res != PCMP_EXACT) return res;
+		}
+	}
+	return PCMP_EXACT;
 }
 
 void Path::insert_task(PathTask *pt, std::vector<PathEvent *> &where) {
@@ -223,15 +368,16 @@ void Path::insert_event(PathEvent *pe, std::vector<PathEvent *> &where) {
 	where.push_back(pe);
 }
 
-void Path::print(FILE *fp) const {
-#ifdef PRINT_DOT
+void Path::print_dot(FILE *fp) const {
 	fprintf(fp, "digraph foo {\n");
 	for (std::map<int,PathEventList>::const_iterator list=children.begin(); list!=children.end(); list++) {
 		for (unsigned int i=0; i<list->second.size(); i++)
-			list->second[i]->print(fp, 1);
+			list->second[i]->print_dot(fp);
 	}
 	fprintf(fp, "}\n");
-#else
+}
+
+void Path::print(FILE *fp) const {
 	for (std::map<int,PathEventList>::const_iterator list=children.begin(); list!=children.end(); list++) {
 		fprintf(fp, "<thread id=\"%d\"%s>\n",
 			list->first, list->first == root_thread ? " root=\"true\"" : "");
@@ -239,7 +385,6 @@ void Path::print(FILE *fp) const {
 			list->second[i]->print(fp, 1);
 		fprintf(fp, "</thread>\n", list->first);
 	}
-#endif
 }
 
 static int count_messages(const PathEventList &list) {
@@ -324,6 +469,39 @@ static void check_order(const PathEventList &list) {
 	}
 }
 
+static int message_depth(const PathEvent *pm) {
+	PathEvent *pred;
+	switch (pm->type()) {
+		case PEV_MESSAGE_SEND:
+			pred = ((PathMessageSend*)pm)->pred;
+			return pred ? message_depth(pred) : 1;
+		case PEV_MESSAGE_RECV:
+			pred = ((PathMessageRecv*)pm)->send;
+			return 1+message_depth(pred);
+		default:
+			fprintf(stderr, "message_depth: Invalid event type %d\n", pm->type());
+			abort();
+	}
+}
+
+static int max_message_depth(const PathEventList &list) {
+	int max = 1;
+	for (unsigned int i=0; i<list.size(); i++) {
+		int depth = 0;
+		switch (list[i]->type()) {
+			case PEV_TASK:
+				depth = max_message_depth(((PathTask*)list[i])->children);
+				break;
+			case PEV_MESSAGE_RECV:
+				depth = message_depth(list[i]);
+				break;
+			default: ;
+		}
+		if (depth > max) max = depth;
+	}
+	return max;
+}
+
 void Path::done_inserting(void) {
 	std::map<int,PathEventList>::iterator thread;
 
@@ -391,6 +569,12 @@ void Path::done_inserting(void) {
 
 	for (thread=children.begin(); thread!=children.end(); thread++)
 		tally(thread->second, true);
+
+	depth = 1;
+	for (thread=children.begin(); thread!=children.end(); thread++) {
+		int this_depth = max_message_depth(thread->second);
+		if (this_depth > depth) depth = this_depth;
+	}
 }
 
 void Path::tally(const PathEventList &list, bool toplevel) {
@@ -414,6 +598,7 @@ void Path::tally(const PathEventList &list, bool toplevel) {
 				break;
 			case PEV_MESSAGE_SEND:
 				size += ((PathMessageSend*)ev)->size;
+				messages++;
 				break;
 			case PEV_MESSAGE_RECV:
 				break;
@@ -421,4 +606,47 @@ void Path::tally(const PathEventList &list, bool toplevel) {
 				assert(!"invalid PathEventType");
 		}
 	}
+}
+
+void run_sql(MYSQL *mysql, const char *query) {
+	//fprintf(stderr, "SQL(\"%s\")\n", query);
+	if (mysql_query(mysql, query) != 0) {
+		fprintf(stderr, "Database error:\n");
+		fprintf(stderr, "  QUERY: \"%s\"\n", query);
+		fprintf(stderr, "  MySQL error: \"%s\"\n", mysql_error(mysql));
+		exit(1);
+	}
+}
+
+void run_sqlf(MYSQL *mysql, const char *fmt, ...) {
+	char query[4096];
+	va_list arg;
+	va_start(arg, fmt);
+	vsprintf(query, fmt, arg);
+	va_end(arg);
+	run_sql(mysql, query);
+}
+
+void get_path_ids(MYSQL *mysql, const char *table_base, std::set<int> *pathids) {
+	MYSQL_RES *res;
+	MYSQL_ROW row;
+
+	fprintf(stderr, "Reading pathids...");
+	run_sqlf(mysql, "SELECT distinct pathid from %s_tasks", table_base);
+	res = mysql_use_result(mysql);
+	while ((row = mysql_fetch_row(res)) != NULL)
+		pathids->insert(atoi(row[0]));
+	mysql_free_result(res);
+	run_sqlf(mysql, "SELECT distinct pathid from %s_notices", table_base);
+	res = mysql_use_result(mysql);
+	while ((row = mysql_fetch_row(res)) != NULL)
+		pathids->insert(atoi(row[0]));
+	mysql_free_result(res);
+	run_sqlf(mysql, "SELECT distinct pathid from %s_messages", table_base);
+	res = mysql_use_result(mysql);
+	while ((row = mysql_fetch_row(res)) != NULL)
+		pathids->insert(atoi(row[0]));
+	mysql_free_result(res);
+
+	fprintf(stderr, " done: %d found.\n", pathids->size());
 }

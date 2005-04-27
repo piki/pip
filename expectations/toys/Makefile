@@ -18,7 +18,7 @@ lineno: lineno.l
 calc: calc.l calc.y
 	$(YACC) -d calc.y
 	$(LEX) calc.l
-	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c calc.tab.c -o $@ -lm
+	$(CC) $(CPPFLAGS) $(CFLAGS) lex.yy.c calc.tab.c -o $@ -lm -lreadline
 
 clean:
 	rm -f $(PROGS) lex.yy.c lex.yy.cc y.tab.c y.tab.h *.o *.exe \

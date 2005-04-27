@@ -1,12 +1,9 @@
-expectations for messages, particularly those not sent/rcvd by tasks
-sword
-aggregates (asserts)
-
------
-
-regex
+actually require send/recv to arrive at their named target thread classes
 variables
 hosts
 backtrack (non-greedy) search, maybe dp
 during?
-split/join?
+
+-----
+
+sword

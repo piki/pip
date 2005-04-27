@@ -27,8 +27,8 @@
 %%
 
 program:
-		program statement '\n'		{ printf("> "); fflush(stdout); }
-		| program '\n'						{ printf("> "); fflush(stdout); }
+		program statement '\n'
+		| program '\n'
 		|
 		;
 
@@ -62,7 +62,7 @@ void yyerror(char *s) {
 }
 
 int main(void) {
-	printf("> "); fflush(stdout);
 	yyparse();
+	putchar('\n');
 	return 0;
 }

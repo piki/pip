@@ -24,6 +24,7 @@ letter	[A-Za-z_]
 "->"														return IMPLIES;
 "&&"														return B_AND;
 "||"														return B_OR;
+"\*\*"													return F_POW;
 [-+()=/*;:{},><!]								return *yytext;
 [ \t]                         
 \n															yylno++;
@@ -54,11 +55,15 @@ letter	[A-Za-z_]
 "stddev"												return STDDEV;
 "max"														return F_MAX;
 "min"														return F_MIN;
+"log"														return LOG;
+"ln"														return LOGN;
+"sqrt"													return SQRT;
+"exp"														return EXP;
 \${letter}({letter}|{digit})*		{ yylval.sValue = strdup(yytext); return STRINGVAR; }
 \@{letter}({letter}|{digit})* 	{ yylval.sValue = strdup(yytext); return PATHVAR; }
 {letter}({letter}|{digit})*			{ yylval.sValue = strdup(yytext); return IDENTIFIER; }
 {digit}+												{ yylval.iValue = atoi(yytext); return INTEGER; }
-{digit}\.{digit}*								{ yylval.fValue = atof(yytext); return FLOAT; }
+{digit}+\.{digit}*							{ yylval.fValue = atof(yytext); return FLOAT; }
 
 \/\*														BEGIN S_COMMENT_BLOCK;
 <S_COMMENT_BLOCK>\*\/						BEGIN 0;

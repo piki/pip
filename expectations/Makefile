@@ -2,15 +2,19 @@ CC = g++
 CFLAGS = -g -Wall
 CXXFLAGS = -g -Wall
 CPPFLAGS = -I.
-PROGS = pathcheck
-LDLIBS = -lm -lmysqlclient
+PROGS = pathcheck uniqpaths showpaths
+LDLIBS = -lm -lmysqlclient -lpcre
 YACC = bison
 
 .PRECIOUS: expect.c
 
-all: $(PROGS) exptree.o
+all: $(PROGS)
 
 pathcheck: expect.tab.o parsetree.o exptree.o path.o pathcheck.o expect.o aggregates.o
+
+uniqpaths: path.o uniqpaths.o
+
+showpaths: path.o showpaths.o
 
 expect.tab.cc: expect.yy
 	$(YACC) -d expect.yy

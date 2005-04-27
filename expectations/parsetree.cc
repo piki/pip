@@ -156,6 +156,11 @@ struct {
 	{ STDDEV, "STDDEV" },
 	{ F_MAX, "F_MAX" },
 	{ F_MIN, "F_MIN" },
+	{ LOG, "LOG" },
+	{ LOGN, "LOGN" },
+	{ SQRT, "SQRT" },
+	{ EXP, "EXP" },
+	{ F_POW, "F_POW" },
 	{ GE, "GE" },
 	{ LE, "LE" },
 	{ EQ, "EQ" },
@@ -300,6 +305,31 @@ void print_assert(FILE *fp, const Node *node) {
 					print_assert(fp, onode->operands[0]);
 					fprintf(fp, ", ");
 					print_assert(fp, onode->operands[1]);
+					fprintf(fp, ")");
+					break;
+				case LOG:
+					fprintf(fp, "log(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ")");
+					break;
+				case LOGN:
+					fprintf(fp, "ln(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ")");
+					break;
+				case SQRT:
+					fprintf(fp, "sqrt(");
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, ")");
+					break;
+				case F_POW:
+					print_assert(fp, onode->operands[0]);
+					fprintf(fp, " ** ");
+					print_assert(fp, onode->operands[1]);
+					break;
+				case EXP:
+					fprintf(fp, "exp(");
+					print_assert(fp, onode->operands[0]);
 					fprintf(fp, ")");
 					break;
 				case AVERAGE:

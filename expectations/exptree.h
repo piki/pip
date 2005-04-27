@@ -61,7 +61,8 @@ private:
 class Limit { 
 public:
 	enum Metric { REAL_TIME=0, UTIME, STIME, CPU_TIME, MAJOR_FAULTS,
-		MINOR_FAULTS, VOL_CS, INVOL_CS, LATENCY, SIZE, LAST };
+		MINOR_FAULTS, VOL_CS, INVOL_CS, LATENCY, SIZE, MESSAGES, DEPTH,
+		THREADS, LAST };
 	static Metric metric_by_name(const std::string &name);
 
 	Limit(const OperatorNode *onode);
@@ -69,7 +70,8 @@ public:
 	bool check(const PathTask *test) const;
 	bool check(const PathMessageSend *test) const;
 	bool check(const Path *test) const;
-	bool check(float n) const { return n >= min && n <= max; }
+	bool check(float n) const {
+		return (min == -1 || n >= min) && (max == -1 || n <= max); }
 private:
 	float min, max;
 	Metric metric;
@@ -95,13 +97,14 @@ typedef std::vector<ExpEvent*> ExpEventList;
 class ExpThread {
 public:
 	ExpThread(const OperatorNode *onode);   // standard thread, in recognizer
-	ExpThread(const ListNode *list, LimitList *limits);  // fragment thread
+	ExpThread(const ListNode *limit_list, const ListNode *statement);  // fragment thread
 	~ExpThread(void);
 	void print(FILE *fp) const;
 	// not const, because it increments check itself
 	bool check(const PathEventList &test, int ofs, bool fragment, bool *resources);
 
 	int min, max, count;
+	LimitList limits;
 	ExpEventList events;
 };
 typedef std::map<std::string, ExpThread*> ExpThreadSet;
@@ -190,7 +193,7 @@ public:
 
 class Recognizer {
 public:
-	Recognizer(const IdentifierNode *ident, const ListNode *statements, bool _complete, bool _validating);
+	Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements, bool _complete, bool _validating);
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
 	bool check(const Path *path, bool *resources);
@@ -206,7 +209,7 @@ public:
 
 	int instances, unique;
 	Counter real_time, utime, stime, cpu_time, major_fault, minor_fault;
-	Counter	vol_cs, invol_cs, size;
+	Counter	vol_cs, invol_cs, latency, size, messages, depth, threadcount;
 };
 
 #endif

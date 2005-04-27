@@ -46,7 +46,10 @@ static const Counter &get_metric(const Recognizer *r, const std::string &name) {
 		case Limit::VOL_CS:        return r->vol_cs;
 		case Limit::INVOL_CS:      return r->invol_cs;
 		case Limit::SIZE:          return r->size;
-		case Limit::LATENCY:
+		case Limit::THREADS:       return r->threadcount;
+		case Limit::MESSAGES:      return r->messages;
+		case Limit::DEPTH:         return r->depth;
+		case Limit::LATENCY:       return r->latency;
 		default:
 			fprintf(stderr, "unknown metric: %d\n", metric);
 			abort();
@@ -75,6 +78,21 @@ float Aggregate::eval_float(const Node *n) const {
 				case '*':
 					assert(onode->nops() == 2);
 					return eval_float(onode->operands[0]) * eval_float(onode->operands[1]);
+				case LOG:
+					assert(onode->nops() == 1);
+					return log(eval_float(onode->operands[0]))/log(10);
+				case LOGN:
+					assert(onode->nops() == 1);
+					return log(eval_float(onode->operands[0]));
+				case EXP:
+					assert(onode->nops() == 1);
+					return exp(eval_float(onode->operands[0]));
+				case SQRT:
+					assert(onode->nops() == 1);
+					return sqrt(eval_float(onode->operands[0]));
+				case F_POW:
+					assert(onode->nops() == 2);
+					return pow(eval_float(onode->operands[0]), eval_float(onode->operands[1]));
 				case INSTANCES:
 					assert(onode->nops() == 1);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);

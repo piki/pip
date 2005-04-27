@@ -10,6 +10,9 @@ fragment recognizer SPSub {
 }
 
 validator Link {
+	limit(DEPTH, {=3});
+	limit(MESSAGES, {=2});
+	limit(THREADS, {=2});
 	thread Client(*, 1) {
 		task("link") {
 			send(Server);
@@ -29,6 +32,9 @@ validator Link {
 }
 
 validator Center {
+	limit(DEPTH, {=3});
+	limit(MESSAGES, {=2});
+	limit(THREADS, {=2});
 	thread Client(*, 1) {
 		task("center") {
 			send(Server);
@@ -48,6 +54,9 @@ validator Center {
 }
 
 validator ShowCache {
+	limit(DEPTH, {=3});
+	limit(MESSAGES, {=2});
+	limit(THREADS, {=2});
 	thread Client(*, 1) {
 		task("show cache") {
 			send(Server);
@@ -63,6 +72,9 @@ validator ShowCache {
 }
 
 validator ByNumber {
+	limit(DEPTH, {=3});
+	limit(MESSAGES, {=2});
+	limit(THREADS, {=2});
 	thread Client(*, 1) {
 		task("by number") {
 			send(Server);
@@ -82,6 +94,9 @@ validator ByNumber {
 }
 
 validator Init {
+	limit(DEPTH, {=1});
+	limit(MESSAGES, {=0});
+	limit(THREADS, {=1});
 	thread Server(*, 1) {
 		task("reading database");
 		task("jump tables");

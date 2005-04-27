@@ -34,6 +34,11 @@
 %token STDDEV
 %token F_MAX
 %token F_MIN
+%token F_POW
+%token SQRT
+%token LOG
+%token LOGN
+%token EXP
 // operators
 %token GE
 %token LE
@@ -59,7 +64,7 @@
 %token <sValue> IDENTIFIER
 %token <sValue> STRINGVAR
 %token <sValue> PATHVAR
-%type <nList> limit_list statement_list thread_list xor_list
+%type <nList> limit_list statement_list thread_list xor_list path_limits
 %type <nPtr> statement thread thread_count_range
 %type <nPtr> repeat limit limit_range limit_spec repeat_range path_expr
 %type <nPtr> string_expr xor task assert assertdecl bool_expr
@@ -69,6 +74,7 @@
 %left '<' '>' LE GE EQ NE
 %left '+' '-'
 %left '*' '/'
+%right F_POW
 %nonassoc '!'
 %{
 #include <stdarg.h>
@@ -90,20 +96,20 @@ program:
 		;
 
 pathdecl:
-		VALIDATOR IDENTIFIER '{' thread_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, true, true));
+		VALIDATOR IDENTIFIER '{' path_limits thread_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, (ListNode*)$5, true, true));
 			delete $4;
 		}
-		| RECOGNIZER IDENTIFIER '{' thread_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, true, false));
+		| RECOGNIZER IDENTIFIER '{' path_limits thread_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, (ListNode*)$5, true, false));
 			delete $4;
 		}
-		| FRAGMENT VALIDATOR IDENTIFIER '{' statement_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, false, true));
+		| FRAGMENT VALIDATOR IDENTIFIER '{' path_limits statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, (ListNode*)$6, false, true));
 			delete $5;
 		}
-		| FRAGMENT RECOGNIZER IDENTIFIER '{' statement_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, false, false));
+		| FRAGMENT RECOGNIZER IDENTIFIER '{' path_limits statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, (ListNode*)$6, false, false));
 			delete $5;
 		}
 		;
@@ -125,7 +131,6 @@ statement:
 		| path_expr
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| MAYBE statement													{ $$ = opr(REPEAT, 2, opr(RANGE, 2, new IntNode(0), new IntNode(1)), $2); }
-		| limit ';'
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
 		;
@@ -145,8 +150,8 @@ thread_list:
 		;
 
 thread:
-		THREAD IDENTIFIER '(' string_expr ',' thread_count_range ')' '{' statement_list '}' {
-			$$ = opr(THREAD, 4, idcl($2,THREAD), $4, $6, $9);
+		THREAD IDENTIFIER '(' string_expr ',' thread_count_range ')' '{' path_limits statement_list '}' {
+			$$ = opr(THREAD, 5, idcl($2,THREAD), $4, $6, $9, $10);
 		}
 		;
 
@@ -157,6 +162,11 @@ thread_count_range:
 
 repeat:
 		REPEAT repeat_range statement							{ $$ = opr(REPEAT, 2, $2, $3); }
+		;
+
+path_limits:
+		path_limits limit ';'											{ $$ = $1; ($$)->add($2); }
+		|																					{ $$ = new ListNode; }
 		;
 
 limit_list:
@@ -170,17 +180,21 @@ limit:
 
 limit_spec:
 		limit_range
-		| unit_qty																{ $$ = opr(RANGE, 2, new UnitsNode(0, NULL), $1); }
+		| count_range
+		| INTEGER																	{ $$ = opr(RANGE, 2, NULL, new IntNode($1)); }
+		| unit_qty																{ $$ = opr(RANGE, 2, NULL, $1); }
 		;
 
 limit_range:
 		'{' unit_qty ',' unit_qty '}'							{ $$ = opr(RANGE, 2, $2, $4); }
 		| '{' unit_qty '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
+		| '{' '=' unit_qty '}'										{ $$ = opr(RANGE, 1, $3); }
 		;
 
 count_range:
 		'{' int_expr ',' int_expr '}'							{ $$ = opr(RANGE, 2, $2, $4); }
 		| '{' int_expr '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
+		| '{' '=' int_expr '}'										{ $$ = opr(RANGE, 1, $3); }
 		;
 
 unit_qty:
@@ -284,6 +298,11 @@ float_expr:
 		| float_expr '*' float_expr								{ $$ = opr('*', 2, $1, $3); }
 		| float_expr '-' float_expr								{ $$ = opr('-', 2, $1, $3); }
 		| float_expr '+' float_expr								{ $$ = opr('+', 2, $1, $3); }
+		| float_expr F_POW float_expr							{ $$ = opr(F_POW, 2, $1, $3); }
+		| LOG '(' float_expr ')'									{ $$ = opr(LOG, 1, $3); }
+		| LOGN '(' float_expr ')'									{ $$ = opr(LOGN, 1, $3); }
+		| EXP '(' float_expr ')'									{ $$ = opr(EXP, 1, $3); }
+		| SQRT '(' float_expr ')'									{ $$ = opr(SQRT, 1, $3); }
 		;
 
 %%
