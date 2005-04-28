@@ -437,30 +437,33 @@ static const char *itoa(int n) {
 	return buf;
 }
 
-static void fill_dag_from_list(GtkDAG *dag, const PathEventList &list, const Path *path);
-
 static DAGNode *fill_dag_one_message(GtkDAG *dag, const PathMessageRecv *pmr, const Path *path) {
 	if (dag_nodes[pmr]) return dag_nodes[pmr];
 	DAGNode *parent = dag_nodes[pmr->send->pred];
-	//if (!parent) parent = fill_dag_one_message(dag, pmr->send->pred);
-	if (!parent) {
-		fill_dag_from_list(dag, path->children.find(pmr->send->thread_send)->second, path);
-		parent = dag_nodes[pmr->send->pred];
-	}
 	assert(parent);
-	if (dag_nodes[pmr]) return dag_nodes[pmr];
 	dag_nodes[pmr] = gtk_dag_add_node(dag, itoa(pmr->thread_recv), parent, NULL, 0, (void*)pmr);
 	return dag_nodes[pmr];
 }
 
-static void fill_dag_from_list(GtkDAG *dag, const PathEventList &list, const Path *path) {
+static void fill_dag_from_list(GtkDAG *dag, const PathEventList &list, const Path *path,
+		const PathMessageRecv *match, bool *found_start) {
 	for (unsigned int i=0; i<list.size(); i++) {
 		switch (list[i]->type()) {
 			case PEV_TASK:
-				fill_dag_from_list(dag, ((PathTask*)list[i])->children, path);
+				fill_dag_from_list(dag, ((PathTask*)list[i])->children, path, NULL, found_start);
 				break;
 			case PEV_MESSAGE_RECV:
-				fill_dag_one_message(dag, ((PathMessageRecv*)list[i]), path);
+				if (*found_start) return;
+				if (list[i] == match) *found_start = true;
+				break;
+			case PEV_MESSAGE_SEND:
+				if (*found_start) {
+					bool child_start = false;
+					const PathMessageSend *pms = (PathMessageSend*)list[i];
+					fill_dag_one_message(dag, pms->recv, path);
+					fill_dag_from_list(dag, path->children.find(pms->recv->thread_recv)->second, path,
+						pms->recv, &child_start);
+				}
 				break;
 			default: ;
 		}
@@ -472,8 +475,7 @@ static void fill_dag(GtkDAG *dag, const Path *path) {
 	gtk_dag_freeze(dag);
 	gtk_dag_clear(dag);
 	dag_nodes[NULL] = gtk_dag_add_root(dag, itoa(path->root_thread), NULL, 0, NULL);
-	std::map<int, PathEventList>::const_iterator thread;
-	for (thread=path->children.begin(); thread!=path->children.end(); thread++)
-		fill_dag_from_list(dag, thread->second, path);
+	bool found_start = TRUE;
+	fill_dag_from_list(dag, path->children.find(path->root_thread)->second, path, NULL, &found_start);
 	gtk_dag_thaw(dag);
 }
