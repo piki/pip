@@ -528,7 +528,7 @@ void Path::done_inserting(void) {
 	std::map<int,PathEventList>::iterator thread;
 
 	if (children.size() == 0) {
-		fprintf(stderr, "No children ??\n");
+		fprintf(stderr, "No threads -- empty path ??\n");
 		return;
 	}
 
