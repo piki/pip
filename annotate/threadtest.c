@@ -32,7 +32,7 @@ int main() {
 	for (i=0; i<idsz; i++)
 		printf("%02x", path_id[i]);
 	printf("\n");
-	ANNOTATE_SET_PATH_ID_INT(NULL, 0, 2);
+	ANNOTATE_SET_PATH_ID_STR(NULL, 0, "%p", main);
 	ANNOTATE_START_TASK(NULL, 0, "catch-this");
 	ANNOTATE_SET_PATH_ID_INT(NULL, 0, 1);
 	pthread_t child;

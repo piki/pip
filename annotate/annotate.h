@@ -19,6 +19,10 @@ void ANNOTATE_RECEIVE(const char *roles, int level, const void *msgid, int idsz,
 #define ANNOTATE_END_PATH_ID_INT(roles, level, n) do{int x=n;ANNOTATE_END_PATH_ID(roles, level, &(x), sizeof(x));}while(0)
 #define ANNOTATE_SEND_INT(roles, level, n, size) do{int x=n;ANNOTATE_SEND(roles, level, &(x), sizeof(x), size);}while(0)
 #define ANNOTATE_RECEIVE_INT(roles, level, n, size) do{int x=n;ANNOTATE_RECEIVE(roles, level, &(x), sizeof(x), size);}while(0)
+void ANNOTATE_SET_PATH_ID_STR(const char *roles, int level, const char *fmt, ...);
+void ANNOTATE_END_PATH_ID_STR(const char *roles, int level, const char *fmt, ...);
+void ANNOTATE_SEND_STR(const char *roles, int level, int size, const char *fmt, ...);
+void ANNOTATE_RECEIVE_STR(const char *roles, int level, int size, const char *fmt, ...);
 
 void ANNOTATE_BELIEF_FIRST(int seq, float max_fail_rate, const char *condstr, const char *file, int line);
 void REAL_ANNOTATE_BELIEF(const char *roles, int level, int seq, int condition);

@@ -328,6 +328,37 @@ void REAL_ANNOTATE_BELIEF(const char *roles, int level, int seq, int condition) 
 		END);
 }
 
+#define VSNPRINTF \
+	char buf[256]; \
+	int len; \
+	va_list arg; \
+	va_start(arg, fmt); \
+	len = vsnprintf(buf, sizeof(buf), fmt, arg); \
+	va_end(arg);
+
+/* printf-style helpers for path IDs */
+void ANNOTATE_SET_PATH_ID_STR(const char *roles, int level, const char *fmt, ...) {
+	VSNPRINTF
+	ANNOTATE_SET_PATH_ID(roles, level, buf, len);
+}
+
+void ANNOTATE_END_PATH_ID_STR(const char *roles, int level, const char *fmt, ...) {
+	VSNPRINTF
+	ANNOTATE_END_PATH_ID(roles, level, buf, len);
+}
+
+void ANNOTATE_SEND_STR(const char *roles, int level, int size, const char *fmt, ...) {
+	VSNPRINTF
+	ANNOTATE_SEND(roles, level, buf, len, size);
+}
+
+void ANNOTATE_RECEIVE_STR(const char *roles, int level, int size, const char *fmt, ...) {
+	VSNPRINTF
+	ANNOTATE_RECEIVE(roles, level, buf, len, size);
+}
+
+
+
 static void output(int fd, ...) {
 	char buf[2048], *p=buf+2;
 	int len;

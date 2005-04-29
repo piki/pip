@@ -13,14 +13,19 @@ public class Annotate {
 
 	public static void setPathID(String roles, int level, int pathid) { setPathID(roles, level, pickle(pathid)); }
 	public static void setPathID(String roles, int level, Serializable pathid) { setPathID(roles, level, pickle(pathid)); }
+	public static void setPathID(String roles, int level, String pathid) { setPathID(roles, level, pathid.getBytes()); }
 	public static Object getPathIDObj() { return unpickleObject(getPathID()); }
 	public static int getPathIDInt() { return unpickleInt(getPathID()); }
+	public static String getPathIDString() { return new String(getPathID()); }
 	public static void endPathID(String roles, int level, int pathid) { endPathID(roles, level, pickle(pathid)); }
 	public static void endPathID(String roles, int level, Serializable pathid) { endPathID(roles, level, pickle(pathid)); }
+	public static void endPathID(String roles, int level, String pathid) { endPathID(roles, level, pathid.getBytes()); }
 	public static void send(String roles, int level, int msgid, int size) { send(roles, level, new Integer(msgid), size); }
 	public static void send(String roles, int level, Serializable msgid, int size) { send(roles, level, pickle(msgid), size); }
+	public static void send(String roles, int level, String msgid, int size) { send(roles, level, msgid.getBytes(), size); }
 	public static void receive(String roles, int level, int msgid, int size) { receive(roles, level, new Integer(msgid), size); }
 	public static void receive(String roles, int level, Serializable msgid, int size) { receive(roles, level, pickle(msgid), size); }
+	public static void receive(String roles, int level, String msgid, int size) { receive(roles, level, msgid.getBytes(), size); }
 
 	private static byte[] pickle(Serializable obj) {
 		System.out.println("Pickling an object: "+obj);

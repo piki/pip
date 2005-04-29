@@ -41,18 +41,19 @@ void reconcile_init(const char *table_base) {
 		exit(1);
 	}
 	run_sql("CREATE TABLE %s (pathid int, roles varchar(255), level tinyint, "
-		"name varchar(255), ts bigint, thread_id int, index(pathid))",
+		"name varchar(255), ts bigint, thread_id int, INDEX(pathid))",
 		table_notices.c_str());
 	run_sql("CREATE TABLE %s (pathid int, roles varchar(255), level tinyint, "
 		"name varchar(255), start bigint, end bigint, tdiff int, utime int, "
 		"stime int, major_fault int, minor_fault int, vol_cs int, invol_cs int, "
-		"thread_start int, thread_end int, index(pathid))", table_tasks.c_str());
+		"thread_start int, thread_end int, INDEX(pathid), INDEX(name))",
+		table_tasks.c_str());
 	run_sql("CREATE TABLE %s (thread_id int auto_increment primary key, "
 		"host varchar(255), prog varchar(255), pid int, tid int, ppid int, "
 		"uid int, start bigint, tz int)", table_threads.c_str());
 	run_sql("CREATE TABLE %s (pathid int, roles varchar(255), levels tinyint, "
 		"msgid varchar(255), ts_send bigint, ts_recv bigint, size int, "
-		"thread_send int, thread_recv int, index(pathid))",
+		"thread_send int, thread_recv int, INDEX(pathid))",
 		table_messages.c_str());
 	run_sql("CREATE TABLE %s (pathid int primary key, pathblob varchar(255))",
 		table_paths.c_str());

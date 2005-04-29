@@ -8,6 +8,13 @@ public class AnnTest implements Runnable {
 		for (int i=0; i<ba.length; i++)
 			System.out.print((ba[i]<0 ? ba[i]+256 : ba[i])+" ");
 		System.out.println("}");
+		Annotate.setPathID(null, 0, "5040");
+		System.out.println("parent's pathid is \""+Annotate.getPathIDString()+"\"");
+		System.out.print("   as a byte array { ");
+		ba = Annotate.getPathID();
+		for (int i=0; i<ba.length; i++)
+			System.out.print((ba[i]<0 ? ba[i]+256 : ba[i])+" ");
+		System.out.println("}");
 
 		new Thread(new AnnTest()).start();
 		Annotate.startTask("counting", 0, "one to a hundred million");
