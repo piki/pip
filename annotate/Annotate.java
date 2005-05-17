@@ -1,3 +1,4 @@
+package annotate;
 import java.io.*;
 
 public class Annotate {
@@ -71,5 +72,6 @@ public class Annotate {
 
 	static {
 		System.loadLibrary("jannotate");
+		init();
 	}
 }

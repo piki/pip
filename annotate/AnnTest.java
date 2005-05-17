@@ -1,6 +1,7 @@
+import annotate.Annotate;
 public class AnnTest implements Runnable {
 	public static void main(String[] args) {
-		Annotate.init();
+//		Annotate.init();
 		Annotate.setPathID(null, 0, 5040);
 		System.out.println("parent's pathid is "+Annotate.getPathIDInt());
 		System.out.print("   as a byte array { ");
