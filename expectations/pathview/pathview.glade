@@ -452,7 +452,8 @@ Network latency (s)
 Network messages
 Network bytes
 Tree height
-Thread count</property>
+Thread count
+Host count</property>
 			      <signal name="changed" handler="on_graph_quantity_changed" last_modification_time="Mon, 25 Apr 2005 23:03:30 GMT"/>
 			    </widget>
 			    <packing>

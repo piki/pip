@@ -31,12 +31,12 @@ static GladeXML *main_xml, *dagpopup_xml = NULL;
 enum { NOTEBOOK_TREE, NOTEBOOK_TIMELINE, NOTEBOOK_COMM, NOTEBOOK_GRAPH };
 enum { QUANT_START, QUANT_REAL, QUANT_CPU, QUANT_UTIME, QUANT_STIME, QUANT_MAJFLT,
 	QUANT_MINFLT, QUANT_VCS, QUANT_IVCS, QUANT_LATENCY, QUANT_MESSAGES,
-	QUANT_BYTES, QUANT_DEPTH, QUANT_THREADS };
+	QUANT_BYTES, QUANT_DEPTH, QUANT_THREADS, QUANT_HOSTS };
 enum { STYLE_CDF, STYLE_PDF };
 const char *task_quant[] = {
 	"start/1000000", "(end-start)/1000", "(utime+stime)/1000", "utime/1000",
 	"stime/1000", "major_fault", "minor_fault", "vol_cs", "invol_cs",
-	NULL, NULL, NULL, NULL, NULL
+	NULL, NULL, NULL, NULL, NULL, NULL
 	//!! might be nice to implement latency, messages, and bytes for tasks
 };
 
