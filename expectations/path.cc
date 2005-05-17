@@ -5,7 +5,7 @@
 
 std::map<int, PathThread*> threads;
 
-inline static timeval tv(long long ts) {
+timeval ts_to_tv(long long ts) {
 	timeval ret;
 	ret.tv_sec = ts/1000000;
 	ret.tv_usec = ts%1000000;
@@ -17,8 +17,8 @@ PathTask::PathTask(const MYSQL_ROW &row) {
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
 	// level = atoi(row[2]);
 	name = strdup(row[3]);
-	ts_start = tv(strtoll(row[4], NULL, 10));
-	ts_end = tv(strtoll(row[5], NULL, 10));
+	ts_start = ts_to_tv(strtoll(row[4], NULL, 10));
+	ts_end = ts_to_tv(strtoll(row[5], NULL, 10));
 	tdiff = atoi(row[6]);
 	utime = atoi(row[7]);
 	stime = atoi(row[8]);
@@ -81,7 +81,7 @@ PathNotice::PathNotice(const MYSQL_ROW &row) {
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
 	// level = atoi(row[2]);
 	name = strdup(row[3]);
-	ts = tv(strtoll(row[4], NULL, 10));
+	ts = ts_to_tv(strtoll(row[4], NULL, 10));
 	thread_id = atoi(row[5]);
 }
 
@@ -111,7 +111,7 @@ PathMessageSend::PathMessageSend(const MYSQL_ROW &row) : dest(NULL), pred(NULL) 
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
 	// level = atoi(row[2]);
 	// msgid is row[3]
-	ts_send = tv(strtoll(row[4], NULL, 10));
+	ts_send = ts_to_tv(strtoll(row[4], NULL, 10));
 	// ts_recv is row[5]
 	size = atoi(row[6]);
 	thread_send = atoi(row[7]);
@@ -164,7 +164,7 @@ PathMessageRecv::PathMessageRecv(const MYSQL_ROW &row) : send(NULL) {
 	// level = atoi(row[2]);
 	// msgid is row[3]
 	// ts_send is row[4]
-	ts_recv = tv(strtoll(row[5], NULL, 10));
+	ts_recv = ts_to_tv(strtoll(row[5], NULL, 10));
 	// size is row[6]
 	// thread_start is row[7]
 	thread_recv = atoi(row[8]);
@@ -214,7 +214,7 @@ PathThread::PathThread(const MYSQL_ROW &row) {
 	tid = atoi(row[4]);
 	ppid = atoi(row[5]);
 	uid = atoi(row[6]);
-	start = tv(strtoll(row[7], NULL, 10));
+	start = ts_to_tv(strtoll(row[7], NULL, 10));
 	tz = atoi(row[8]);
 }
 

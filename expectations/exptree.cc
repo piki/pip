@@ -60,7 +60,9 @@ RegexMatch::~RegexMatch(void) {
 bool RegexMatch::check(const std::string &text) const {
 	assert(regex);
 	int ovector[30];
-	return pcre_exec(regex, NULL, text.c_str(), text.length(), 0, 0, ovector, 30) >= 0;
+	bool res = pcre_exec(regex, NULL, text.c_str(), text.length(), 0, 0, ovector, 30) >= 0;
+	//if (!res) printf("regex did not match \"%s\"\n", text.c_str());
+	return res;
 }
 bool StringMatch::check(const std::string &text) const { bool ret = data == text; return negate ? !ret : ret; }
 bool VarMatch::check(const std::string &text) const { return true; }  // !!
@@ -68,6 +70,7 @@ bool VarMatch::check(const std::string &text) const { return true; }  // !!
 static const char *metric_name[] = {
 	"REAL_TIME", "UTIME", "STIME", "CPU_TIME", "MAJOR_FAULTS", "MINOR_FAULTS",
 	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", "MESSAGES", "DEPTH", "THREADS", NULL
+		//!! HOSTS, too.
 };
 
 Limit::Metric Limit::metric_by_name(const std::string &name) {

@@ -164,6 +164,7 @@ private:
 
 extern std::map<int, PathThread*> threads;
 
+timeval ts_to_tv(long long ts);
 void get_path_ids(MYSQL *mysql, const char *table_base, std::set<int> *pathids);
 void run_sql(MYSQL *mysql, const char *cmd);
 void run_sqlf(MYSQL *mysql, const char *fmt, ...)

@@ -8,7 +8,7 @@
 #define ROWS_PER_CALL 50
 
 struct IdleQuery {
-	IdleQuery(const char *_cmd, RowHandler _row_handler, Notify _start,
+	IdleQuery(const std::string &_cmd, RowHandler _row_handler, Notify _start,
 			Notify _end, void *_user_data) : cmd(_cmd), row_handler(_row_handler),
 			start(_start), end(_end), user_data(_user_data) {}
 	std::string cmd;
@@ -27,8 +27,13 @@ static void next_query(void);
 
 void add_db_idler(const char *query, RowHandler rh, Notify start, Notify end,
 		void *user_data) {
+	add_db_idler(std::string(query), rh, start, end, user_data);
+}
+
+void add_db_idler(const std::string &query, RowHandler rh, Notify start, Notify end,
+		void *user_data) {
 	queries.push_back(IdleQuery(query, rh, start, end, user_data));
-	printf("WQ: pushing query: \"%s\"\n", query);
+	//printf("WQ: pushing query: \"%s\"\n", query.c_str());
 	if (!registered) {
 		g_idle_add(the_idle_func, NULL);
 		res = NULL;
@@ -40,7 +45,7 @@ static void next_query(void) {
 	assert(queries.size() != 0);
 	IdleQuery *iq = &(*queries.begin());
 	if (iq->start) iq->start(iq->user_data);
-	printf("WQ: running query: \"%s\"\n", iq->cmd.c_str());
+	//printf("WQ: running query: \"%s\"\n", iq->cmd.c_str());
 	run_sql(&mysql, iq->cmd.c_str());
 	res = mysql_use_result(&mysql);
 }
@@ -56,7 +61,7 @@ static gboolean the_idle_func(void *ign) {
 			mysql_free_result(res);
 			if (iq->end) iq->end(iq->user_data);
 			queries.pop_front();
-			printf("WQ: query finished, %d remain\n", queries.size());
+			//printf("WQ: query finished, %d remain\n", queries.size());
 			if (queries.empty()) {
 				registered = FALSE;
 				return FALSE;

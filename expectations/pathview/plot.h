@@ -22,6 +22,8 @@ typedef enum {
 	PLOT_LOGSCALE_Y = 1<<3,
 	PLOT_LINES = 1<<4,
 	PLOT_POINTS = 1<<5,
+	PLOT_X0 = 1<<6,
+	PLOT_Y0 = 1<<7,
 	PLOT_DEFAULTS = PLOT_AUTO_X | PLOT_AUTO_Y | PLOT_LINES | PLOT_POINTS
 } GtkPlotFlags;
 

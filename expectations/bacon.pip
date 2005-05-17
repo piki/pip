@@ -98,7 +98,7 @@ validator Init {
 	limit(MESSAGES, {=0});
 	limit(THREADS, {=1});
 	thread Server(*, 1) {
-		task("reading database");
+//		task("reading database");
 		task("jump tables");
 	}
 }

@@ -204,6 +204,8 @@ static void gtk_plot_layout(GtkPlot *plot) {
 		if (plot->flags & PLOT_AUTO_Y && plot->ymin == plot->ymax)
 			plot->ymin--, plot->ymax++;
 	}
+	if (plot->flags & PLOT_X0) plot->xmin = 0;
+	if (plot->flags & PLOT_Y0) plot->ymin = 0;
 
 	/* pick tics */
 	if (plot->flags & PLOT_LOGSCALE_X)
@@ -364,10 +366,6 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	g_return_val_if_fail(GTK_WIDGET_DRAWABLE(widget), FALSE);
 
 	plot = GTK_PLOT(widget);
-	g_return_val_if_fail(plot->xtic > 0, FALSE);
-	g_return_val_if_fail(plot->ytic > 0, FALSE);
-	g_return_val_if_fail(plot->xmax > plot->xmin, FALSE);
-	g_return_val_if_fail(plot->ymax > plot->ymin, FALSE);
 	g_return_val_if_fail(!plot->frozen, FALSE);
 
 	if (white.pixel == 0) {
@@ -386,6 +384,11 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 		gdk_gc_destroy(gc);
 		return TRUE;
 	}
+
+	g_return_val_if_fail(plot->xtic > 0, FALSE);
+	g_return_val_if_fail(plot->ytic > 0, FALSE);
+	g_return_val_if_fail(plot->xmax > plot->xmin, FALSE);
+	g_return_val_if_fail(plot->ymax > plot->ymin, FALSE);
 
 	xscale = (widget->allocation.width - plot->left - plot->right - 2*MARGIN) /
 		(plot->xmax - plot->xmin);

@@ -72,6 +72,7 @@ void gtk_graph_clear(GtkGraph *graph) {
 	}
 	for (i=0; i<graph->edges->len; i++)
 		g_free(EDGE(graph, i));
+	graph->nodes->len = graph->edges->len = 0;
 
 	if (!graph->frozen) gtk_graph_update(graph);
 }
@@ -191,7 +192,7 @@ static void gtk_graph_update(GtkGraph *graph) {
 #define SPRING 0.02
 #define SPRINGLEN 110
 #define DAMP 1.0
-#define ROUNDS 50000
+#define ROUNDS 500
 #define MOVE_MIN 0.00
 #define MAX_GRAV_DIST 200
 //#define DEBUG
@@ -199,8 +200,7 @@ static void gtk_graph_update(GtkGraph *graph) {
 static void gtk_graph_layout(GtkGraph *graph) {
 	if (graph->nodes->len == 0) return;
 
-	gboolean was_frozen = graph->frozen;
-	graph->frozen = TRUE;
+	g_assert(!graph->frozen);
 	int i, j, k;
 	for (k=0; k<ROUNDS; k++) {
 		/* apply anti-gravity */
@@ -288,8 +288,8 @@ static void gtk_graph_layout(GtkGraph *graph) {
 		GtkGraphNode *n = NODE(graph, i);
 		if (n->x < xmin) xmin = n->x;
 		if (n->y < ymin) ymin = n->y;
-		if (n->x > xmin) xmax = n->x;
-		if (n->y > ymin) ymax = n->y;
+		if (n->x > xmax) xmax = n->x;
+		if (n->y > ymax) ymax = n->y;
 	}
 	for (i=1; i<graph->nodes->len; i++) {
 		GtkGraphNode *n = NODE(graph, i);
@@ -297,7 +297,9 @@ static void gtk_graph_layout(GtkGraph *graph) {
 		n->y -= ymin - 12;
 	}
 
-	graph->frozen = was_frozen;
+	gtk_widget_set_usize(GTK_WIDGET(graph), xmax-xmin+50, ymax-ymin+24);
+	printf("xmin=%f xmax=%f ymin=%f ymax=%f\n", xmin, xmax, ymin, ymax);
+	printf("usize=%f by %f\n", xmax-xmin+50, ymax-ymin+24);
 }
 
 static void gtk_graph_realize(GtkWidget *widget) {
@@ -485,7 +487,7 @@ static gint gtk_graph_button_press(GtkWidget *widget, GdkEventButton *ev) {
 	graph = GTK_GRAPH(widget);
 	if (graph->frozen) return FALSE;
 
-	g_assert(node_dragging == NULL);
+	if (node_dragging) return FALSE;  /* should be NULL, unless user double-clicked */
 	for (i=0; i<graph->nodes->len; i++) {
 		GtkGraphNode *node = NODE(graph, i);
 		if (ABS(ev->x - node->x) + ABS(ev->y - node->y) < 30) {
