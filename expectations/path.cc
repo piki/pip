@@ -238,7 +238,7 @@ void Path::init(void) {
 	utime = stime = 0;
 	major_fault = minor_fault = 0;
 	vol_cs = invol_cs = 0;
-	size = messages = depth = 0;
+	size = messages = depth = hosts = 0;
 	root_thread = -1;
 	ts_start.tv_sec = ts_start.tv_usec = 0;
 	ts_end.tv_sec = ts_end.tv_usec = 0;
@@ -593,10 +593,14 @@ void Path::done_inserting(void) {
 		tally(thread->second, true);
 
 	depth = 1;
+	std::set<std::string> host_set;
 	for (thread=children.begin(); thread!=children.end(); thread++) {
 		int this_depth = max_message_depth(thread->second);
 		if (this_depth > depth) depth = this_depth;
+
+		host_set.insert(threads[thread->first]->host);
 	}
+	hosts = host_set.size();
 }
 
 void Path::tally(const PathEventList &list, bool toplevel) {

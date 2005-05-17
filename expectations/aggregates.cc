@@ -49,6 +49,7 @@ static const Counter &get_metric(const Recognizer *r, const std::string &name) {
 		case Limit::THREADS:       return r->threadcount;
 		case Limit::MESSAGES:      return r->messages;
 		case Limit::DEPTH:         return r->depth;
+		case Limit::HOSTS:         return r->hosts;
 		case Limit::LATENCY:       return r->latency;
 		default:
 			fprintf(stderr, "unknown metric: %d\n", metric);

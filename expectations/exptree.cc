@@ -69,8 +69,8 @@ bool VarMatch::check(const std::string &text) const { return true; }  // !!
 
 static const char *metric_name[] = {
 	"REAL_TIME", "UTIME", "STIME", "CPU_TIME", "MAJOR_FAULTS", "MINOR_FAULTS",
-	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", "MESSAGES", "DEPTH", "THREADS", NULL
-		//!! HOSTS, too.
+	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", "MESSAGES", "DEPTH", "THREADS",
+	"HOSTS", NULL
 };
 
 Limit::Metric Limit::metric_by_name(const std::string &name) {
@@ -141,6 +141,7 @@ bool Limit::check(const PathTask *test) const {
 		case MESSAGES:
 		case DEPTH:
 		case THREADS:
+		case HOSTS:
 		default:
 			fprintf(stderr, "Metric %s (%d) invalid or unknown when checking Task\n",
 				metric_name[metric], metric);
@@ -164,6 +165,7 @@ bool Limit::check(const PathMessageSend *test) const {
 		case MESSAGES:
 		case DEPTH:
 		case THREADS:
+		case HOSTS:
 		default:
 			fprintf(stderr, "Metric %s (%d) invalid or unknown when checking Message\n",
 				metric_name[metric], metric);
@@ -185,6 +187,7 @@ bool Limit::check(const Path *test) const {
 		case DEPTH:          return check(test->depth);
 		case MESSAGES:       return check(test->messages);
 		case THREADS:        return check(test->children.size());
+		case HOSTS:          return check(test->hosts);
 		case LATENCY:        return check(test->ts_end - test->ts_start);
 		default:
 			fprintf(stderr, "Metric %s (%d) unknown when checking Path\n",
@@ -664,6 +667,7 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	size.add(p->size);
 	messages.add(p->messages);
 	depth.add(p->depth);
+	hosts.add(p->hosts);
 	threadcount.add(p->children.size());
 	return true;
 }

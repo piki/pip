@@ -62,7 +62,7 @@ class Limit {
 public:
 	enum Metric { REAL_TIME=0, UTIME, STIME, CPU_TIME, MAJOR_FAULTS,
 		MINOR_FAULTS, VOL_CS, INVOL_CS, LATENCY, SIZE, MESSAGES, DEPTH,
-		THREADS, LAST };
+		THREADS, HOSTS, LAST };
 	static Metric metric_by_name(const std::string &name);
 
 	Limit(const OperatorNode *onode);
@@ -209,7 +209,7 @@ public:
 
 	int instances, unique;
 	Counter real_time, utime, stime, cpu_time, major_fault, minor_fault;
-	Counter	vol_cs, invol_cs, latency, size, messages, depth, threadcount;
+	Counter	vol_cs, invol_cs, latency, size, messages, depth, hosts, threadcount;
 };
 
 #endif

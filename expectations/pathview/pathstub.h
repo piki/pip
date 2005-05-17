@@ -12,7 +12,7 @@ public:
 
 	int utime, stime, major_fault, minor_fault, vol_cs, invol_cs;
 	timeval ts_start, ts_end;
-	int size, messages, depth;
+	int size, messages, depth, hosts;
 	int path_id;
 	bool valid, validated;
 	BoolArray recognizers;

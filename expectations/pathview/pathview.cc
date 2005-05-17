@@ -86,6 +86,7 @@ void fill_paths(void);
 void fill_recognizers(void);
 void on_graph_quantity_changed(GtkComboBox *cb);
 void on_graph_style_changed(GtkComboBox *cb);
+void on_graph_logx_changed(void);
 void on_aggregation_changed(GtkComboBox *cb);
 void on_scale_times_toggled(GtkToggleButton *cb);
 }
@@ -651,6 +652,9 @@ void tasks_activate(void) {
 		gtk_tree_view_get_selection(GTK_TREE_VIEW(WID("list_tasks")));
 	GtkPlot *plot = GTK_PLOT(WID("plot"));
 	gtk_plot_freeze(plot);
+	int flags = (int)plot->flags;
+	if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(WID("logx")))) flags |= PLOT_LOGSCALE_X; else flags &= ~PLOT_LOGSCALE_X;
+	gtk_plot_set_flags(plot, (GtkPlotFlags)flags);
 	gtk_plot_clear(plot);
 	gtk_tree_selection_selected_foreach(sel, plot_row, plot);
 	gtk_plot_thaw(plot);
@@ -697,6 +701,8 @@ void on_graph_style_changed(GtkComboBox *cb) {
 	printf("graph style changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
 	tasks_activate();
 }
+
+void on_graph_logx_changed(void) { tasks_activate(); }
 
 void on_aggregation_changed(GtkComboBox *cb) {
 	printf("aggregation changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));

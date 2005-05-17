@@ -13,6 +13,7 @@ validator Link {
 	limit(DEPTH, {=3});
 	limit(MESSAGES, {=2});
 	limit(THREADS, {=2});
+	limit(HOSTS, {1,2});
 	thread Client(*, 1) {
 		task("link") {
 			send(Server);
