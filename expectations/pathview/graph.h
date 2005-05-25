@@ -48,6 +48,9 @@ GtkGraphNode* gtk_graph_add_node(GtkGraph *graph, const char *label);
 GtkGraphEdge* gtk_graph_add_edge(GtkGraph *graph, GtkGraphNode *a, GtkGraphNode *b, gboolean directed);
 void          gtk_graph_freeze(GtkGraph *graph);
 void          gtk_graph_thaw(GtkGraph *graph);
+/* remove all duplicate edges, and replace all to+from directed edges with
+ * a single, undirected edge */
+void          gtk_graph_simplify(GtkGraph *graph);
 
 #ifdef __cplusplus
 }

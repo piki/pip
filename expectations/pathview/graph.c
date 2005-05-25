@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <gtk/gtksignal.h>
+#include <librsvg/rsvg.h>
 
 #include "graph.h"
 
@@ -148,6 +149,43 @@ void gtk_graph_thaw(GtkGraph *graph) {
 	graph->frozen = FALSE;
 	gtk_graph_update(graph);
 	gtk_widget_queue_draw(GTK_WIDGET(graph));
+}
+
+static guint g_edge_hash(gconstpointer v) {
+	GtkGraphEdge *edge = (GtkGraphEdge*)v;
+	return (int)edge->a ^ (int)edge->b;
+}
+
+static gint g_edge_equal(gconstpointer a, gconstpointer b) {
+	GtkGraphEdge *edgea = (GtkGraphEdge*)a;
+	GtkGraphEdge *edgeb = (GtkGraphEdge*)b;
+	return edgea->a == edgeb->a && edgea->b == edgeb->b;
+}
+
+void gtk_graph_simplify(GtkGraph *graph) {
+	g_return_if_fail(graph);
+	g_return_if_fail(GTK_IS_GRAPH(graph));
+
+	GHashTable *seen = g_hash_table_new(g_edge_hash, g_edge_equal);
+	int i;
+	for (i=0; i<graph->edges->len; i++) {
+		GtkGraphEdge *edge = EDGE(graph, i);
+		GtkGraphEdge *old;
+		GtkGraphEdge rev = { edge->b, edge->a, NULL, FALSE };
+		if (g_hash_table_lookup(seen, edge) != NULL) {  /* already have it */
+			g_ptr_array_remove_index_fast(graph->edges, i--);
+			continue;
+		}
+		if ((old = g_hash_table_lookup(seen, &rev)) != NULL) {
+			old->directed = FALSE;
+			g_ptr_array_remove_index_fast(graph->edges, i--);
+			continue;
+		}
+		g_hash_table_insert(seen, edge, edge);
+	}
+	g_hash_table_destroy(seen);
+
+	if (!graph->frozen) gtk_graph_update(graph);
 }
 
 GtkGraphNode *gtk_graph_add_node(GtkGraph *graph, const char *label) {
@@ -295,7 +333,7 @@ static void gtk_graph_layout(GtkGraph *graph) {
 		if (n->x > xmax) xmax = n->x;
 		if (n->y > ymax) ymax = n->y;
 	}
-	for (i=1; i<graph->nodes->len; i++) {
+	for (i=0; i<graph->nodes->len; i++) {
 		GtkGraphNode *n = NODE(graph, i);
 		n->x -= xmin - 25;
 		n->y -= ymin - 12;
@@ -461,7 +499,6 @@ static gint gtk_graph_expose(GtkWidget *widget, GdkEventExpose *ev) {
 		//printf("Node %d: \"%s\" %.2f,%.2f\n", i, n->label, n->x, n->y);
 
 		if (n->label) {
-
 			pango_layout_set_text(layout, n->label, -1);
 			pango_layout_get_size(layout, &width, &height);
 			width /= PANGO_SCALE;
