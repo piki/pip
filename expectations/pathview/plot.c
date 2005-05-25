@@ -166,7 +166,10 @@ static void gtk_plot_update(GtkPlot *plot) {
 }
 
 static double pick_tic(double range) {
-	return pow(10, floor(log10(range)));
+	/* number of tics should be between 1 and 5 */
+	double tic = pow(10, floor(log10(range)));
+	if (range/tic > 5) tic *= 2;
+	return tic;
 }
 
 static void gtk_plot_layout(GtkPlot *plot) {
@@ -204,8 +207,12 @@ static void gtk_plot_layout(GtkPlot *plot) {
 		if (plot->flags & PLOT_AUTO_Y && plot->ymin == plot->ymax)
 			plot->ymin--, plot->ymax++;
 	}
-	if (plot->flags & PLOT_X0) plot->xmin = 0;
-	if (plot->flags & PLOT_Y0) plot->ymin = 0;
+	if (plot->flags & PLOT_X0) {
+		if (plot->xmax < 0) plot->xmax = 0; else plot->xmin = 0;
+	}
+	if (plot->flags & PLOT_Y0) {
+		if (plot->ymax < 0) plot->ymax = 0; else plot->ymin = 0;
+	}
 
 	/* pick tics */
 	if (plot->flags & PLOT_LOGSCALE_X)
