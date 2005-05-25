@@ -20,7 +20,7 @@ private:
 	Event *get_event(void);
 	void handle_event(Event *ev);
 
-	char *buf;
+	unsigned char *buf;
 	int bufhead, buflen, bufsiz;
 
 	Header *header;

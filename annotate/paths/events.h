@@ -37,7 +37,7 @@ public:
 
 class Header : public Event {
 public:
-	Header(const char *buf);
+	Header(const unsigned char *buf);
 	virtual ~Header(void);
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_HEADER; }
@@ -50,7 +50,7 @@ public:
 /* abstract event type with rusage information */
 class ResourceMark : public Event {
 public:
-	ResourceMark(int version, const char *buf);
+	ResourceMark(int version, const unsigned char *buf);
 
 	inline int bufsiz(int version) const {
 		switch (version) {
@@ -66,7 +66,7 @@ public:
 /* abstract event type for start/end task */
 class Task : public ResourceMark {
 public:
-	Task(int version, const char *buf);
+	Task(int version, const unsigned char *buf);
 	virtual ~Task(void);
 
 	char *name;
@@ -75,21 +75,21 @@ public:
 
 class StartTask : public Task {
 public:
-	StartTask(int version, const char *buf) : Task(version, buf) {}
+	StartTask(int version, const unsigned char *buf) : Task(version, buf) {}
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_START_TASK; }
 };
 
 class EndTask : public Task {
 public:
-	EndTask(int version, const char *buf) : Task(version, buf) {}
+	EndTask(int version, const unsigned char *buf) : Task(version, buf) {}
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_END_TASK; }
 };
 
 class NewPathID : public ResourceMark {
 public:
-	NewPathID(int version, const char *buf);
+	NewPathID(int version, const unsigned char *buf);
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_SET_PATH_ID; }
 
@@ -98,7 +98,7 @@ public:
 
 class EndPathID : public Event {
 public:
-	EndPathID(int version, const char *buf);
+	EndPathID(int version, const unsigned char *buf);
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_END_PATH_ID; }
 
@@ -107,7 +107,7 @@ public:
 
 class Notice : public Event {
 public:
-	Notice(int version, const char *buf);
+	Notice(int version, const unsigned char *buf);
 	virtual ~Notice(void);
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_NOTICE; }
@@ -118,7 +118,7 @@ public:
 /* abstract type for sending/receiving events */
 class Message : public Event {
 public:
-	Message(int version, const char *buf);
+	Message(int version, const unsigned char *buf);
 
 	IDBlock msgid;
 	int size, thread_id;
@@ -126,21 +126,21 @@ public:
 
 class MessageSend : public Message {
 public:
-	MessageSend(int version, const char *buf) : Message(version, buf) { }
+	MessageSend(int version, const unsigned char *buf) : Message(version, buf) { }
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_SEND; }
 };
 
 class MessageRecv : public Message {
 public:
-	MessageRecv(int version, const char *buf) : Message(version, buf) { }
+	MessageRecv(int version, const unsigned char *buf) : Message(version, buf) { }
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_RECV; }
 };
 
 class BeliefFirst : public Event {
 public:
-	BeliefFirst(int version, const char *buf);
+	BeliefFirst(int version, const unsigned char *buf);
 	~BeliefFirst(void);
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_BELIEF_FIRST; }
@@ -154,7 +154,7 @@ public:
 
 class Belief : public Event {
 public:
-	Belief(int version, const char *buf);
+	Belief(int version, const unsigned char *buf);
 	virtual void print(FILE *fp, int depth);
 	virtual EventType type(void) { return EV_BELIEF; }
 
@@ -163,6 +163,6 @@ public:
 };
 
 Event *read_event(int version, FILE *_fp);
-Event *parse_event(int version, const char *buf);
+Event *parse_event(int version, const unsigned char *buf);
 
 #endif

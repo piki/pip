@@ -8,8 +8,8 @@
 #include "events.h"
 
 typedef enum { STRING, VOIDP, CHAR, INT, END } InType;
-static int readblock(FILE *_fp, char *buf);
-static int scan(const char *buf, ...);
+static int readblock(FILE *_fp, unsigned char *buf);
+static int scan(const unsigned char *buf, ...);
 
 void IDBlock::set(char *_data, int _len) {
 	if (data) delete[] data;
@@ -66,7 +66,7 @@ const char *IDBlock::to_string(void) const {
 	return buf;
 }
 
-Header::Header(const char *buf) {
+Header::Header(const unsigned char *buf) {
 	scan(buf,
 		INT, &magic,
 		INT, &version,
@@ -97,7 +97,7 @@ void Header::print(FILE *fp, int depth) {
 		pid, tid, ppid, uid, processname);
 }
 
-ResourceMark::ResourceMark(int version, const char *buf) {
+ResourceMark::ResourceMark(int version, const unsigned char *buf) {
 	if (version >= 3)
 		buf += scan(buf, STRING, &roles, CHAR, &level, END);
 	else { level = 0; roles = NULL; }
@@ -113,7 +113,7 @@ ResourceMark::ResourceMark(int version, const char *buf) {
 		END);
 }
 
-Task::Task(int version, const char *buf) : ResourceMark(version, buf), path_id(-1), thread_id(-1) {
+Task::Task(int version, const unsigned char *buf) : ResourceMark(version, buf), path_id(-1), thread_id(-1) {
 	scan(buf+bufsiz(version), STRING, &name, END);
 }
 Task::~Task(void) { delete[] name; }
@@ -132,7 +132,7 @@ void EndTask::print(FILE *fp, int depth) {
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
 }
 
-NewPathID::NewPathID(int version, const char *buf) : ResourceMark(version, buf) {
+NewPathID::NewPathID(int version, const unsigned char *buf) : ResourceMark(version, buf) {
 	char *idbuf;
 	int len;
 	scan(buf+bufsiz(version), VOIDP, &idbuf, &len, END);
@@ -146,7 +146,7 @@ void NewPathID::print(FILE *fp, int depth) {
 		stime.tv_sec, stime.tv_usec, minor_fault, major_fault, vol_cs, invol_cs);
 }
 
-EndPathID::EndPathID(int version, const char *buf) {
+EndPathID::EndPathID(int version, const unsigned char *buf) {
 	char *idbuf;
 	int len;
 
@@ -166,7 +166,7 @@ void EndPathID::print(FILE *fp, int depth) {
 		2*depth, "", path_id.to_string(), roles, level, tv.tv_sec, tv.tv_usec);
 }
 
-Notice::Notice(int version, const char *buf) {
+Notice::Notice(int version, const unsigned char *buf) {
 	if (version >= 3)
 		buf += scan(buf, STRING, &roles, CHAR, &level, END);
 	else { level = 0; roles = NULL; }
@@ -182,7 +182,7 @@ void Notice::print(FILE *fp, int depth) {
 		2*depth, "", roles, level, tv.tv_sec, tv.tv_usec, str);
 }
 
-Message::Message(int version, const char *buf) {
+Message::Message(int version, const unsigned char *buf) {
 	char *idbuf;
 	int len;
 
@@ -209,7 +209,7 @@ void MessageRecv::print(FILE *fp, int depth) {
 		2*depth, "", msgid.to_string(), roles, level, size, tv.tv_sec, tv.tv_usec, thread_id);
 }
 
-BeliefFirst::BeliefFirst(int version, const char *buf) {
+BeliefFirst::BeliefFirst(int version, const unsigned char *buf) {
 	assert(version >= 3);
 
 	int max_fail_int;
@@ -234,7 +234,7 @@ void BeliefFirst::print(FILE *fp, int depth) {
 		2*depth, "", seq, max_fail_rate, cond, file, line);
 }
 
-Belief::Belief(int version, const char *buf) {
+Belief::Belief(int version, const unsigned char *buf) {
 	assert(version >= 3);
 
 	if (version >= 3)
@@ -255,15 +255,15 @@ void Belief::print(FILE *fp, int depth) {
 		2*depth, "", seq, cond ? "true" : "false", roles, level, tv.tv_sec, tv.tv_usec);
 }
 
-static int readblock(FILE *_fp, char *buf) {
+static int readblock(FILE *_fp, unsigned char *buf) {
 	int len = (fgetc(_fp) << 8) + fgetc(_fp);
 	if (feof(_fp)) return -1;
 	fread(buf, len-2, 1, _fp);
 	return len-2;
 }
 
-static int scan(const char *buf, ...) {
-	const char *p=buf;
+static int scan(const unsigned char *buf, ...) {
+	const unsigned char *p=buf;
 	char **s;
 	char *c;
 	int *ip, len, *lenp;
@@ -317,12 +317,12 @@ loop_break:
 }
 
 Event *read_event(int version, FILE *_fp) {
-	char buf[2048];
+	unsigned char buf[2048];
 	if (readblock(_fp, buf) == -1) return NULL;
 	return parse_event(version, buf);
 }
 
-Event *parse_event(int version, const char *buf) {
+Event *parse_event(int version, const unsigned char *buf) {
 	if (version == -1) assert(buf[0] == 'H');
 	switch (buf[0]) {
 		case 'H':  return new Header(buf+1);

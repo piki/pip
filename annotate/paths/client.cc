@@ -20,7 +20,7 @@ void Client::append(const char *newbuf, int len) {
 	assert(bufhead == 0);
 	if (buflen + len > bufsiz) {
 		bufsiz = MAX(bufsiz*2, buflen + len);
-		buf = (char*)realloc(buf, bufsiz);
+		buf = (unsigned char*)realloc(buf, bufsiz);
 	}
 	memcpy(buf+buflen, newbuf, len);
 	buflen += len;
