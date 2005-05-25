@@ -242,7 +242,7 @@ static void gtk_plot_layout(GtkPlot *plot) {
 		sprintf(buf, "%.*f", get_precision(plot->xmax), plot->xmax);
 	pango_layout_set_text(layout, buf, -1);
 	pango_layout_get_size(layout, &width, &height);
-	width /= PANGO_SCALE;	height /= PANGO_SCALE;
+	width /= PANGO_SCALE;  height /= PANGO_SCALE;
 	plot->bottom = height + TEXT_GAP_Y;
 	plot->top = height/2;
 	plot->right = width/2;
@@ -437,7 +437,7 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 			sprintf(buf, "%.*f", get_precision(tic), tic);
 		pango_layout_set_text(layout, buf, -1);
 		pango_layout_get_size(layout, &width, &height);
-		width /= PANGO_SCALE;	height /= PANGO_SCALE;
+		width /= PANGO_SCALE;  height /= PANGO_SCALE;
 		gdk_draw_layout(drawbuffer, gc,
 			X(plot->xmin)-width-TEXT_GAP_Y, Y(tic)-height/2, layout);
 	}
@@ -452,7 +452,7 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 
 			if (plot->flags & PLOT_LOGSCALE_X) p.x = log10(p.x);
 			if (plot->flags & PLOT_LOGSCALE_Y) p.y = log10(p.y);
-			x = X(p.x);	y = Y(p.y);
+			x = X(p.x);  y = Y(p.y);
 
 			if (j > 0 && (plot->flags & PLOT_LINES))
 				gdk_draw_line(drawbuffer, gc, X(lastp.x), Y(lastp.y), x, y);
@@ -498,7 +498,7 @@ static void gtk_plot_set_highlight(GtkPlot *plot, int click_x, int click_y) {
 
 			if (plot->flags & PLOT_LOGSCALE_X) p.x = log10(p.x);
 			if (plot->flags & PLOT_LOGSCALE_Y) p.y = log10(p.y);
-			x = X(p.x);	y = Y(p.y);
+			x = X(p.x);  y = Y(p.y);
 
 			this_distsq = (x-click_x) * (x-click_x) + (y-click_y) * (y-click_y);
 			if (this_distsq < distsq) {
