@@ -10,8 +10,8 @@
 #define TEXT_GAP_Y 5
 
 enum {
-  POINT_CLICKED,
-  LAST_SIGNAL
+	POINT_CLICKED,
+	LAST_SIGNAL
 };
 
 static guint plot_signals[LAST_SIGNAL] = { 0 };
@@ -21,15 +21,15 @@ struct _GtkPlotLine {
 	GArray *points;
 };
 
-static void gtk_plot_class_init     (GtkPlotClass      *klass);
-static void gtk_plot_init           (GtkPlot           *plot);
-static void gtk_plot_realize        (GtkWidget         *widget);
-static void gtk_plot_size_allocate  (GtkWidget         *widget,
-                                    GtkAllocation      *allocation);
-static gint gtk_plot_expose         (GtkWidget         *widget,
-                                    GdkEventExpose     *ev);
-static gint gtk_plot_button_press   (GtkWidget         *widget,
-                                    GdkEventButton     *ev);
+static void gtk_plot_class_init     (GtkPlotClass   *klass);
+static void gtk_plot_init           (GtkPlot        *plot);
+static void gtk_plot_realize        (GtkWidget      *widget);
+static void gtk_plot_size_allocate  (GtkWidget      *widget,
+                                     GtkAllocation  *allocation);
+static gint gtk_plot_expose         (GtkWidget      *widget,
+                                     GdkEventExpose *ev);
+static gint gtk_plot_button_press   (GtkWidget      *widget,
+                                     GdkEventButton *ev);
 
 static void gtk_plot_update(GtkPlot *plot);
 static void gtk_plot_layout(GtkPlot *plot);
@@ -41,25 +41,25 @@ static void gtk_plot_set_highlight(GtkPlot *plot, int click_x, int click_y);
 #define POINT(plot, i, j) g_array_index(LINE(plot, i).points, GtkPlotPoint, (j))
 
 GType gtk_plot_get_type(void) {
-  static GType plot_type = 0;
+	static GType plot_type = 0;
 
-  if (!plot_type) {
-    static const GTypeInfo plot_info = {
-      sizeof(GtkPlotClass),
+	if (!plot_type) {
+		static const GTypeInfo plot_info = {
+			sizeof(GtkPlotClass),
 			NULL,
 			NULL,
-      (GClassInitFunc)gtk_plot_class_init,
+			(GClassInitFunc)gtk_plot_class_init,
 			NULL,
 			NULL,
-      sizeof(GtkPlot),
+			sizeof(GtkPlot),
 			0,
-      (GInstanceInitFunc)gtk_plot_init,
-    };
-    
-    plot_type = g_type_register_static(GTK_TYPE_WIDGET, "GtkPlot", &plot_info, 0);
-  }
-  
-  return plot_type;
+			(GInstanceInitFunc)gtk_plot_init,
+		};
+		
+		plot_type = g_type_register_static(GTK_TYPE_WIDGET, "GtkPlot", &plot_info, 0);
+	}
+	
+	return plot_type;
 }
 
 void gtk_plot_clear(GtkPlot *plot) {
@@ -77,23 +77,23 @@ void gtk_plot_clear(GtkPlot *plot) {
 }
 
 static void gtk_plot_class_init(GtkPlotClass *class) {
-  GtkWidgetClass *widget_class = (GtkWidgetClass*)class;
+	GtkWidgetClass *widget_class = (GtkWidgetClass*)class;
 
-  plot_signals[POINT_CLICKED] =
-    g_signal_new("point_clicked",
-      G_TYPE_FROM_CLASS(class),
-      G_SIGNAL_RUN_FIRST | G_SIGNAL_ACTION,
-      G_STRUCT_OFFSET(GtkPlotClass, point_clicked),
+	plot_signals[POINT_CLICKED] =
+		g_signal_new("point_clicked",
+			G_TYPE_FROM_CLASS(class),
+			G_SIGNAL_RUN_FIRST | G_SIGNAL_ACTION,
+			G_STRUCT_OFFSET(GtkPlotClass, point_clicked),
 			NULL, NULL,
 			g_cclosure_marshal_VOID__POINTER,
 			GTK_TYPE_NONE, 1, GTK_TYPE_POINTER);
 
-  widget_class->realize = gtk_plot_realize;
-  widget_class->size_allocate = gtk_plot_size_allocate;
-  widget_class->expose_event = gtk_plot_expose;
+	widget_class->realize = gtk_plot_realize;
+	widget_class->size_allocate = gtk_plot_size_allocate;
+	widget_class->expose_event = gtk_plot_expose;
 	widget_class->button_press_event = gtk_plot_button_press;
-  
-  /*class->value_changed = NULL;*/
+	
+	/*class->value_changed = NULL;*/
 }
 
 static void gtk_plot_init(GtkPlot *plot) {
@@ -105,14 +105,14 @@ static void gtk_plot_init(GtkPlot *plot) {
 }
 
 GtkWidget *gtk_plot_new(GtkPlotFlags flags) {
-  GtkWidget *plot;
+	GtkWidget *plot;
 
-  plot = gtk_type_new(gtk_plot_get_type());
-  plot->requisition.width = 160;
-  plot->requisition.height = 120;
+	plot = gtk_type_new(gtk_plot_get_type());
+	plot->requisition.width = 160;
+	plot->requisition.height = 120;
 	GTK_PLOT(plot)->flags = flags;
 
-  return plot;
+	return plot;
 }
 
 void gtk_plot_free(GtkPlot *plot) {
@@ -242,7 +242,7 @@ static void gtk_plot_layout(GtkPlot *plot) {
 		sprintf(buf, "%.*f", get_precision(plot->xmax), plot->xmax);
 	pango_layout_set_text(layout, buf, -1);
 	pango_layout_get_size(layout, &width, &height);
-	width /= PANGO_SCALE;  height /= PANGO_SCALE;
+	width /= PANGO_SCALE;	height /= PANGO_SCALE;
 	plot->bottom = height + TEXT_GAP_Y;
 	plot->top = height/2;
 	plot->right = width/2;
@@ -293,46 +293,46 @@ void gtk_plot_start_new_line(GtkPlot *plot) {
 }
 
 static void gtk_plot_realize(GtkWidget *widget) {
-  GtkPlot *plot;
-  GdkWindowAttr attributes;
-  gint attributes_mask;
+	GtkPlot *plot;
+	GdkWindowAttr attributes;
+	gint attributes_mask;
 
-  g_return_if_fail(widget != NULL);
-  g_return_if_fail(GTK_IS_PLOT(widget));
-  
-  plot = GTK_PLOT(widget);
-  GTK_WIDGET_SET_FLAGS(widget, GTK_REALIZED);
-  
-  attributes.window_type = GDK_WINDOW_CHILD;
-  attributes.x = widget->allocation.x;
-  attributes.y = widget->allocation.y;
-  attributes.width = widget->allocation.width;
-  attributes.height = widget->allocation.height;
-  attributes.wclass = GDK_INPUT_OUTPUT;
-  attributes.visual = gtk_widget_get_visual(widget);
-  attributes.colormap = gtk_widget_get_colormap(widget);
-  attributes.event_mask = gtk_widget_get_events(widget);
-  attributes.event_mask |= GDK_EXPOSURE_MASK;
-  
-  attributes_mask = GDK_WA_X | GDK_WA_Y | GDK_WA_VISUAL | GDK_WA_COLORMAP;
-  
-  widget->window = gdk_window_new(gtk_widget_get_parent_window(widget), &attributes, attributes_mask);
-  gdk_window_set_user_data(widget->window, plot);
-  
-  widget->style = gtk_style_attach(widget->style, widget->window);
-  gtk_style_set_background(widget->style, widget->window, GTK_STATE_ACTIVE);
+	g_return_if_fail(widget != NULL);
+	g_return_if_fail(GTK_IS_PLOT(widget));
+	
+	plot = GTK_PLOT(widget);
+	GTK_WIDGET_SET_FLAGS(widget, GTK_REALIZED);
+	
+	attributes.window_type = GDK_WINDOW_CHILD;
+	attributes.x = widget->allocation.x;
+	attributes.y = widget->allocation.y;
+	attributes.width = widget->allocation.width;
+	attributes.height = widget->allocation.height;
+	attributes.wclass = GDK_INPUT_OUTPUT;
+	attributes.visual = gtk_widget_get_visual(widget);
+	attributes.colormap = gtk_widget_get_colormap(widget);
+	attributes.event_mask = gtk_widget_get_events(widget);
+	attributes.event_mask |= GDK_EXPOSURE_MASK;
+	
+	attributes_mask = GDK_WA_X | GDK_WA_Y | GDK_WA_VISUAL | GDK_WA_COLORMAP;
+	
+	widget->window = gdk_window_new(gtk_widget_get_parent_window(widget), &attributes, attributes_mask);
+	gdk_window_set_user_data(widget->window, plot);
+	
+	widget->style = gtk_style_attach(widget->style, widget->window);
+	gtk_style_set_background(widget->style, widget->window, GTK_STATE_ACTIVE);
 }
 
 static void gtk_plot_size_allocate(GtkWidget *widget, GtkAllocation *allocation) {
-  g_return_if_fail(widget != NULL);
-  g_return_if_fail(GTK_IS_PLOT(widget));
-  g_return_if_fail(allocation != NULL);
+	g_return_if_fail(widget != NULL);
+	g_return_if_fail(GTK_IS_PLOT(widget));
+	g_return_if_fail(allocation != NULL);
 
-  widget->allocation = *allocation;
-  
-  if (GTK_WIDGET_REALIZED(widget))
-    gdk_window_move_resize(widget->window,
-      allocation->x, allocation->y, allocation->width, allocation->height);
+	widget->allocation = *allocation;
+	
+	if (GTK_WIDGET_REALIZED(widget))
+		gdk_window_move_resize(widget->window,
+			allocation->x, allocation->y, allocation->width, allocation->height);
 }
 
 #define X(_x) (MARGIN + plot->left + ((_x)-plot->xmin)*xscale - ev->area.x)
@@ -360,9 +360,9 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	GtkPlotPoint lastp;
 	PangoLayout *layout;
 
-  g_return_val_if_fail(widget != NULL, FALSE);
-  g_return_val_if_fail(GTK_IS_PLOT(widget), FALSE);
-  g_return_val_if_fail(ev != NULL, FALSE);
+	g_return_val_if_fail(widget != NULL, FALSE);
+	g_return_val_if_fail(GTK_IS_PLOT(widget), FALSE);
+	g_return_val_if_fail(ev != NULL, FALSE);
 	g_return_val_if_fail(GTK_WIDGET_DRAWABLE(widget), FALSE);
 
 	plot = GTK_PLOT(widget);
@@ -437,7 +437,7 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 			sprintf(buf, "%.*f", get_precision(tic), tic);
 		pango_layout_set_text(layout, buf, -1);
 		pango_layout_get_size(layout, &width, &height);
-		width /= PANGO_SCALE;  height /= PANGO_SCALE;
+		width /= PANGO_SCALE;	height /= PANGO_SCALE;
 		gdk_draw_layout(drawbuffer, gc,
 			X(plot->xmin)-width-TEXT_GAP_Y, Y(tic)-height/2, layout);
 	}
@@ -452,7 +452,7 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 
 			if (plot->flags & PLOT_LOGSCALE_X) p.x = log10(p.x);
 			if (plot->flags & PLOT_LOGSCALE_Y) p.y = log10(p.y);
-			x = X(p.x);  y = Y(p.y);
+			x = X(p.x);	y = Y(p.y);
 
 			if (j > 0 && (plot->flags & PLOT_LINES))
 				gdk_draw_line(drawbuffer, gc, X(lastp.x), Y(lastp.y), x, y);
@@ -476,7 +476,7 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	gdk_pixmap_unref(drawbuffer);
 	gdk_gc_destroy(gc);
 
-  return TRUE;
+	return TRUE;
 }
 
 static void gtk_plot_set_highlight(GtkPlot *plot, int click_x, int click_y) {
@@ -498,7 +498,7 @@ static void gtk_plot_set_highlight(GtkPlot *plot, int click_x, int click_y) {
 
 			if (plot->flags & PLOT_LOGSCALE_X) p.x = log10(p.x);
 			if (plot->flags & PLOT_LOGSCALE_Y) p.y = log10(p.y);
-			x = X(p.x);  y = Y(p.y);
+			x = X(p.x);	y = Y(p.y);
 
 			this_distsq = (x-click_x) * (x-click_x) + (y-click_y) * (y-click_y);
 			if (this_distsq < distsq) {
