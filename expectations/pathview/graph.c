@@ -1,7 +1,10 @@
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <gtk/gtksignal.h>
 
 #include "graph.h"
@@ -37,6 +40,7 @@ static void gtk_graph_layout(GtkGraph *graph);
 
 #define NODE(graph, i) ((GtkGraphNode*)g_ptr_array_index((graph)->nodes, (i)))
 #define EDGE(graph, i) ((GtkGraphEdge*)g_ptr_array_index((graph)->edges, (i)))
+#define EP(g,en,pn) g_array_index(EDGE(g,en)->points, GdkPoint, (pn))
 
 GType gtk_graph_get_type() {
   static GType graph_type = 0;
@@ -102,7 +106,7 @@ static void gtk_graph_class_init(GtkGraphClass *class) {
 static void gtk_graph_init(GtkGraph *graph) {
 	graph->nodes = g_ptr_array_new();
 	graph->edges = g_ptr_array_new();
-	graph->frozen = FALSE;
+	graph->frozen = graph->needs_layout = FALSE;
 
 	gtk_widget_set_events(GTK_WIDGET(graph), GDK_BUTTON_PRESS_MASK|GDK_BUTTON_RELEASE_MASK|GDK_BUTTON1_MOTION_MASK);
 }
@@ -123,6 +127,9 @@ void gtk_graph_free(GtkGraph *graph) {
 	graph->frozen = TRUE;
 	gtk_graph_clear(graph);
 	g_ptr_array_free(graph->nodes, TRUE);
+	int i;
+	for (i=0; i<graph->edges->len; i++)
+		if (EDGE(graph, i)->points) g_array_free(EDGE(graph, i)->points, TRUE);
 	g_ptr_array_free(graph->edges, TRUE);
 	g_free(graph);
 }
@@ -161,22 +168,25 @@ GtkGraphNode *gtk_graph_add_node(GtkGraph *graph, const char *label) {
 	return ret;
 }
 
-void gtk_graph_add_edge(GtkGraph *graph, GtkGraphNode *a, GtkGraphNode *b, gboolean directed) {
+GtkGraphEdge *gtk_graph_add_edge(GtkGraph *graph, GtkGraphNode *a, GtkGraphNode *b, gboolean directed) {
 	GtkGraphEdge *e;
 
-	g_return_if_fail(graph);
-	g_return_if_fail(GTK_IS_GRAPH(graph));
-	g_return_if_fail(a);
-	g_return_if_fail(b);
+	g_return_val_if_fail(graph, NULL);
+	g_return_val_if_fail(GTK_IS_GRAPH(graph), NULL);
+	g_return_val_if_fail(a, NULL);
+	g_return_val_if_fail(b, NULL);
 
 	e = g_new(GtkGraphEdge, 1);
 	e->a = a;
 	e->b = b;
 	e->directed = directed;
+	e->points = NULL;
 
 	g_ptr_array_add(graph->edges, e);
 
 	if (!graph->frozen) gtk_graph_update(graph);
+
+	return e;
 }
 
 static void gtk_graph_update(GtkGraph *graph) {
@@ -184,100 +194,94 @@ static void gtk_graph_update(GtkGraph *graph) {
 	g_return_if_fail(GTK_IS_GRAPH(graph));
 	g_return_if_fail(!graph->frozen);
 
-	gtk_graph_layout(graph);
+	graph->needs_layout = TRUE;
 	gtk_widget_queue_draw(GTK_WIDGET(graph));
 }
 
-#define GRAVITY 50.0
-#define SPRING 0.02
-#define SPRINGLEN 110
-#define DAMP 1.0
-#define ROUNDS 500
-#define MOVE_MIN 0.00
-#define MAX_GRAV_DIST 200
-//#define DEBUG
+#define DOT_CMD "dot"
+#define DOT_SCALE 48
 
 static void gtk_graph_layout(GtkGraph *graph) {
 	if (graph->nodes->len == 0) return;
+	g_return_if_fail(graph->needs_layout);
+	graph->needs_layout = FALSE;
 
 	g_assert(!graph->frozen);
-	int i, j, k;
-	for (k=0; k<ROUNDS; k++) {
-		/* apply anti-gravity */
-		for (i=0; i<graph->nodes->len; i++) {
-			GtkGraphNode *n = NODE(graph, i);
-			n->nx = n->x;
-			n->ny = n->y;
-#ifdef DEBUG
-			printf("Node %d (%s) starts at %.2f,%.2f\n", i, n->label, n->x, n->y);
-#endif
-			for (j=0; j<graph->nodes->len; j++) {
-				if (i == j) continue;
-				GtkGraphNode *n2 = NODE(graph, j);
-				double dx = n->x - n2->x;
-				double dy = n->y - n2->y;
-				double dist = hypot(dx, dy);
-				if (dist > MAX_GRAV_DIST) continue;
-				double ga = GRAVITY/(dist*dist);
-				double gax = dx/dist * ga;
-				double gay = dy/dist * ga;
-#ifdef DEBUG
-				printf("  anti-gravity by node %d (%s) at %.2f,%.2f: dist=%.2f g=%.2f,%.2f\n",
-					j, n2->label, n2->x, n2->y, dist, gax, gay);
-#endif
-				n->nx += DAMP*gax;
-				n->ny += DAMP*gay;
-			}
-#ifdef DEBUG
-			printf("  ends at %.2f,%.2f\n", n->nx, n->ny);
-#endif
-		}
-		/* apply springs */
-		for (i=0; i<graph->edges->len; i++) {
-			GtkGraphEdge *e = EDGE(graph, i);
-#ifdef DEBUG
-			printf("Edge %d: %s/%.2f,%.2f -> %s/%.2f,%.2f\n",
-				i, e->a->label, e->a->x, e->a->y, e->b->label, e->b->x, e->b->y);
-#endif
-			double dx = e->a->x - e->b->x;
-			double dy = e->a->y - e->b->y;
-			double dist = hypot(dx, dy);
-			double ga = GRAVITY/(dist*dist);
-			double gax = dx/dist * ga;
-			double gay = dy/dist * ga;
-			double sa = SPRING*(SPRINGLEN - dist);
-			double sax = dx/dist * sa;
-			double say = dy/dist * sa;
-			e->a->nx += DAMP * (sax + gax);
-			e->a->ny += DAMP * (say + gay);
-			e->b->nx -= DAMP * (sax + gax);
-			e->b->ny -= DAMP * (say + gay);
-#ifdef DEBUG
-			printf("  becomes %.2f,%.2f -> %.2f,%.2f (dist=%.2f a=%.2f,%.2f)\n",
-				e->a->nx, e->a->ny, e->b->nx, e->b->ny, dist, sax, say);
-#endif
-		}
-		gboolean moved_one = FALSE;
-		for (i=0; i<graph->nodes->len; i++) {
-			GtkGraphNode *n = NODE(graph, i);
-			if (ABS(n->x-n->nx) + ABS(n->y-n->ny) > MOVE_MIN) {
-		//		printf("moved %d %.2f,%.2f\n", i, n->nx-n->x, n->ny-n->y);
-				moved_one = TRUE;
-			}
-			n->x = n->nx;
-			n->y = n->ny;
-		}
-#if 0
-		static int q = 0;
-		if (++q == 150) {
-			gtk_widget_queue_draw(GTK_WIDGET(graph));
-			//gtk_main_iteration();
-			q=0;
-		}
-#endif
 
-		if (!moved_one) break;
+	/* fork+exec dot */
+	int wfd[2]={0,0}, rfd[2]={0,0}, pid=0;
+	if (pipe(wfd) == -1) { perror("pipe"); goto done; }
+	if (pipe(rfd) == -1) { perror("pipe"); goto done; }
+	switch ((pid = fork())) {
+		case -1:
+			perror("fork");
+			goto done;
+			return;
+		case 0:    /* child */
+			dup2(wfd[0], 0);
+			dup2(rfd[1], 1);
+			close(wfd[0]);
+			close(wfd[1]);
+			close(rfd[0]);
+			close(rfd[1]);
+			if (execlp(DOT_CMD, DOT_CMD, "-Tplain", NULL) == -1) {
+				perror(DOT_CMD);
+				exit(1);
+			}
+		default:
+			close(wfd[0]);
+			close(rfd[1]);
 	}
+
+	/* write our graph to dot */
+	FILE *wfp = NULL, *rfp = NULL;
+	int i;
+	if ((wfp = fdopen(wfd[1], "w")) == NULL) { perror("fdopen"); goto done; }
+	if ((rfp = fdopen(rfd[0], "r")) == NULL) { perror("fdopen"); goto done; }
+	fprintf(wfp, "digraph world {\n");
+	for (i=0; i<graph->nodes->len; i++)
+		fprintf(wfp, "  n%x [ label = \"%s\" ];\n", (int)NODE(graph, i), NODE(graph, i)->label);
+	for (i=0; i<graph->edges->len; i++)
+		fprintf(wfp, "  n%x -> n%x [ label = \"n%x\" ];\n", (int)EDGE(graph, i)->a, (int)EDGE(graph, i)->b, (int)EDGE(graph, i));
+	fprintf(wfp, "}\n");
+	fclose(wfp);  wfp = NULL;
+
+	/* read dot's response */
+	/* Warning: we completely trust dot here -- we're assuming the node names it
+	 * gives back are the valid pointers we wrote in.  So an untrusted dot can
+	 * write coordinate data to arbitrary memory addresses, cause a crash, or
+	 * worse. */
+	char buf[4096];
+	while ((fgets(buf, sizeof(buf), rfp)) != NULL) {
+		const char *type = strtok(buf, " \t");
+		if (!strcmp(type, "node")) {
+			const char *name = strtok(NULL, " \t");
+			assert(name[0] == 'n');
+			GtkGraphNode *node = (GtkGraphNode*)strtol(name+1, NULL, 16);
+			node->x = DOT_SCALE*atof(strtok(NULL, " \t"));
+			node->y = -DOT_SCALE*atof(strtok(NULL, " \t"));
+		}
+		else if (!strcmp(type, "edge")) {
+			(void)strtok(NULL, " \t");   /* source */
+			(void)strtok(NULL, " \t");   /* dest */
+			int npoints = atoi(strtok(NULL, " \t"));
+			GArray *points = NULL;
+			if (npoints > 0) {
+				points = g_array_new(FALSE, FALSE, sizeof(GdkPoint));
+				for (i=0; i<npoints; i++) {
+					GdkPoint p;
+					p.x = DOT_SCALE*atof(strtok(NULL, " \t"));
+					p.y = -DOT_SCALE*atof(strtok(NULL, " \t"));
+					g_array_append_val(points, p);
+				}
+			}
+			const char *name = strtok(NULL, " \t");
+			GtkGraphEdge *edge = (GtkGraphEdge*)strtol(name+1, NULL, 16);
+			if (edge->points) g_array_free(edge->points, TRUE);
+			edge->points = points;
+		}
+	}
+	fclose(rfp);  rfp = NULL;
 
 	/* normalize */
 	double xmin = NODE(graph, 0)->x;
@@ -296,10 +300,28 @@ static void gtk_graph_layout(GtkGraph *graph) {
 		n->x -= xmin - 25;
 		n->y -= ymin - 12;
 	}
+	for (i=0; i<graph->edges->len; i++) {
+		GtkGraphEdge *e = EDGE(graph, i);
+		if (e->points) {
+			int j;
+			for (j=0; j<e->points->len/2; j++) {
+				EP(graph, i, j).x -= xmin - 25;
+				EP(graph, i, j).y -= ymin - 12;
+			}
+		}
+	}
 
 	gtk_widget_set_usize(GTK_WIDGET(graph), xmax-xmin+50, ymax-ymin+24);
 	printf("xmin=%f xmax=%f ymin=%f ymax=%f\n", xmin, xmax, ymin, ymax);
 	printf("usize=%f by %f\n", xmax-xmin+50, ymax-ymin+24);
+
+done:
+	if (wfp) fclose(wfp);
+	if (rfp) fclose(rfp);
+	if (wfd[0] > 0) { close(wfd[0]); close(wfd[1]); }
+	if (rfd[0] > 0) { close(rfd[0]); close(rfd[1]); }
+	int returncode;
+	if (pid > 0) waitpid(pid, &returncode, 0);
 }
 
 static void gtk_graph_realize(GtkWidget *widget) {
@@ -367,6 +389,7 @@ static gint gtk_graph_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	g_return_val_if_fail(GTK_WIDGET_DRAWABLE(widget), FALSE);
 
 	graph = GTK_GRAPH(widget);
+	if (graph->needs_layout) gtk_graph_layout(graph);
 //	g_return_val_if_fail(!graph->frozen, FALSE);
 
 	if (white.pixel == 0) {
@@ -412,13 +435,21 @@ static gint gtk_graph_expose(GtkWidget *widget, GdkEventExpose *ev) {
 			double e1y = py - ARROW_WIDTH * mx;
 			double e2x = px - ARROW_WIDTH * my;
 			double e2y = py + ARROW_WIDTH * mx;
-			gdk_draw_line(drawbuffer, gc, X(e->a->x)-ev->area.x, Y(e->a->y)-ev->area.y, px-ev->area.x, py-ev->area.y);
 			gdk_draw_line(drawbuffer, gc, e1x-ev->area.x, e1y-ev->area.y, e2x-ev->area.x, e2y-ev->area.y);
 			gdk_draw_line(drawbuffer, gc, e1x-ev->area.x, e1y-ev->area.y, X(e->b->x)-ev->area.x, Y(e->b->y)-ev->area.y);
 			gdk_draw_line(drawbuffer, gc, e2x-ev->area.x, e2y-ev->area.y, X(e->b->x)-ev->area.x, Y(e->b->y)-ev->area.y);
 		}
-		else
-			gdk_draw_line(drawbuffer, gc, X(e->a->x)-ev->area.x, Y(e->a->y)-ev->area.y, X(e->b->x)-ev->area.x, Y(e->b->y)-ev->area.y);
+		float x = e->a->x;
+		float y = e->a->y;
+		if (e->points) {
+			int j;
+			for (j=0; j<e->points->len/2; j++) {
+				gdk_draw_line(drawbuffer, gc, X(x)-ev->area.x, Y(y)-ev->area.y, X(EP(graph,i,j).x)-ev->area.x, Y(EP(graph,i,j).y)-ev->area.y);
+				x = EP(graph,i,j).x;
+				y = EP(graph,i,j).y;
+			}
+		}
+		gdk_draw_line(drawbuffer, gc, X(x)-ev->area.x, Y(y)-ev->area.y, X(e->b->x)-ev->area.x, Y(e->b->y)-ev->area.y);
 	}
 
 	/* draw nodes */

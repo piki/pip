@@ -20,7 +20,7 @@ typedef struct _GtkGraphEdge   GtkGraphEdge;
 struct _GtkGraph {
 	GtkWidget widget;
 	GPtrArray *nodes, *edges;
-	gboolean frozen;
+	gboolean frozen, needs_layout;
 };
 
 struct _GtkGraphClass {
@@ -31,11 +31,12 @@ struct _GtkGraphClass {
 
 struct _GtkGraphNode {
 	char *label;
-	double x, y, nx, ny;
+	double x, y;
 };
 
 struct _GtkGraphEdge {
 	GtkGraphNode *a, *b;
+	GArray *points;
 	gboolean directed;
 };
 
@@ -44,7 +45,7 @@ GtkWidget*    gtk_graph_new(void);
 void          gtk_graph_free(GtkGraph *graph);
 void          gtk_graph_clear(GtkGraph *graph);
 GtkGraphNode* gtk_graph_add_node(GtkGraph *graph, const char *label);
-void          gtk_graph_add_edge(GtkGraph *graph, GtkGraphNode *a, GtkGraphNode *b, gboolean directed);
+GtkGraphEdge* gtk_graph_add_edge(GtkGraph *graph, GtkGraphNode *a, GtkGraphNode *b, gboolean directed);
 void          gtk_graph_freeze(GtkGraph *graph);
 void          gtk_graph_thaw(GtkGraph *graph);
 

@@ -64,21 +64,10 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	MYSQL_RES *res;
-	MYSQL_ROW row;
-
 	std::set<int> pathids;
 	if (just_one == -1)
 		get_path_ids(&mysql, base, &pathids);
-
-	fprintf(stderr, "Reading threads...");
-	run_sqlf(&mysql, "SELECT * from %s_threads", base);
-	res = mysql_use_result(&mysql);
-	while ((row = mysql_fetch_row(res)) != NULL) {
-		threads[atoi(row[0])] = new PathThread(row);
-	}
-	mysql_free_result(res);
-	fprintf(stderr, " done: %d found.\n", threads.size());
+	get_threads(&mysql, base, &threads);
 
 	if (just_one != -1)
 		check_path(base, just_one);

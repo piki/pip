@@ -29,10 +29,11 @@
 #define WID_D(name) glade_xml_get_widget(dagpopup_xml, name)
 static GladeXML *main_xml, *dagpopup_xml = NULL;
 enum { NOTEBOOK_TREE, NOTEBOOK_TIMELINE, NOTEBOOK_COMM, NOTEBOOK_GRAPH };
-enum { QUANT_START, QUANT_REAL, QUANT_CPU, QUANT_UTIME, QUANT_STIME, QUANT_MAJFLT,
-	QUANT_MINFLT, QUANT_VCS, QUANT_IVCS, QUANT_LATENCY, QUANT_MESSAGES,
-	QUANT_BYTES, QUANT_DEPTH, QUANT_THREADS, QUANT_HOSTS };
+enum { QUANT_START, QUANT_REAL, QUANT_CPU, QUANT_UTIME,
+	QUANT_STIME, QUANT_MAJFLT, QUANT_MINFLT, QUANT_VCS, QUANT_IVCS,
+	QUANT_LATENCY, QUANT_MESSAGES, QUANT_BYTES, QUANT_DEPTH, QUANT_THREADS, QUANT_HOSTS };
 enum { STYLE_CDF, STYLE_PDF };
+enum { GRAPH_NONE, GRAPH_TASKS, GRAPH_PATHS };
 const char *task_quant[] = {
 	"start/1000000", "(end-start)/1000", "(utime+stime)/1000", "utime/1000",
 	"stime/1000", "major_fault", "minor_fault", "vol_cs", "invol_cs",
@@ -53,6 +54,7 @@ static std::vector<int> match_tally;
 static std::vector<int> resources_count;
 static bool still_checking = true;
 static BoolArray *recognizers_filter;
+static int graph_showing = GRAPH_NONE;
 
 extern Path *read_path(const char *base, int pathid);
 static void init_times(GtkAdjustment *end_time_adj);
@@ -65,6 +67,7 @@ static void fill_comm(GtkGraph *graph, const Path *path);
 static const char *itoa(int n);
 static gboolean check_all_paths(void *iter);
 static void check_path(int pathid);
+static void regraph(void);
 
 extern "C" {
 GtkWidget *create_dag(const char *wid);
@@ -77,6 +80,8 @@ void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point);
 void dag_node_clicked(GtkDAG *dag, DAGNode *node);
 void filter_by_recognizers(void);
 void tasks_activate(void);
+void tasks_graph(void);
+void paths_graph(void);
 void hosts_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc);
 void paths_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc);
 void recognizers_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc);
@@ -93,6 +98,8 @@ void on_scale_times_toggled(GtkToggleButton *cb);
 
 static std::set<int> path_ids;
 static std::map<int,PathStub*> paths;
+
+typedef std::pair<std::string, std::string> StringPair;
 
 int main(int argc, char **argv) {
 	gtk_init(&argc, &argv);
@@ -133,6 +140,7 @@ int main(int argc, char **argv) {
 	init_paths(GTK_TREE_VIEW(WID("list_paths")));
 
 	get_path_ids(&mysql, table_base, &path_ids);
+	get_threads(&mysql, table_base, &threads);
 	// initialize all path-checking counters to zero
 	match_tally.insert(match_tally.end(), recognizers.size()+1, 0);
 	match_count.insert(match_count.end(), recognizers.size(), 0);
@@ -351,6 +359,15 @@ void fill_hosts(void) {
 	add_db_idler(query, add_host, first_host, last_host, NULL);
 }
 
+static bool should_show(const PathStub *ps) {
+	if (recognizers_filter) {
+		int count = recognizers_filter->intersect_count(ps->recognizers, recognizers.size()+1);
+		bool seek_inval = (*recognizers_filter)[recognizers.size()];
+		if (count == 0 && !(seek_inval && !ps->validated)) return false;
+	}
+	return true;
+}
+
 static void add_path(MYSQL_ROW row, void *ign) {
 	int pathid = atoi(row[0]);
 	PathStub *ps = paths[pathid];
@@ -359,11 +376,7 @@ static void add_path(MYSQL_ROW row, void *ign) {
 		assert(ps->path_id == pathid);
 		if (ps->ts_end < limit_start || ps->ts_start > limit_end) return;
 	}
-	if (recognizers_filter) {
-		int count = recognizers_filter->intersect_count(ps->recognizers, recognizers.size()+1);
-		bool seek_inval = (*recognizers_filter)[recognizers.size()];
-		if (count == 0 && !(seek_inval && !ps->validated)) return;
-	}
+	if (!should_show(ps)) return;
 	GtkTreeIter iter;
 	gtk_list_store_append(list_paths, &iter);
 	gtk_list_store_set(list_paths, &iter,
@@ -582,7 +595,7 @@ void filter_by_recognizers(void) {
 	fill_paths();
 }
 
-void plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *iter,
+static void tasks_plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *iter,
 		gpointer data) {
 	int quant = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_quantity")));
 	int style = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_style")));
@@ -646,17 +659,72 @@ void plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *iter,
 	mysql_free_result(res);
 }
 
-void tasks_activate(void) {
-	printf("tasks activate\n");
-	GtkTreeSelection *sel =
-		gtk_tree_view_get_selection(GTK_TREE_VIEW(WID("list_tasks")));
+void graph_common(const char *title, int _graph_showing) {
+	if (title) gtk_label_set_text(GTK_LABEL(WID("graph_title")), title);
+	graph_showing = _graph_showing;
 	GtkPlot *plot = GTK_PLOT(WID("plot"));
 	gtk_plot_freeze(plot);
 	int flags = (int)plot->flags;
 	if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(WID("logx")))) flags |= PLOT_LOGSCALE_X; else flags &= ~PLOT_LOGSCALE_X;
 	gtk_plot_set_flags(plot, (GtkPlotFlags)flags);
 	gtk_plot_clear(plot);
-	gtk_tree_selection_selected_foreach(sel, plot_row, plot);
+}
+
+void tasks_activate(void) {
+	tasks_graph();
+}
+
+void tasks_graph(void) {
+	graph_common("Performance: Tasks", GRAPH_TASKS);
+	GtkTreeSelection *sel =
+		gtk_tree_view_get_selection(GTK_TREE_VIEW(WID("list_tasks")));
+	GtkPlot *plot = GTK_PLOT(WID("plot"));
+	gtk_tree_selection_selected_foreach(sel, tasks_plot_row, plot);
+	gtk_plot_thaw(plot);
+	if (plot->lines->len > 0)
+		gtk_notebook_set_current_page(GTK_NOTEBOOK(WID("notebook")), NOTEBOOK_GRAPH);
+}
+
+void paths_graph(void) {
+	graph_common("Performance: Paths", GRAPH_PATHS);
+
+	int quant = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_quantity")));
+	int style = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_style")));
+	if (!task_quant[quant]) {
+		printf("quant %d is not defined for tasks (yet?)\n", quant);
+		return;
+	}
+
+	GtkPlot *plot = GTK_PLOT(WID("plot"));
+	gtk_plot_start_new_line(plot);
+
+	std::map<int,PathStub*>::const_iterator p;
+	int i=0;
+	for (p=paths.begin(); p!=paths.end(); p++,i++) {
+		float val = 0.0;
+		switch (quant) {
+			case QUANT_START:     val = (p->second->ts_start - first_time) / 1000000.0;      break;
+			case QUANT_REAL:      val = (p->second->ts_end - p->second->ts_start) / 1000.0;  break;
+			case QUANT_CPU:       val = (p->second->stime + p->second->utime) / 1000.0;      break;
+			case QUANT_UTIME:     val = p->second->utime / 1000.0;                           break;
+			case QUANT_STIME:     val = p->second->stime / 1000.0;                           break;
+			case QUANT_MAJFLT:    val = p->second->major_fault;                              break;
+			case QUANT_MINFLT:    val = p->second->minor_fault;                              break;
+			case QUANT_VCS:       val = p->second->vol_cs;                                   break;
+			case QUANT_IVCS:      val = p->second->invol_cs;                                 break;
+			case QUANT_MESSAGES:  val = p->second->messages;                                 break;
+			case QUANT_DEPTH:     val = p->second->depth;                                    break;
+			case QUANT_HOSTS:     val = p->second->hosts;                                    break;
+			case QUANT_LATENCY:
+			case QUANT_BYTES:
+			case QUANT_THREADS:
+				fprintf(stderr, "Quant %d not implemented for paths yet\n", quant);
+				break;
+			default: assert(!"invalid quant");
+		}
+		gtk_plot_add_point(plot, (float)i/(paths.size()-1), val);
+	}
+
 	gtk_plot_thaw(plot);
 	if (plot->lines->len > 0)
 		gtk_notebook_set_current_page(GTK_NOTEBOOK(WID("notebook")), NOTEBOOK_GRAPH);
@@ -694,15 +762,15 @@ void recognizers_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewC
 
 void on_graph_quantity_changed(GtkComboBox *cb) {
 	printf("graph quantity changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
-	tasks_activate();
+	regraph();
 }
 
 void on_graph_style_changed(GtkComboBox *cb) {
 	printf("graph style changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
-	tasks_activate();
+	regraph();
 }
 
-void on_graph_logx_changed(void) { tasks_activate(); }
+void on_graph_logx_changed(void) { regraph(); }
 
 void on_aggregation_changed(GtkComboBox *cb) {
 	printf("aggregation changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
@@ -777,6 +845,7 @@ static void fill_comm(GtkGraph *graph, const Path *path) {
 	MYSQL_RES *res = mysql_use_result(&mysql);
 	MYSQL_ROW row;
 	std::map<std::string, GtkGraphNode*> nodes;
+	std::map<StringPair, GtkGraphEdge*> edges;
 	gtk_graph_freeze(graph);
 	gtk_graph_clear(graph);
 	while ((row = mysql_fetch_row(res)) != NULL) {
@@ -786,7 +855,12 @@ static void fill_comm(GtkGraph *graph, const Path *path) {
 		if (nodes.find(row[1]) == nodes.end()) {
 			nodes[row[1]] = gtk_graph_add_node(graph, row[1]);
 		}
-		gtk_graph_add_edge(graph, nodes[row[0]], nodes[row[1]], FALSE);
+
+		std::map<StringPair, GtkGraphEdge*>::iterator rev = edges.find(StringPair(row[1], row[0]));
+		if (rev != edges.end())
+			rev->second->directed = FALSE;
+		else
+			edges[StringPair(row[0], row[1])] = gtk_graph_add_edge(graph, nodes[row[0]], nodes[row[1]], TRUE);
 	}
 	mysql_free_result(res);
 	gtk_graph_thaw(graph);
@@ -833,4 +907,12 @@ static void check_path(int pathid) {
 			ps->recognizers.set(i, false);
 	}
 	match_tally[tally]++;
+}
+
+static void regraph(void) {
+	switch (graph_showing) {
+		case GRAPH_NONE:                               break;
+		case GRAPH_TASKS:        tasks_graph();        break;
+		case GRAPH_PATHS:        paths_graph();        break;
+	}
 }

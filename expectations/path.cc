@@ -676,3 +676,14 @@ void get_path_ids(MYSQL *mysql, const char *table_base, std::set<int> *pathids) 
 
 	fprintf(stderr, " done: %d found.\n", pathids->size());
 }
+
+void get_threads(MYSQL *mysql, const char *table_base, std::map<int, PathThread*> *threads) {
+  fprintf(stderr, "Reading threads...");
+	run_sqlf(mysql, "SELECT * from %s_threads", table_base);
+	MYSQL_RES *res = mysql_use_result(mysql);
+	MYSQL_ROW row;
+	while ((row = mysql_fetch_row(res)) != NULL)
+		(*threads)[atoi(row[0])] = new PathThread(row);
+  mysql_free_result(res);
+	fprintf(stderr, " done: %d found.\n", threads->size());
+}
