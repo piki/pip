@@ -99,8 +99,6 @@ void on_scale_times_toggled(GtkToggleButton *cb);
 static std::set<int> path_ids;
 static std::map<int,PathStub*> paths;
 
-typedef std::pair<std::string, std::string> StringPair;
-
 int main(int argc, char **argv) {
 	gtk_init(&argc, &argv);
 	if (argc != 3) {
@@ -126,6 +124,7 @@ int main(int argc, char **argv) {
 	gtk_combo_box_set_active(GTK_COMBO_BOX(WID("graph_quantity")), 0);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(WID("graph_style")), 0);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(WID("aggregation")), 0);
+	gtk_combo_box_set_active(GTK_COMBO_BOX(WID("comm_layout")), 0);
 	status_bar_context = gtk_statusbar_get_context_id(GTK_STATUSBAR(WID("statusbar")), "foo");
 	gtk_tree_selection_set_mode(
 		gtk_tree_view_get_selection(GTK_TREE_VIEW(WID("list_tasks"))),
@@ -360,7 +359,7 @@ void fill_hosts(void) {
 }
 
 static bool should_show(const PathStub *ps) {
-	if (recognizers_filter) {
+	if (ps && recognizers_filter) {
 		int count = recognizers_filter->intersect_count(ps->recognizers, recognizers.size()+1);
 		bool seek_inval = (*recognizers_filter)[recognizers.size()];
 		if (count == 0 && !(seek_inval && !ps->validated)) return false;
@@ -688,19 +687,22 @@ void tasks_graph(void) {
 void paths_graph(void) {
 	graph_common("Performance: Paths", GRAPH_PATHS);
 
+	GtkPlot *plot = GTK_PLOT(WID("plot"));
+
 	int quant = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_quantity")));
 	int style = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_style")));
 	if (!task_quant[quant]) {
-		printf("quant %d is not defined for tasks (yet?)\n", quant);
+		gtk_plot_thaw(plot);
+		printf("quant %d is not defined for paths (yet?)\n", quant);
 		return;
 	}
 
-	GtkPlot *plot = GTK_PLOT(WID("plot"));
 	gtk_plot_start_new_line(plot);
 
 	std::map<int,PathStub*>::const_iterator p;
 	int i=0;
 	for (p=paths.begin(); p!=paths.end(); p++,i++) {
+		if (!p->second) continue;  // path has not been read+checked yet
 		float val = 0.0;
 		switch (quant) {
 			case QUANT_START:     val = (p->second->ts_start - first_time) / 1000000.0;      break;
@@ -845,7 +847,6 @@ static void fill_comm(GtkGraph *graph, const Path *path) {
 	MYSQL_RES *res = mysql_use_result(&mysql);
 	MYSQL_ROW row;
 	std::map<std::string, GtkGraphNode*> nodes;
-	std::map<StringPair, GtkGraphEdge*> edges;
 	gtk_graph_freeze(graph);
 	gtk_graph_clear(graph);
 	while ((row = mysql_fetch_row(res)) != NULL) {
@@ -856,12 +857,9 @@ static void fill_comm(GtkGraph *graph, const Path *path) {
 			nodes[row[1]] = gtk_graph_add_node(graph, row[1]);
 		}
 
-		std::map<StringPair, GtkGraphEdge*>::iterator rev = edges.find(StringPair(row[1], row[0]));
-		if (rev != edges.end())
-			rev->second->directed = FALSE;
-		else
-			edges[StringPair(row[0], row[1])] = gtk_graph_add_edge(graph, nodes[row[0]], nodes[row[1]], TRUE);
+		(void)gtk_graph_add_edge(graph, nodes[row[0]], nodes[row[1]], TRUE);
 	}
+	gtk_graph_simplify(graph);
 	mysql_free_result(res);
 	gtk_graph_thaw(graph);
 }
