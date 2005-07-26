@@ -29,7 +29,8 @@
 
 #define WID(name) glade_xml_get_widget(main_xml, name)
 #define WID_D(name) glade_xml_get_widget(dagpopup_xml, name)
-static GladeXML *main_xml, *dagpopup_xml = NULL;
+#define WID_T(name) glade_xml_get_widget(taskpopup_xml, name)
+static GladeXML *main_xml, *dagpopup_xml = NULL, *taskpopup_xml = NULL;
 enum { NOTEBOOK_TREE, NOTEBOOK_TIMELINE, NOTEBOOK_COMM, NOTEBOOK_GRAPH };
 enum { QUANT_START, QUANT_REAL, QUANT_CPU, QUANT_UTIME,
 	QUANT_STIME, QUANT_MAJFLT, QUANT_MINFLT, QUANT_VCS, QUANT_IVCS,
@@ -98,6 +99,7 @@ void on_graph_logx_changed(void);
 void on_aggregation_changed(GtkComboBox *cb);
 void on_comm_layout_changed(GtkComboBox *cb);
 void on_scale_times_toggled(GtkToggleButton *cb);
+void on_dagpopup_row_activated(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc);
 }
 
 static std::set<int> path_ids;
@@ -493,6 +495,7 @@ static void popup_append_event(const PathEvent *ev, GtkTreeIter *iter, GtkTreeIt
 	gtk_tree_store_set(popup_events, iter,
 		0, buf,
 		1, txt.c_str(),
+		2, ev->type() == PEV_TASK ? ev : NULL,
 		-1);
 }
 
@@ -546,7 +549,7 @@ void dag_node_clicked(GtkDAG *dag, DAGNode *node) {
 		glade_xml_signal_autoconnect(dagpopup_xml);
 
 		GtkTreeView *tree = GTK_TREE_VIEW(WID_D("dagpopup_list"));
-		popup_events = gtk_tree_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
+		popup_events = gtk_tree_store_new(3, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT);
 		gtk_tree_view_set_model(tree, GTK_TREE_MODEL(popup_events));
 		GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 		GtkTreeViewColumn *col = gtk_tree_view_column_new_with_attributes("Time", renderer, "text", 0, NULL);
@@ -945,4 +948,61 @@ static void regraph(void) {
 		case GRAPH_TASKS:        tasks_graph();        break;
 		case GRAPH_PATHS:        paths_graph();        break;
 	}
+}
+
+static GtkListStore *taskpopup_props;
+static void taskpopup_add_item(const char *label, const char *fmt, ...) {
+	GtkTreeIter iter;
+	char buf[64];
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	gtk_list_store_append(taskpopup_props, &iter);
+	gtk_list_store_set(taskpopup_props, &iter,
+		0, label,
+		1, buf,
+		-1);
+	va_end(args);
+}
+void on_dagpopup_row_activated(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc) {
+	printf("dagpopup_row_activated\n");
+	GtkTreeIter iter;
+	PathEvent *ev;
+	gtk_tree_model_get_iter(GTK_TREE_MODEL(popup_events), &iter, path);
+	gtk_tree_model_get(GTK_TREE_MODEL(popup_events), &iter, 2, &ev, -1);
+	if (!ev) return;  // not a task
+	assert(ev->type() == PEV_TASK);
+	PathTask *task = (PathTask*)ev;
+
+	if (!taskpopup_xml) {
+		printf("initializing taskpopup\n");
+		taskpopup_xml = glade_xml_new("pathview.glade", "taskpopup", NULL);
+		glade_xml_signal_autoconnect(taskpopup_xml);
+
+		GtkTreeView *tree = GTK_TREE_VIEW(WID_T("taskpopup_list"));
+		taskpopup_props = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
+		gtk_tree_view_set_model(tree, GTK_TREE_MODEL(taskpopup_props));
+		GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+		GtkTreeViewColumn *col = gtk_tree_view_column_new_with_attributes("Name", renderer, "text", 0, NULL);
+		gtk_tree_view_append_column(tree, col);
+		col = gtk_tree_view_column_new_with_attributes("Value", renderer, "text", 1, NULL);
+		gtk_tree_view_append_column(tree, col);
+	}
+	else {
+		printf("showing taskpopup\n");
+		gtk_widget_show(WID_T("taskpopup"));
+		gtk_list_store_clear(taskpopup_props);
+	}
+
+	taskpopup_add_item("Start time", "%ld.%06ld", task->ts_start.tv_sec, task->ts_start.tv_usec);
+	taskpopup_add_item("End time", "%ld.%06ld", task->ts_end.tv_sec, task->ts_end.tv_usec);
+	taskpopup_add_item("Real time (ms)", "%.3f", task->tdiff/1000.0);
+	taskpopup_add_item("System time (ms)", "%.3f", task->stime/1000.0);
+	taskpopup_add_item("User time (ms)", "%.3f", task->utime/1000.0);
+	taskpopup_add_item("Major faults", "%d", task->major_fault);
+	taskpopup_add_item("Minor faults", "%d", task->minor_fault);
+	taskpopup_add_item("Voluntary context switches", "%d", task->vol_cs);
+	taskpopup_add_item("Involuntary context switches", "%d", task->invol_cs);
+	taskpopup_add_item("Starting thread", "%d", task->thread_start);
+	taskpopup_add_item("End thread", "%d", task->thread_end);
 }
