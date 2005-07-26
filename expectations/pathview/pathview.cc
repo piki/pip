@@ -24,6 +24,7 @@
 #include "pathstub.h"
 #include "pathtl.h"
 #include "workqueue.h"
+#include "expect.tab.hh"
 
 #define WID(name) glade_xml_get_widget(main_xml, name)
 #define WID_D(name) glade_xml_get_widget(dagpopup_xml, name)
@@ -50,7 +51,7 @@ static int status_bar_context;
 static Path *active_path = NULL;
 static timeval first_time, last_time;
 static std::vector<int> match_count;
-static std::vector<int> match_tally;
+static int invalid_paths_count = 0;
 static std::vector<int> resources_count;
 static bool still_checking = true;
 static BoolArray *recognizers_filter;
@@ -75,7 +76,8 @@ GtkWidget *create_comm_graph(const char *wid);
 GtkWidget *create_plot(const char *wid);
 GtkWidget *create_pathtl(const char *wid);
 gchar *zoom_format_value(GtkScale *scale, gdouble value);
-void zoom_value_changed(GtkRange *range);
+void dag_zoom_value_changed(GtkRange *range);
+void comm_zoom_value_changed(GtkRange *range);
 void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point);
 void dag_node_clicked(GtkDAG *dag, DAGNode *node);
 void filter_by_recognizers(void);
@@ -93,6 +95,7 @@ void on_graph_quantity_changed(GtkComboBox *cb);
 void on_graph_style_changed(GtkComboBox *cb);
 void on_graph_logx_changed(void);
 void on_aggregation_changed(GtkComboBox *cb);
+void on_comm_layout_changed(GtkComboBox *cb);
 void on_scale_times_toggled(GtkToggleButton *cb);
 }
 
@@ -141,7 +144,7 @@ int main(int argc, char **argv) {
 	get_path_ids(&mysql, table_base, &path_ids);
 	get_threads(&mysql, table_base, &threads);
 	// initialize all path-checking counters to zero
-	match_tally.insert(match_tally.end(), recognizers.size()+1, 0);
+	invalid_paths_count = 0;
 	match_count.insert(match_count.end(), recognizers.size(), 0);
 	resources_count.insert(resources_count.end(), recognizers.size(), 0);
 	// queue up an idler job to check all paths
@@ -414,7 +417,7 @@ void fill_recognizers(void) {
 			gtk_list_store_append(list_recognizers, &iter);
 			gtk_list_store_set(list_recognizers, &iter,
 				0, rp->first.c_str(),
-				1, rp->second->validating ? "V" : "R",
+				1, toupper(path_type_to_string(rp->second->pathtype)[0]),
 				2, rp->second->complete ? "C" : "F",
 				3, match_count[i],
 				4, resources_count[i],
@@ -424,7 +427,7 @@ void fill_recognizers(void) {
 	gtk_list_store_append(list_recognizers, &iter);
 	gtk_list_store_set(list_recognizers, &iter,
 		0, "(unvalidated)",
-		3, match_tally[0],
+		3, invalid_paths_count,
 		5, recognizers.size(),
 		-1);
 }
@@ -432,44 +435,50 @@ void fill_recognizers(void) {
 #define SLIDER_TO_ZOOM(z) pow(2, (z)-3)
 #define DEFAULT_ZOOM 0.6  /* slider value: 2.27 */
 GtkWidget *create_dag(const char *wid) {
-	GtkWidget *ret = gtk_dag_new();
-	gtk_dag_set_zoom(GTK_DAG(ret), DEFAULT_ZOOM);
-	gtk_widget_show(ret);
+	GtkWidget *dag = gtk_dag_new();
+	gtk_dag_set_zoom(GTK_DAG(dag), DEFAULT_ZOOM);
+	gtk_widget_show(dag);
 
-	return ret;
+	return dag;
 }
 
 GtkWidget *create_comm_graph(const char *wid) {
 	GtkWidget *graph = gtk_graph_new();
+	gtk_graph_set_zoom(GTK_GRAPH(graph), DEFAULT_ZOOM);
 	gtk_widget_show(graph);
 	return graph;
 }
 
 GtkWidget *create_plot(const char *wid) {
-	GtkWidget *ret = gtk_plot_new((GtkPlotFlags)(PLOT_DEFAULTS|PLOT_Y0));
-	gtk_widget_show(ret);
-	return ret;
+	GtkWidget *plot = gtk_plot_new((GtkPlotFlags)(PLOT_DEFAULTS|PLOT_Y0));
+	gtk_widget_show(plot);
+	return plot;
 }
 
 GtkWidget *create_pathtl(const char *wid) {
-	GtkWidget *ret = gtk_pathtl_new();
-	gtk_widget_show(ret);
-	return ret;
+	GtkWidget *pathtl = gtk_pathtl_new();
+	gtk_widget_show(pathtl);
+	return pathtl;
 }
 
 gchar *zoom_format_value(GtkScale *scale, gdouble value) {
 	return g_strdup_printf("%.2f", SLIDER_TO_ZOOM(value));
 }
-void zoom_value_changed(GtkRange *range) {
+
+void dag_zoom_value_changed(GtkRange *range) {
 	gtk_dag_set_zoom(GTK_DAG(WID("dag")),
 		SLIDER_TO_ZOOM(gtk_range_get_value(range)));
 }
 
+void comm_zoom_value_changed(GtkRange *range) {
+	gtk_graph_set_zoom(GTK_GRAPH(WID("comm_graph")),
+		SLIDER_TO_ZOOM(gtk_range_get_value(range)));
+}
+
 void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point) {
-  if (point)
-    printf("point clicked: %.3f %.3f\n", point->x, point->y);
-  else
-    printf("point cleared\n");
+	char buf[64];
+	sprintf(buf, "(%.3f, %.3f)", point->x, point->y);
+	gtk_label_set_text(GTK_LABEL(WID("graph_pos")), buf);
 }
 
 static GtkTreeStore *popup_events;
@@ -690,7 +699,6 @@ void paths_graph(void) {
 	GtkPlot *plot = GTK_PLOT(WID("plot"));
 
 	int quant = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_quantity")));
-	int style = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_style")));
 	if (!task_quant[quant]) {
 		gtk_plot_thaw(plot);
 		printf("quant %d is not defined for paths (yet?)\n", quant);
@@ -776,6 +784,14 @@ void on_graph_logx_changed(void) { regraph(); }
 
 void on_aggregation_changed(GtkComboBox *cb) {
 	printf("aggregation changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
+}
+
+void on_comm_layout_changed(GtkComboBox *cb) {
+	char *cmd = g_strdup(gtk_combo_box_get_active_text(cb));
+	char *p = strchr(cmd, ' ');
+	if (p) *p = '\0';
+	gtk_graph_set_layout_program(GTK_GRAPH(WID("comm_graph")), cmd);
+	g_free(cmd);
 }
 
 void on_scale_times_toggled(GtkToggleButton *cb) {
@@ -889,22 +905,32 @@ static void check_path(int pathid) {
 		//malformed_paths_count++;
 		return;
 	}
-	int tally = 0;
+	int validators_matched = 0;
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++) {
 		bool resources = true;
 		if (rp->second->check(&path, &resources)) {
 			ps->recognizers.set(i, true);
 			match_count[i]++;
-			if (rp->second->validating) {
+			if (rp->second->pathtype == VALIDATOR) {
 				ps->validated = true;
-				tally++;
+				validators_matched++;
 			}
 			if (!resources) resources_count[i]++;
 		}
 		else
 			ps->recognizers.set(i, false);
 	}
-	match_tally[tally]++;
+	// invalidators override validators.  do that here.
+	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++)
+		if (rp->second->pathtype == INVALIDATOR && ps->recognizers[i]) {
+			ps->validated = false;
+			// This may be misleading because some validators MAY have been
+			// matched.  It's OK, because the only thing this variable is used
+			// for is incrementing invalid_paths_count.
+			validators_matched = 0;
+			break;
+		}
+	if (validators_matched == 0) invalid_paths_count++;
 }
 
 static void regraph(void) {

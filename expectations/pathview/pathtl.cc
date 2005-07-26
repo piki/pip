@@ -196,7 +196,6 @@ static gint gtk_pathtl_expose(GtkWidget *widget, GdkEventExpose *ev) {
 //		{ 0, 0xff00, 0x0000, 0x0000 },
 	};
 	static int ncolors = sizeof(color)/sizeof(color[0]);
-	PangoLayout *layout;
 
   g_return_val_if_fail(widget != NULL, FALSE);
   g_return_val_if_fail(GTK_IS_PATHTL(widget), FALSE);

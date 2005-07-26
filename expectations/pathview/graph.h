@@ -3,6 +3,7 @@
 
 #include <gdk/gdk.h>
 #include <gtk/gtkwidget.h>
+#include <librsvg/rsvg.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,6 +22,10 @@ struct _GtkGraph {
 	GtkWidget widget;
 	GPtrArray *nodes, *edges;
 	gboolean frozen, needs_layout;
+	RsvgHandle *rsvg;
+	GdkPixbuf *pbuf;
+	char *layout_program;
+	double zoom;
 };
 
 struct _GtkGraphClass {
@@ -31,12 +36,10 @@ struct _GtkGraphClass {
 
 struct _GtkGraphNode {
 	char *label;
-	double x, y;
 };
 
 struct _GtkGraphEdge {
 	GtkGraphNode *a, *b;
-	GArray *points;
 	gboolean directed;
 };
 
@@ -51,6 +54,8 @@ void          gtk_graph_thaw(GtkGraph *graph);
 /* remove all duplicate edges, and replace all to+from directed edges with
  * a single, undirected edge */
 void          gtk_graph_simplify(GtkGraph *graph);
+void          gtk_graph_set_layout_program(GtkGraph *graph, const char *prog);
+void          gtk_graph_set_zoom(GtkGraph *graph, double zoom);
 
 #ifdef __cplusplus
 }

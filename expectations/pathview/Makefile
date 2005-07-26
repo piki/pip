@@ -1,19 +1,18 @@
 CPPFLAGS = -I. -I..
-CFLAGS = -g -Wall
-CXXFLAGS = -g -Wall -I. -I..
+CFLAGS = -g -Wall -Werror
+CXXFLAGS = -g -Wall -I. -I.. -Werror
 PROGS = pathview plottest dagtest graphtest
 LDLIBS = -lm -lmysqlclient -lpcre `pkg-config --libs libglade-2.0 librsvg-2.0`
+LDFLAGS = -rdynamic
 CPPFLAGS = `pkg-config --cflags libglade-2.0 librsvg-2.0`
 OBJS = pathview.o plot.o dag.o graph.o readpaths.o pathtl.o workqueue.o \
 	pathstub.o \
 	../path.o ../exptree.o ../expect.o ../expect.tab.o ../parsetree.o ../aggregates.o
 
-YACC = bison
-
 all: $(PROGS)
 
 pathview: $(OBJS)
-	g++ $^ -o $@ $(LDLIBS)
+	g++ $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 plottest: plottest.o plot.o
 
