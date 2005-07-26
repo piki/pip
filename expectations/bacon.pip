@@ -99,13 +99,14 @@ validator Init {
 	limit(MESSAGES, {=0});
 	limit(THREADS, {=1});
 	thread Server(*, 1) {
-//		task("reading database");
+		task("reading database");
 		task("jump tables");
 	}
 }
 
 fragment recognizer CacheHit { notice("cache hit"); }
 fragment recognizer CacheMiss { notice("cache miss"); }
+fragment invalidator TooLong { task(*) limit(REAL_TIME,{1s+}); }
 
 assert(instances(Init) == 1 );
 assert(instances(ShowCache) <= 20);

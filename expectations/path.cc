@@ -405,7 +405,7 @@ void Path::print(FILE *fp) const {
 			list->first, list->first == root_thread ? " root=\"true\"" : "");
 		for (unsigned int i=0; i<list->second.size(); i++)
 			list->second[i]->print(fp, 1);
-		fprintf(fp, "</thread>\n", list->first);
+		fprintf(fp, "</thread>\n");
 	}
 }
 

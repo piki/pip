@@ -16,6 +16,18 @@ limit(REAL_TIME, 15s);
 	}
 }
 
+invalidator X1 {
+	thread Client(*, 1) {
+		task("outer") {
+			task("inner");   // "inner" cannot be nested alone in "outer"
+		}
+	}
+}
+
+fragment invalidator X2 {
+	task(*) limit(REAL_TIME, {1s+});  // no tasks over one second
+}
+
 fragment recognizer E2 { }
 
 fragment recognizer E3 {
@@ -69,7 +81,6 @@ validator DHT_recursive {
 			recv(Client);
 		}
 		task("DHT");
-		reverse(@PATH);
 		recv(Client);
 		task("DHT");
 	}

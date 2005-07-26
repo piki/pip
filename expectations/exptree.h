@@ -193,7 +193,7 @@ public:
 
 class Recognizer {
 public:
-	Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements, bool _complete, bool _validating);
+	Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements, bool _complete, int _pathtype);
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
 	bool check(const Path *path, bool *resources);
@@ -205,11 +205,13 @@ public:
 	ExpThread *root;
 	LimitList limits;
 	bool complete;    // match full paths (true) or fragments (false)
-	bool validating;  // classify matched paths as valid?
+	int pathtype;     // validator, invalidator, or recognizer?
 
 	int instances, unique;
 	Counter real_time, utime, stime, cpu_time, major_fault, minor_fault;
 	Counter	vol_cs, invol_cs, latency, size, messages, depth, hosts, threadcount;
 };
+
+const char *path_type_to_string(int pathtype);
 
 #endif

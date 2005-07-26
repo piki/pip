@@ -502,9 +502,10 @@ int ExpCall::check(const PathEventList &test, unsigned int ofs, bool *resources)
 }
 
 Recognizer::Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements,
-		bool _complete, bool _validating)
-		: root(NULL), complete(_complete), validating(_validating), instances(0), unique(0) {
+		bool _complete, int _pathtype)
+		: root(NULL), complete(_complete), pathtype(_pathtype), instances(0), unique(0) {
 	assert(ident->type() == NODE_IDENTIFIER);
+	assert(pathtype == VALIDATOR || pathtype == INVALIDATOR || pathtype == RECOGNIZER);
 	name = ident->sym->name;
 
 	unsigned int i;
@@ -543,8 +544,8 @@ Recognizer::~Recognizer(void) {
 }
 
 void Recognizer::print(FILE *fp) const {
-	fprintf(fp, "<recognizer name=\"%s\" validator=\"%s\" complete=\"%s\">\n",
-		name.c_str(), validating?"true":"false", complete?"true":"false");
+	fprintf(fp, "<recognizer name=\"%s\" type=\"%s\" complete=\"%s\">\n",
+		name.c_str(), path_type_to_string(pathtype), complete?"true":"false");
 	for (unsigned int i=0; i<limits.size(); i++)
 		limits[i]->print(fp, 1);
 	for (ExpThreadSet::const_iterator tp=threads.begin(); tp!=threads.end(); tp++) {
@@ -720,7 +721,6 @@ static void add_statements(const ListNode *list_node, ExpEventList *where) {
 						case RECV:
 							local_where->push_back(new ExpMessageRecv(onode));
 							break;
-						case REVERSE:
 						case '=':
 							fprintf(stderr, "op %s not implemented yet\n", get_op_name(onode->op));
 							break;
@@ -743,5 +743,15 @@ static void add_limits(const ListNode *limit_list, LimitList *limits) {
 	for (unsigned int i=0; i<limit_list->size(); i++) {
 		assert(((OperatorNode*)(*limit_list)[i])->op == LIMIT);
 		limits->push_back(new Limit((OperatorNode*)(*limit_list)[i]));
+	}
+}
+
+
+const char *path_type_to_string(int pathtype) {
+	switch (pathtype) {
+		case VALIDATOR:   return "validator";
+		case INVALIDATOR: return "invalidator";
+		case RECOGNIZER:  return "recognizer";
+		default: fprintf(stderr, "invalid path type: %d\n", pathtype); exit(1);
 	}
 }

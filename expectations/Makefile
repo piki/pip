@@ -25,3 +25,4 @@ clean:
 parsetree.o:: parsetree.cc expect.tab.hh
 exptree.o:: exptree.cc expect.tab.hh
 expect.o:: expect.tab.o
+pathcheck.o:: expect.tab.o

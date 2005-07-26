@@ -13,10 +13,10 @@
 
 // keywords
 %token VALIDATOR
+%token INVALIDATOR
 %token RECOGNIZER
 %token FRAGMENT
 %token REPEAT
-%token REVERSE
 %token JOIN
 %token BRANCH
 %token SPLIT
@@ -64,6 +64,7 @@
 %token <sValue> IDENTIFIER
 %token <sValue> STRINGVAR
 %token <sValue> PATHVAR
+%type <iValue> VALIDATOR INVALIDATOR RECOGNIZER pathtype
 %type <nList> limit_list statement_list thread_list xor_list path_limits
 %type <nPtr> statement thread thread_count_range
 %type <nPtr> repeat limit limit_range limit_spec repeat_range path_expr
@@ -96,23 +97,21 @@ program:
 		;
 
 pathdecl:
-		VALIDATOR IDENTIFIER '{' path_limits thread_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, (ListNode*)$5, true, true));
+		pathtype IDENTIFIER '{' path_limits thread_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, (ListNode*)$5, true, $1));
 			delete $4;
 		}
-		| RECOGNIZER IDENTIFIER '{' path_limits thread_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, (ListNode*)$5, true, false));
-			delete $4;
-		}
-		| FRAGMENT VALIDATOR IDENTIFIER '{' path_limits statement_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, (ListNode*)$6, false, true));
-			delete $5;
-		}
-		| FRAGMENT RECOGNIZER IDENTIFIER '{' path_limits statement_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, (ListNode*)$6, false, false));
+		| FRAGMENT pathtype IDENTIFIER '{' path_limits statement_list '}' {
+			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, (ListNode*)$6, false, $2));
 			delete $5;
 		}
 		;
+
+pathtype:
+	VALIDATOR							{ $$ = VALIDATOR; }
+	| INVALIDATOR					{ $$ = INVALIDATOR; }
+	| RECOGNIZER					{ $$ = RECOGNIZER; }
+	;
 
 statement_list:
 		statement_list statement									{ $$ = $1; ($$)->add($2); }
@@ -120,8 +119,7 @@ statement_list:
 		;
 		
 statement:
-		REVERSE '(' path_expr ')' ';'							{ $$ = opr(REVERSE, 1, $3); }
-		| SEND '(' IDENTIFIER ')' limit_list ';'	{ $$ = opr(SEND, 2, idcl($3,THREAD), $5); }
+		SEND '(' IDENTIFIER ')' limit_list ';'		{ $$ = opr(SEND, 2, idcl($3,THREAD), $5); }
 		| RECV '(' IDENTIFIER ')' limit_list ';'	{ $$ = opr(RECV, 2, idcl($3,THREAD), $5); }
 		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }   //?
 		| NOTICE '(' string_expr ')' ';'					{ $$ = opr(NOTICE, 1, $3); }

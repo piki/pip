@@ -8,6 +8,7 @@
 #include <set>
 #include "aggregates.h"
 #include "exptree.h"
+#include "expect.tab.hh"
 
 static bool check_path(const char *base, int pathid);
 inline static timeval tv(long long ts) {
@@ -80,7 +81,7 @@ int main(int argc, char **argv) {
 		printf("paths matching %d validator(s): %d\n", i, match_tally[i]);
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); rp++,i++) {
 		printf("paths matching %s \"%s\": %d",
-			rp->second->validating ? "validator" : "recognizer",
+			path_type_to_string(rp->second->pathtype),
 			rp->second->name.c_str(), match_count[i]);
 		if (resources_count[i] != 0)
 			printf(" (%d missed limits)\n", resources_count[i]);
@@ -109,6 +110,7 @@ static bool check_path(const char *base, int pathid) {
 		return true;
 	}
 	int tally = 0;
+	bool invalidated = false;
 	bool printed = false;
 #if 0
 	printf("\n# path %d\n", pathid);
@@ -120,9 +122,12 @@ static bool check_path(const char *base, int pathid) {
 		bool resources = true;
 		if (rp->second->check(&path, &resources)) {
 			printf("%d ---> matched %s\n", pathid, rp->second->name.c_str());
-			match_count[i]++;
-			if (rp->second->validating) tally++;
-			if (!resources) {
+			if (resources) {
+				match_count[i]++;
+				if (rp->second->pathtype == VALIDATOR) tally++;
+				if (rp->second->pathtype == INVALIDATOR) invalidated = true;
+			}
+			else if (rp->second->pathtype != INVALIDATOR) {
 				resources_count[i]++;
 				if (!printed) {
 					printed = true;
@@ -134,13 +139,13 @@ static bool check_path(const char *base, int pathid) {
 			}
 		}
 	}
-	if (!tally) {
+	if (!tally || invalidated) {
 		if (!printed) {
 			printf("# path %d:\n", pathid);
 			path.print();
 		}
 		printf("%d ---> nothing matched\n", pathid);
 	}
-	match_tally[tally]++;
+	match_tally[invalidated ? 0 : tally]++;
 	return tally > 0;
 }

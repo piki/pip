@@ -29,10 +29,10 @@ letter	[A-Za-z_]
 [ \t]                         
 \n															yylno++;
 "validator"											return VALIDATOR;
+"invalidator"										return INVALIDATOR;
 "fragment"											return FRAGMENT;
 "recognizer"										return RECOGNIZER;
 "repeat"												return REPEAT;
-"reverse"												return REVERSE;
 "send"													return SEND;
 "recv"													return RECV;
 "task"													return TASK;

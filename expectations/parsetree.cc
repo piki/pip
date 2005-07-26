@@ -131,7 +131,7 @@ ListNode::~ListNode(void) {
 		delete data[i];
 }
 
-struct {
+static struct {
 	int op;
 	const char *name;
 } opmap[] = {
@@ -139,7 +139,6 @@ struct {
 	{ RECOGNIZER, "RECOGNIZER" },
 	{ FRAGMENT, "FRAGMENT" },
 	{ REPEAT, "REPEAT" },
-	{ REVERSE, "REVERSE" },
 	{ JOIN, "JOIN" },
 	{ BRANCH, "BRANCH" },
 	{ SPLIT, "SPLIT" },

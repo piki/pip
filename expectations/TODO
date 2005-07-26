@@ -1,3 +1,5 @@
+rework accounting of validated, invalidated, and resource-failed paths.
+
 actually require send/recv to arrive at their named target thread classes
 variables
 hosts

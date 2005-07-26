@@ -7,6 +7,7 @@
 /* click in the dag, highlight all other nodes with the same hostname, same thread */
 
 #include <assert.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -414,10 +415,12 @@ void fill_recognizers(void) {
 	int i;
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++)
 		if (!search || !search[0] || rp->first.find(search) != std::string::npos) {
+			char pathtype[] = "X";
+			pathtype[0] = toupper(path_type_to_string(rp->second->pathtype)[0]);
 			gtk_list_store_append(list_recognizers, &iter);
 			gtk_list_store_set(list_recognizers, &iter,
 				0, rp->first.c_str(),
-				1, toupper(path_type_to_string(rp->second->pathtype)[0]),
+				1, pathtype,
 				2, rp->second->complete ? "C" : "F",
 				3, match_count[i],
 				4, resources_count[i],
@@ -909,13 +912,16 @@ static void check_path(int pathid) {
 	for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++) {
 		bool resources = true;
 		if (rp->second->check(&path, &resources)) {
-			ps->recognizers.set(i, true);
-			match_count[i]++;
-			if (rp->second->pathtype == VALIDATOR) {
-				ps->validated = true;
-				validators_matched++;
+			if (resources) {
+				ps->recognizers.set(i, true);
+				match_count[i]++;
+				if (rp->second->pathtype == VALIDATOR) {
+					ps->validated = true;
+					validators_matched++;
+				}
 			}
-			if (!resources) resources_count[i]++;
+			else
+				resources_count[i]++;
 		}
 		else
 			ps->recognizers.set(i, false);
