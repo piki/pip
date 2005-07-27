@@ -41,6 +41,7 @@ static const Counter &get_metric(const Recognizer *r, const std::string &name) {
 		case Limit::UTIME:         return r->utime;
 		case Limit::STIME:         return r->stime;
 		case Limit::CPU_TIME:      return r->cpu_time;
+		case Limit::BUSY_TIME:     return r->busy_time;
 		case Limit::MAJOR_FAULTS:  return r->minor_fault;
 		case Limit::MINOR_FAULTS:  return r->major_fault;
 		case Limit::VOL_CS:        return r->vol_cs;

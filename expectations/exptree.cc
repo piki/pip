@@ -68,9 +68,9 @@ bool StringMatch::check(const std::string &text) const { bool ret = data == text
 bool VarMatch::check(const std::string &text) const { return true; }  // !!
 
 static const char *metric_name[] = {
-	"REAL_TIME", "UTIME", "STIME", "CPU_TIME", "MAJOR_FAULTS", "MINOR_FAULTS",
-	"VOL_CS", "INVOL_CS", "LATENCY", "SIZE", "MESSAGES", "DEPTH", "THREADS",
-	"HOSTS", NULL
+	"REAL_TIME", "UTIME", "STIME", "CPU_TIME", "BUSY_TIME", "MAJOR_FAULTS",
+	"MINOR_FAULTS", "VOL_CS", "INVOL_CS", "LATENCY", "SIZE", "MESSAGES",
+	"DEPTH", "THREADS", "HOSTS", NULL
 };
 
 Limit::Metric Limit::metric_by_name(const std::string &name) {
@@ -86,8 +86,9 @@ static float get_range_value(Node *n) {
 		switch (n->type()) {
 			case NODE_UNITS:  return ((UnitsNode*)n)->amt;
 			case NODE_INT:    return ((IntNode*)n)->value;
+			case NODE_FLOAT:  return ((FloatNode*)n)->value;
 			default:
-				fprintf(stderr, "Limit: expected unit or int, got %d\n", n->type());
+				fprintf(stderr, "Limit: expected unit, int, or float, got %d\n", n->type());
 				abort();
 		}
 	}
@@ -128,10 +129,11 @@ void Limit::print(FILE *fp, int depth) const {
 
 bool Limit::check(const PathTask *test) const {
 	switch (metric) {
-		case REAL_TIME:      return check(test->ts_end - test->ts_start);
+		case REAL_TIME:      return check(test->tdiff);
 		case UTIME:          return check(test->utime);
 		case STIME:          return check(test->stime);
 		case CPU_TIME:       return check(test->utime + test->stime);
+		case BUSY_TIME:      return check((test->utime + test->stime) / (double)test->tdiff);
 		case MAJOR_FAULTS:   return check(test->major_fault);
 		case MINOR_FAULTS:   return check(test->minor_fault);
 		case VOL_CS:         return check(test->vol_cs);
@@ -158,6 +160,7 @@ bool Limit::check(const PathMessageSend *test) const {
 		case UTIME:
 		case STIME:
 		case CPU_TIME:
+		case BUSY_TIME:
 		case MAJOR_FAULTS:
 		case MINOR_FAULTS:
 		case VOL_CS:
@@ -179,6 +182,7 @@ bool Limit::check(const Path *test) const {
 		case UTIME:          return check(test->utime);
 		case STIME:          return check(test->stime);
 		case CPU_TIME:       return check(test->utime + test->stime);
+		case BUSY_TIME:      return check((test->utime + test->stime)/(double)(test->ts_end - test->ts_start));
 		case MAJOR_FAULTS:   return check(test->major_fault);
 		case MINOR_FAULTS:   return check(test->minor_fault);
 		case VOL_CS:         return check(test->vol_cs);
@@ -660,6 +664,7 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	utime.add(p->utime);
 	stime.add(p->stime);
 	cpu_time.add(p->utime + p->stime);
+	busy_time.add((p->utime + p->stime) / (double)(p->ts_end - p->ts_start));
 	major_fault.add(p->major_fault);
 	minor_fault.add(p->minor_fault);
 	vol_cs.add(p->vol_cs);

@@ -60,7 +60,7 @@ private:
 
 class Limit { 
 public:
-	enum Metric { REAL_TIME=0, UTIME, STIME, CPU_TIME, MAJOR_FAULTS,
+	enum Metric { REAL_TIME=0, UTIME, STIME, CPU_TIME, BUSY_TIME, MAJOR_FAULTS,
 		MINOR_FAULTS, VOL_CS, INVOL_CS, LATENCY, SIZE, MESSAGES, DEPTH,
 		THREADS, HOSTS, LAST };
 	static Metric metric_by_name(const std::string &name);
@@ -208,8 +208,9 @@ public:
 	int pathtype;     // validator, invalidator, or recognizer?
 
 	int instances, unique;
-	Counter real_time, utime, stime, cpu_time, major_fault, minor_fault;
-	Counter	vol_cs, invol_cs, latency, size, messages, depth, hosts, threadcount;
+	Counter real_time, utime, stime, cpu_time, busy_time, major_fault;
+	Counter minor_fault, vol_cs, invol_cs, latency, size, messages, depth;
+	Counter hosts, threadcount;
 };
 
 const char *path_type_to_string(int pathtype);

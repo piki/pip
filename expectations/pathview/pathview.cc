@@ -999,6 +999,7 @@ void on_dagpopup_row_activated(GtkTreeView *tree, GtkTreePath *path, GtkTreeView
 	taskpopup_add_item("Real time (ms)", "%.3f", task->tdiff/1000.0);
 	taskpopup_add_item("System time (ms)", "%.3f", task->stime/1000.0);
 	taskpopup_add_item("User time (ms)", "%.3f", task->utime/1000.0);
+	taskpopup_add_item("Busy %", "%.3f", (task->utime+task->stime)/(float)task->tdiff);
 	taskpopup_add_item("Major faults", "%d", task->major_fault);
 	taskpopup_add_item("Minor faults", "%d", task->minor_fault);
 	taskpopup_add_item("Voluntary context switches", "%d", task->vol_cs);

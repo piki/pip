@@ -107,6 +107,7 @@ validator Init {
 fragment recognizer CacheHit { notice("cache hit"); }
 fragment recognizer CacheMiss { notice("cache miss"); }
 fragment invalidator TooLong { task(*) limit(REAL_TIME,{1s+}); }
+fragment invalidator NotBusyEnough { task(*) limit(BUSY_TIME,{0.0,0.5}) limit(REAL_TIME,{0.5s+}); }
 
 assert(instances(Init) == 1 );
 assert(instances(ShowCache) <= 20);

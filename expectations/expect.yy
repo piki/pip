@@ -193,6 +193,9 @@ count_range:
 		'{' int_expr ',' int_expr '}'							{ $$ = opr(RANGE, 2, $2, $4); }
 		| '{' int_expr '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
 		| '{' '=' int_expr '}'										{ $$ = opr(RANGE, 1, $3); }
+		| '{' float_expr ',' float_expr '}'				{ $$ = opr(RANGE, 2, $2, $4); }
+		| '{' float_expr '+' '}'									{ $$ = opr(RANGE, 2, $2, NULL); }
+		| '{' '=' float_expr '}'									{ $$ = opr(RANGE, 1, $3); }
 		;
 
 unit_qty:
