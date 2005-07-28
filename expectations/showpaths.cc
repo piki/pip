@@ -65,9 +65,9 @@ static void read_path(const char *base, int pathid) {
 	if (!path->valid()) {
 		printf("# path %d malformed\n", pathid);
 		malformed_paths_count++;
-		delete path;
 	}
 
 	printf("====================[ path %d ]====================\n", pathid);
 	path->print();
+	delete path;
 }
