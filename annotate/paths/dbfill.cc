@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <stdio.h>
+#include <string>
 #include "client.h"
 
 static void read_file(const char *fn);
@@ -23,21 +24,36 @@ int main(int argc, char **argv) {
 
 static void read_file(const char *fn) {
 	fprintf(stderr, "Reading %s\n", fn);
-	int fd = open(fn, O_RDONLY);
-	if (fd == -1) { perror(fn); return; }
+	FILE *fp;
+	int is_pipe = 0;
+	if (!strcmp(fn+strlen(fn)-4, ".bz2")) {
+		std::string cmd("bunzip2 -c ");
+		cmd.append(fn);
+		fp = popen(cmd.c_str(), "r");
+		is_pipe = 1;
+	}
+	else if (!strcmp(fn+strlen(fn)-3, ".gz")) {
+		std::string cmd("gunzip -c ");
+		cmd.append(fn);
+		fp = popen(cmd.c_str(), "r");
+		is_pipe = 1;
+	}
+	else
+		fp = fopen(fn, "r");
+	if (!fp) { perror(fn); return; }
 
 	Client cl;
 
 	int n;
 	char buf[65536];
-	while ((n = read(fd, buf, sizeof(buf))) != 0) {
+	while ((n = fread(buf, 1, sizeof(buf), fp)) != 0) {
 		if (n == -1) {
-			perror("read");
+			perror("fread");
 			exit(1);
 		}
 		cl.append(buf, n);
 	}
 
-	close(fd);
+	if (is_pipe) pclose(fp); else fclose(fp);
 	cl.end();
 }
