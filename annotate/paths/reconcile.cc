@@ -79,6 +79,7 @@ void run_sql(const char *fmt, ...) {
 		printf("Database error:\n");
 		printf("  QUERY: \"%s\"\n", query);
 		printf("  MySQL error: \"%s\"\n", mysql_error(&mysql));
+		exit(1);
 	}
 }
 
