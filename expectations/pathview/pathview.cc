@@ -35,7 +35,7 @@ enum { NOTEBOOK_TREE, NOTEBOOK_TIMELINE, NOTEBOOK_COMM, NOTEBOOK_GRAPH };
 enum { QUANT_START, QUANT_REAL, QUANT_CPU, QUANT_UTIME,
 	QUANT_STIME, QUANT_MAJFLT, QUANT_MINFLT, QUANT_VCS, QUANT_IVCS,
 	QUANT_LATENCY, QUANT_MESSAGES, QUANT_BYTES, QUANT_DEPTH, QUANT_THREADS, QUANT_HOSTS };
-enum { STYLE_CDF, STYLE_PDF };
+enum { STYLE_CDF, STYLE_PDF, STYLE_TIME };
 enum { GRAPH_NONE, GRAPH_TASKS, GRAPH_PATHS };
 const char *task_quant[] = {
 	"start/1000000", "(end-start)/1000", "(utime+stime)/1000", "utime/1000",
@@ -44,7 +44,7 @@ const char *task_quant[] = {
 	//!! might be nice to implement latency, messages, and bytes for tasks
 };
 
-#define MAX_GRAPH_POINTS 300
+#define MAX_GRAPH_POINTS 5000
 
 static char *table_base;
 MYSQL mysql;
@@ -330,8 +330,12 @@ void fill_tasks(void) {
 	gtk_list_store_clear(list_tasks);
 	std::string query("SELECT name,COUNT(name) FROM ");
 	query.append(table_base).append("_tasks");
-	if (search && search[0])
-		query.append(" WHERE name LIKE '%%").append(search).append("%%'");
+	if (search && search[0]) {
+		if (search[0] == '!')
+			query.append(" WHERE name NOT LIKE '%%").append(&search[1]).append("%%'");
+		else
+			query.append(" WHERE name LIKE '%%").append(search).append("%%'");
+	}
 	query.append(" GROUP BY name LIMIT 1000");
 	add_db_idler(query, add_task, first_task, last_task, NULL);
 }
@@ -358,8 +362,12 @@ void fill_hosts(void) {
 	gtk_list_store_clear(list_hosts);
 	std::string query("SELECT host,COUNT(host) FROM ");
 	query.append(table_base).append("_threads");
-	if (search && search[0])
-		query.append(" WHERE host LIKE '%%").append(search).append("%%'");
+	if (search && search[0]) {
+		if (search[0] == '!')
+			query.append(" WHERE host NOT LIKE '%%").append(&search[1]).append("%%'");
+		else
+			query.append(" WHERE host LIKE '%%").append(search).append("%%'");
+	}
 	query.append(" GROUP BY host");
 	add_db_idler(query, add_host, first_host, last_host, NULL);
 }
@@ -403,8 +411,12 @@ void fill_paths(void) {
 	gtk_list_store_clear(list_paths);
 	std::string query("SELECT pathid,pathblob FROM ");
 	query.append(table_base).append("_paths");
-	if (search && search[0])
-		query.append(" WHERE pathblob LIKE '%%").append(search).append("%%'");
+	if (search && search[0]) {
+		if (search[0] == '!')
+			query.append(" WHERE pathblob NOT LIKE '%%").append(&search[1]).append("%%'");
+		else
+			query.append(" WHERE pathblob LIKE '%%").append(search).append("%%'");
+	}
 	query += " LIMIT 5000";
 	add_db_idler(query, add_path, first_path, last_path, NULL);
 }
@@ -482,8 +494,12 @@ void comm_zoom_value_changed(GtkRange *range) {
 
 void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point) {
 	char buf[64];
-	sprintf(buf, "(%.3f, %.3f)", point->x, point->y);
-	gtk_label_set_text(GTK_LABEL(WID("graph_pos")), buf);
+	if (point) {
+		sprintf(buf, "(%.3f, %.3f)", point->x, point->y);
+		gtk_label_set_text(GTK_LABEL(WID("graph_pos")), buf);
+	}
+	else
+		gtk_label_set_text(GTK_LABEL(WID("graph_pos")), "(X, Y)");
 }
 
 static GtkTreeStore *popup_events;
@@ -627,7 +643,7 @@ static void tasks_plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *i
 	int row_count, skip;
 	MYSQL_RES *res;
 	MYSQL_ROW row;
-	if (style == STYLE_CDF) {
+	if (style == STYLE_CDF || style == STYLE_TIME) {
 		run_sqlf(&mysql, "SELECT COUNT(*) FROM %s_tasks WHERE name='%s'",
 			table_base, taskname);
 		res = mysql_use_result(&mysql);
@@ -637,37 +653,52 @@ static void tasks_plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *i
 		mysql_free_result(res);
 	}
 
-	char *query = g_strdup_printf("SELECT %s%s%s%s AS x%s FROM %s_tasks WHERE name='%s' %s BY x",
-		style == STYLE_PDF ? "ROUND(" : "",
-		task_quant[quant],
-		quant == QUANT_START ? itoa(-first_time.tv_sec) : "",
-		style == STYLE_PDF ? ")" : "",
-		style == STYLE_PDF ? ",COUNT(name)" : "",
-		table_base,
-		taskname,
-		style == STYLE_PDF ? "GROUP" : "ORDER");
+	char *query;
+	switch (style) {
+		case STYLE_PDF:
+			query = g_strdup_printf("SELECT ROUND(%s%s) AS x,COUNT(name) FROM %s_tasks WHERE name='%s' GROUP BY x",
+				task_quant[quant], quant == QUANT_START ? itoa(-first_time.tv_sec) : "",
+				table_base, taskname);
+			break;
+		case STYLE_CDF:
+			query = g_strdup_printf("SELECT %s%s AS x FROM %s_tasks WHERE name='%s' ORDER BY x",
+				task_quant[quant], quant == QUANT_START ? itoa(-first_time.tv_sec) : "",
+				table_base, taskname);
+			break;
+		case STYLE_TIME:
+			query = g_strdup_printf("SELECT %s%s AS x,start/1000000-%ld FROM %s_tasks WHERE name='%s' ORDER BY start",
+				task_quant[quant], quant == QUANT_START ? itoa(-first_time.tv_sec) : "",
+				first_time.tv_sec, table_base, taskname);
+			break;
+	}
 	run_sql(&mysql, query);
 	printf("sql(\"%s\")\n", query);
 	g_free(query);
 	res = mysql_use_result(&mysql);
-	int n = 0;
+	int n = 0, x, last_x = 1<<30;
 	while ((row = mysql_fetch_row(res)) != NULL) {
-		if (style == STYLE_CDF) {
-			if (n % skip == 0 || n == row_count - 1)
-				gtk_plot_add_point(plot, atof(row[0]), (double)n/(row_count-1));
-			n++;
-		}
-		else {
-			static int last_x = 1<<30;
-			int x = atoi(row[0]);
-			if (x == last_x + 2)
-				gtk_plot_add_point(plot, x-1, 0);
-			else if (x > last_x + 2) {
-				gtk_plot_add_point(plot, last_x+1, 0);
-				gtk_plot_add_point(plot, x-1, 0);
-			}
-			last_x = x;
-			gtk_plot_add_point(plot, x, atof(row[1]));
+		switch (style) {
+			case STYLE_CDF:
+				if (n % skip == 0 || n == row_count - 1)
+					gtk_plot_add_point(plot, atof(row[0]), (double)n/(row_count-1));
+				n++;
+				break;
+			case STYLE_PDF:
+				x = atoi(row[0]);
+				if (x == last_x + 2)
+					gtk_plot_add_point(plot, x-1, 0);
+				else if (x > last_x + 2) {
+					gtk_plot_add_point(plot, last_x+1, 0);
+					gtk_plot_add_point(plot, x-1, 0);
+				}
+				last_x = x;
+				gtk_plot_add_point(plot, x, atof(row[1]));
+				break;
+			case STYLE_TIME:
+				if (n % skip == 0 || n == row_count - 1)
+					gtk_plot_add_point(plot, atof(row[1]), atof(row[0]));
+				n++;
+				break;
 		}
 	}
 	mysql_free_result(res);
@@ -699,12 +730,30 @@ void tasks_graph(void) {
 		gtk_notebook_set_current_page(GTK_NOTEBOOK(WID("notebook")), NOTEBOOK_GRAPH);
 }
 
+struct PlotPoint {
+	float x, y;
+};
+
+static int ppcmp(const void *a, const void *b) {
+	if (((PlotPoint*)a)->x < ((PlotPoint*)b)->x) return -1;
+	if (((PlotPoint*)a)->x > ((PlotPoint*)b)->x) return 1;
+	return 0;
+}
+
+template<typename T>
+static int cmp(const void *a, const void *b) {
+	if (*(T*)a < *(T*)b) return -1;
+	if (*(T*)a > *(T*)b) return 1;
+	return 0;
+}
+
 void paths_graph(void) {
 	graph_common("Performance: Paths", GRAPH_PATHS);
 
 	GtkPlot *plot = GTK_PLOT(WID("plot"));
 
 	int quant = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_quantity")));
+	int style = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_style")));
 	if (!task_quant[quant]) {
 		gtk_plot_thaw(plot);
 		printf("quant %d is not defined for paths (yet?)\n", quant);
@@ -714,6 +763,17 @@ void paths_graph(void) {
 	gtk_plot_start_new_line(plot);
 
 	std::map<int,PathStub*>::const_iterator p;
+	union {
+		PlotPoint *pp;
+		float *f;
+		int *i;
+	} points;
+	switch (style) {
+		case STYLE_CDF:   points.f = new float[paths.size()];       break;
+		case STYLE_PDF:   points.i = new int[paths.size()];         break;
+		case STYLE_TIME:  points.pp = new PlotPoint[paths.size()];  break;
+	}
+	int npoints = 0;
 	int i=0;
 	for (p=paths.begin(); p!=paths.end(); p++,i++) {
 		if (!p->second) continue;  // path has not been read+checked yet
@@ -738,7 +798,51 @@ void paths_graph(void) {
 				break;
 			default: assert(!"invalid quant");
 		}
-		gtk_plot_add_point(plot, (float)i/(paths.size()-1), val);
+		switch (style) {
+			case STYLE_CDF:   points.f[npoints] = val;                break;
+			case STYLE_PDF:   points.i[npoints] = (int)(val + 0.5);   break;
+			case STYLE_TIME:
+				points.pp[npoints].x = (p->second->ts_start - first_time)/1000000.0;
+				points.pp[npoints].y = val;
+				break;
+		}
+		npoints++;
+	}
+	int j, last_x = 1<<30;
+	int skip = npoints / (MAX_GRAPH_POINTS - 1) + 1;
+	switch (style) {
+		case STYLE_CDF:
+			qsort(points.f, npoints, sizeof(float), &cmp<float>);
+			for (i=0; i<npoints; i+=skip)
+				gtk_plot_add_point(plot, points.f[i], (double)i/(npoints-1));
+			if ((npoints-1) % skip != 0)
+				gtk_plot_add_point(plot, points.f[npoints-1], 1.0);
+			delete[] points.f;
+			break;
+		case STYLE_PDF:
+			qsort(points.i, npoints, sizeof(int), &cmp<int>);
+			// use 'j' to count how many identical values appear in a row, then
+			// plot that count as the Y value
+			for (i=0; i<npoints; ) {
+				for (j=i+1; j<npoints && points.i[j] == points.i[i]; j++)  ;
+				if (points.i[i] == last_x + 2)
+					gtk_plot_add_point(plot, points.i[i]-1, 0);
+				else if (points.i[i] > last_x + 2) {
+					gtk_plot_add_point(plot, last_x+1, 0);
+					gtk_plot_add_point(plot, points.i[i]-1, 0);
+				}
+				last_x = points.i[i];
+				gtk_plot_add_point(plot, points.i[i], j-i);
+				i=j;
+			}
+			delete[] points.i;
+			break;
+		case STYLE_TIME:
+			qsort(points.pp, npoints, sizeof(PlotPoint), &ppcmp);
+			for (i=0; i<npoints; i++)
+				gtk_plot_add_point(plot, points.pp[i].x, points.pp[i].y);
+			delete[] points.pp;
+			break;
 	}
 
 	gtk_plot_thaw(plot);
