@@ -39,9 +39,11 @@ fragment recognizer E3 {
 
 validator E4 {
 	thread Client(*, 1) {
-		send(Client);
+		send(Client,Mumble);
 		task("foo");
 		recv(Client);
+	}
+	thread Mumble(*, {2,4}) {
 	}
 }
 

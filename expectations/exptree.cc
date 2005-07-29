@@ -338,7 +338,11 @@ int ExpNotice::check(const PathEventList &test, unsigned int ofs,
 ExpMessageSend::ExpMessageSend(const OperatorNode *onode) {
 	assert(onode->op == SEND);
 	assert(onode->nops() == 2);
-	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
+	assert(onode->operands[0]->type() == NODE_LIST);
+	ListNode *lnode = (ListNode*)onode->operands[0];
+	assert(lnode->size() >= 1);
+	for (unsigned int i=0; i<lnode->size(); i++) ;
+		//!! we're supposed to care about where Send goes
 	if (onode->operands[1])
 		add_limits((ListNode*)onode->operands[1], &limits);
 }
@@ -378,7 +382,11 @@ int ExpMessageSend::check(const PathEventList &test, unsigned int ofs,
 ExpMessageRecv::ExpMessageRecv(const OperatorNode *onode) {
 	assert(onode->op == RECV);
 	assert(onode->nops() == 2);
-	assert(onode->operands[0]->type() == NODE_IDENTIFIER);
+	assert(onode->operands[0]->type() == NODE_LIST);
+	ListNode *lnode = (ListNode*)onode->operands[0];
+	assert(lnode->size() >= 1);
+	for (unsigned int i=0; i<lnode->size(); i++) ;
+		//!! we're supposed to care about where Recv goes
 	if (onode->operands[1])
 		add_limits((ListNode*)onode->operands[1], &limits);
 }

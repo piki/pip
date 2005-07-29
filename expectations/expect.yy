@@ -17,9 +17,7 @@
 %token RECOGNIZER
 %token FRAGMENT
 %token REPEAT
-%token JOIN
 %token BRANCH
-%token SPLIT
 %token XOR
 %token MAYBE
 %token CALL
@@ -65,7 +63,7 @@
 %token <sValue> STRINGVAR
 %token <sValue> PATHVAR
 %type <iValue> VALIDATOR INVALIDATOR RECOGNIZER pathtype
-%type <nList> limit_list statement_list thread_list xor_list path_limits
+%type <nList> limit_list statement_list thread_list xor_list path_limits msg_list
 %type <nPtr> statement thread thread_count_range
 %type <nPtr> repeat limit limit_range limit_spec repeat_range path_expr
 %type <nPtr> string_expr xor task assert assertdecl bool_expr
@@ -119,8 +117,8 @@ statement_list:
 		;
 		
 statement:
-		SEND '(' IDENTIFIER ')' limit_list ';'		{ $$ = opr(SEND, 2, idcl($3,THREAD), $5); }
-		| RECV '(' IDENTIFIER ')' limit_list ';'	{ $$ = opr(RECV, 2, idcl($3,THREAD), $5); }
+		SEND '(' msg_list ')' limit_list ';'			{ $$ = opr(SEND, 2, $3, $5); }
+		| RECV '(' msg_list ')' limit_list ';'		{ $$ = opr(RECV, 2, $3, $5); }
 		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }   //?
 		| NOTICE '(' string_expr ')' ';'					{ $$ = opr(NOTICE, 1, $3); }
 		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
@@ -145,6 +143,11 @@ xor:
 thread_list:
 		thread_list thread												{ $$ = $1; ($$)->add($2); }
 		|																					{ $$ = new ListNode; }
+		;
+
+msg_list:
+		msg_list ',' IDENTIFIER										{ $$ = $1; ($$)->add(idcl($3,THREAD)); }
+		| IDENTIFIER															{ $$ = new ListNode; ($$)->add(idcl($1,THREAD)); }
 		;
 
 thread:

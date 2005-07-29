@@ -381,6 +381,7 @@ static bool should_show(const PathStub *ps) {
 	return true;
 }
 
+static std::vector<int> shown_paths;
 static void add_path(MYSQL_ROW row, void *ign) {
 	int pathid = atoi(row[0]);
 	PathStub *ps = paths[pathid];
@@ -396,6 +397,7 @@ static void add_path(MYSQL_ROW row, void *ign) {
 		0, pathid,
 		1, row[1],
 		-1);
+	shown_paths.push_back(pathid);
 }
 
 static void first_path(void *ign) {
@@ -418,6 +420,7 @@ void fill_paths(void) {
 			query.append(" WHERE pathblob LIKE '%%").append(search).append("%%'");
 	}
 	query += " LIMIT 5000";
+	shown_paths.clear();
 	add_db_idler(query, add_path, first_path, last_path, NULL);
 }
 
@@ -762,35 +765,34 @@ void paths_graph(void) {
 
 	gtk_plot_start_new_line(plot);
 
-	std::map<int,PathStub*>::const_iterator p;
 	union {
 		PlotPoint *pp;
 		float *f;
-		int *i;
+		unsigned int *i;
 	} points;
 	switch (style) {
-		case STYLE_CDF:   points.f = new float[paths.size()];       break;
-		case STYLE_PDF:   points.i = new int[paths.size()];         break;
-		case STYLE_TIME:  points.pp = new PlotPoint[paths.size()];  break;
+		case STYLE_CDF:   points.f = new float[shown_paths.size()];         break;
+		case STYLE_PDF:   points.i = new unsigned int[shown_paths.size()];  break;
+		case STYLE_TIME:  points.pp = new PlotPoint[shown_paths.size()];    break;
 	}
-	int npoints = 0;
-	int i=0;
-	for (p=paths.begin(); p!=paths.end(); p++,i++) {
-		if (!p->second) continue;  // path has not been read+checked yet
+	unsigned int npoints = 0;
+	for (unsigned int i=0; i<shown_paths.size(); i++) {
+		PathStub *p = paths[i];
+		if (!p) continue;  // path has not been read+checked yet
 		float val = 0.0;
 		switch (quant) {
-			case QUANT_START:     val = (p->second->ts_start - first_time) / 1000000.0;      break;
-			case QUANT_REAL:      val = (p->second->ts_end - p->second->ts_start) / 1000.0;  break;
-			case QUANT_CPU:       val = (p->second->stime + p->second->utime) / 1000.0;      break;
-			case QUANT_UTIME:     val = p->second->utime / 1000.0;                           break;
-			case QUANT_STIME:     val = p->second->stime / 1000.0;                           break;
-			case QUANT_MAJFLT:    val = p->second->major_fault;                              break;
-			case QUANT_MINFLT:    val = p->second->minor_fault;                              break;
-			case QUANT_VCS:       val = p->second->vol_cs;                                   break;
-			case QUANT_IVCS:      val = p->second->invol_cs;                                 break;
-			case QUANT_MESSAGES:  val = p->second->messages;                                 break;
-			case QUANT_DEPTH:     val = p->second->depth;                                    break;
-			case QUANT_HOSTS:     val = p->second->hosts;                                    break;
+			case QUANT_START:     val = (p->ts_start - first_time) / 1000000.0;  break;
+			case QUANT_REAL:      val = (p->ts_end - p->ts_start) / 1000.0;      break;
+			case QUANT_CPU:       val = (p->stime + p->utime) / 1000.0;          break;
+			case QUANT_UTIME:     val = p->utime / 1000.0;                       break;
+			case QUANT_STIME:     val = p->stime / 1000.0;                       break;
+			case QUANT_MAJFLT:    val = p->major_fault;                          break;
+			case QUANT_MINFLT:    val = p->minor_fault;                          break;
+			case QUANT_VCS:       val = p->vol_cs;                               break;
+			case QUANT_IVCS:      val = p->invol_cs;                             break;
+			case QUANT_MESSAGES:  val = p->messages;                             break;
+			case QUANT_DEPTH:     val = p->depth;                                break;
+			case QUANT_HOSTS:     val = p->hosts;                                break;
 			case QUANT_LATENCY:
 			case QUANT_BYTES:
 			case QUANT_THREADS:
@@ -798,32 +800,33 @@ void paths_graph(void) {
 				break;
 			default: assert(!"invalid quant");
 		}
+		assert(val >= 0);
 		switch (style) {
 			case STYLE_CDF:   points.f[npoints] = val;                break;
 			case STYLE_PDF:   points.i[npoints] = (int)(val + 0.5);   break;
 			case STYLE_TIME:
-				points.pp[npoints].x = (p->second->ts_start - first_time)/1000000.0;
+				points.pp[npoints].x = (p->ts_start - first_time)/1000000.0;
 				points.pp[npoints].y = val;
 				break;
 		}
 		npoints++;
 	}
-	int j, last_x = 1<<30;
+	unsigned int j, last_x = 1<<30;
 	int skip = npoints / (MAX_GRAPH_POINTS - 1) + 1;
 	switch (style) {
 		case STYLE_CDF:
 			qsort(points.f, npoints, sizeof(float), &cmp<float>);
-			for (i=0; i<npoints; i+=skip)
+			for (unsigned int i=0; i<npoints; i+=skip)
 				gtk_plot_add_point(plot, points.f[i], (double)i/(npoints-1));
 			if ((npoints-1) % skip != 0)
 				gtk_plot_add_point(plot, points.f[npoints-1], 1.0);
 			delete[] points.f;
 			break;
 		case STYLE_PDF:
-			qsort(points.i, npoints, sizeof(int), &cmp<int>);
+			qsort(points.i, npoints, sizeof(unsigned int), &cmp<unsigned int>);
 			// use 'j' to count how many identical values appear in a row, then
 			// plot that count as the Y value
-			for (i=0; i<npoints; ) {
+			for (unsigned int i=0; i<npoints; ) {
 				for (j=i+1; j<npoints && points.i[j] == points.i[i]; j++)  ;
 				if (points.i[i] == last_x + 2)
 					gtk_plot_add_point(plot, points.i[i]-1, 0);
@@ -839,7 +842,7 @@ void paths_graph(void) {
 			break;
 		case STYLE_TIME:
 			qsort(points.pp, npoints, sizeof(PlotPoint), &ppcmp);
-			for (i=0; i<npoints; i++)
+			for (unsigned int i=0; i<npoints; i++)
 				gtk_plot_add_point(plot, points.pp[i].x, points.pp[i].y);
 			delete[] points.pp;
 			break;
