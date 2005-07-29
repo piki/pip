@@ -59,7 +59,6 @@ static bool still_checking = true;
 static BoolArray *recognizers_filter;
 static int graph_showing = GRAPH_NONE;
 
-extern Path *read_path(const char *base, int pathid);
 static void init_times(GtkAdjustment *end_time_adj);
 static void init_tasks(GtkTreeView *tree);
 static void init_hosts(GtkTreeView *tree);
@@ -860,8 +859,9 @@ void hosts_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn 
 void paths_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc) {
 	GtkTreeIter iter;
 	int pathid;
+	char *pathname;
 	gtk_tree_model_get_iter(GTK_TREE_MODEL(list_paths), &iter, path);
-	gtk_tree_model_get(GTK_TREE_MODEL(list_paths), &iter, 0, &pathid, -1);
+	gtk_tree_model_get(GTK_TREE_MODEL(list_paths), &iter, 0, &pathid, 1, &pathname, -1);
 	if (active_path) delete active_path;
 	active_path = new Path(&mysql, table_base, pathid);
 	if (!active_path->valid()) {
@@ -870,6 +870,10 @@ void paths_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn 
 		active_path = NULL;
 		return;
 	}
+	char *buf = g_strdup_printf("%s (%d)", pathname, pathid);
+	g_free(pathname);
+	gtk_label_set_text(GTK_LABEL(WID("label_path")), buf);
+	g_free(buf);
 	gtk_pathtl_set(GTK_PATHTL(WID("pathtl")), active_path);
 	fill_dag(GTK_DAG(WID("dag")), active_path);
 	fill_comm(GTK_GRAPH(WID("comm_graph")), active_path);
