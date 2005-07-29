@@ -4,6 +4,7 @@
 #include "path.h"
 
 std::map<int, PathThread*> threads;
+const char *path_type_name[] = { "task", "notice", "send", "recv" };
 
 timeval ts_to_tv(long long ts) {
 	timeval ret;

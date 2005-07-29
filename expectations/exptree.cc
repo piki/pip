@@ -8,6 +8,7 @@
 static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources);
 static void add_statements(const ListNode *list_node, ExpEventList *where);
 static void add_limits(const ListNode *limit_list, LimitList *limits);
+static bool debug_failed_matches_individually = false;
 
 Match *Match::create(Node *node, bool negate) {
 	if (node->type() == NODE_STRING)
@@ -43,7 +44,7 @@ Match *Match::create(Node *node, bool negate) {
 	}
 }
 
-RegexMatch::RegexMatch(const std::string &_data, bool _negate) : Match(_negate) {
+RegexMatch::RegexMatch(const std::string &_data, bool _negate) : Match(_negate), data(_data) {
 	const char *err;
 	int errofs;
 	regex = pcre_compile(_data.c_str(), 0, &err, &errofs, NULL);
@@ -57,6 +58,11 @@ RegexMatch::~RegexMatch(void) {
 	assert(regex);
 	free(regex);
 }
+const char *RegexMatch::to_string(void) const {
+	static char ret[64];
+	sprintf(ret, "m/%s/", data.c_str());
+	return ret;
+}
 bool RegexMatch::check(const std::string &text) const {
 	assert(regex);
 	int ovector[30];
@@ -65,6 +71,11 @@ bool RegexMatch::check(const std::string &text) const {
 	return res;
 }
 bool StringMatch::check(const std::string &text) const { bool ret = data == text; return negate ? !ret : ret; }
+const char *StringMatch::to_string(void) const {
+	static char ret[64];
+	sprintf(ret, "\"%s\"", data.c_str());
+	return ret;
+}
 bool VarMatch::check(const std::string &text) const { return true; }  // !!
 
 static const char *metric_name[] = {
@@ -296,10 +307,19 @@ void ExpTask::print(FILE *fp, int depth) const {
 
 int ExpTask::check(const PathEventList &test, unsigned int ofs,
 		bool *resources) const {
-	if (ofs == test.size()) return -1;  // we need at least one
-	if (test[ofs]->type() != PEV_TASK) return -1;
+	if (ofs == test.size()) {
+		if (debug_failed_matches_individually) printf("      Task(%s) has nothing left to match.\n", name->to_string());
+		return -1;  // we need at least one
+	}
+	if (test[ofs]->type() != PEV_TASK) {
+		if (debug_failed_matches_individually) printf("      Task(%s) expectation does not match %s event.\n", name->to_string(), path_type_name[test[ofs]->type()]);
+		return -1;
+	}
 	PathTask *pt = (PathTask*)test[ofs];
-	if (!name->check(pt->name)) return -1;  // name
+	if (!name->check(pt->name)) {
+		if (debug_failed_matches_individually) printf("      Task(%s) does not match \"%s\"\n", name->to_string(), pt->name);
+		return -1;  // name
+	}
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
 			if (!limits[i]->check(pt)) {
@@ -307,8 +327,17 @@ int ExpTask::check(const PathEventList &test, unsigned int ofs,
 				break;
 			}
 
-	if (Recognizer::check(pt->children, children, 0, resources)
-			!= (int)pt->children.size()) return -1;  // children
+	int matched_children = Recognizer::check(pt->children, children, 0, resources);
+	assert(matched_children <= (int)pt->children.size());
+	if (matched_children == -1) {
+		if (debug_failed_matches_individually) printf("      Task(%s) children did not match\n", name->to_string());
+		return -1;  // children
+	}
+	else if (matched_children < (int)pt->children.size()) {
+		if (debug_failed_matches_individually) printf("      Task(%s) had %d leftover children\n",
+			name->to_string(), pt->children.size() - matched_children);
+		return -1;  // children
+	}
 	return 1;
 }
 
@@ -326,10 +355,19 @@ void ExpNotice::print(FILE *fp, int depth) const {
 
 int ExpNotice::check(const PathEventList &test, unsigned int ofs,
 		bool *resources) const {
-	if (ofs == test.size()) return -1;  // we need at least one
-	if (test[ofs]->type() != PEV_NOTICE) return -1;
+	if (ofs == test.size()) {
+		if (debug_failed_matches_individually) printf("      Notice(%s) has nothing left to match.\n", name->to_string());
+		return -1;  // we need at least one
+	}
+	if (test[ofs]->type() != PEV_NOTICE) {
+		if (debug_failed_matches_individually) printf("      Notice(%s) expectation does not match %s event.\n", name->to_string(), path_type_name[test[ofs]->type()]);
+		return -1;
+	}
 	PathNotice *pn = (PathNotice*)test[ofs];
-	if (!name->check(pn->name)) return -1;  // name
+	if (!name->check(pn->name)) {
+		if (debug_failed_matches_individually) printf("      Notice(%s) does not match \"%s\"\n", name->to_string(), pn->name);
+		return -1;  // name
+	}
 	return 1;
 }
 
@@ -362,8 +400,14 @@ void ExpMessageSend::print(FILE *fp, int depth) const {
 
 int ExpMessageSend::check(const PathEventList &test, unsigned int ofs,
 		bool *resources) const {
-	if (ofs == test.size()) return -1;  // we need at least one
-	if (test[ofs]->type() != PEV_MESSAGE_SEND) return -1;
+	if (ofs == test.size()) {
+		if (debug_failed_matches_individually) printf("      Send has nothing left to match.\n");
+		return -1;  // we need at least one
+	}
+	if (test[ofs]->type() != PEV_MESSAGE_SEND) {
+		if (debug_failed_matches_individually) printf("      Send expectation does not match %s event.\n", path_type_name[test[ofs]->type()]);
+		return -1;
+	}
 	PathMessageSend *pms = (PathMessageSend*)test[ofs];
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
@@ -395,8 +439,14 @@ void ExpMessageRecv::print(FILE *fp, int depth) const {
 
 int ExpMessageRecv::check(const PathEventList &test, unsigned int ofs,
 		bool *resources) const {
-	if (ofs == test.size()) return -1;  // we need at least one
-	if (test[ofs]->type() != PEV_MESSAGE_RECV) return -1;
+	if (ofs == test.size()) {
+		if (debug_failed_matches_individually) printf("      Recv has nothing left to match.\n");
+		return -1;  // we need at least one
+	}
+	if (test[ofs]->type() != PEV_MESSAGE_RECV) {
+		if (debug_failed_matches_individually) printf("      Recv expectation does not match %s event.\n", path_type_name[test[ofs]->type()]);
+		return -1;
+	}
 
 	// !! make sure thread-class matches
 
@@ -441,6 +491,8 @@ int ExpRepeat::check(const PathEventList &test, unsigned int ofs,
 		my_ofs += res;
 	}
 	if (count >= min) return my_ofs - ofs;
+	if (debug_failed_matches_individually)
+		printf("      Repeat(%d, %d) matched %d times\n", min, max, count);
 	return -1;
 }
 
@@ -485,6 +537,7 @@ int ExpXor::check(const PathEventList &test, unsigned int ofs,
 		int res = Recognizer::check(test, branches[i], ofs, resources);
 		if (res != -1) return res;  // !! greedy, continuation needed
 	}
+	if (debug_failed_matches_individually) printf("      Xor(%d branches) had no match.\n", branches.size());
 	return -1;
 }
 
@@ -589,6 +642,7 @@ static bool check_fragment(const PathEventList &test, const ExpEventList &list, 
 	return false;
 }
 
+bool debug_failed_matches = false;
 bool Recognizer::check(const Path *p, bool *resources) {
 	if (!complete) {
 		assert(threads.size() == 1);
@@ -606,13 +660,11 @@ bool Recognizer::check(const Path *p, bool *resources) {
 		min += tp->second->min;
 		max += tp->second->max;
 	}
-#if 0
-	printf("Recognizer %s\n", name.c_str());
-#endif
 	if (p->children.size() < min || p->children.size() > max) {
-#if 0
-		printf(" -> false, R.threads={%d,%d} P.threads=%d\n", min, max, p->children.size());
-#endif
+		if (debug_failed_matches) {
+			printf("Recognizer %s\n", name.c_str());
+			printf("  false, R.threads={%d,%d} P.threads=%d\n", min, max, p->children.size());
+		}
 		return false;
 	}
 
@@ -628,53 +680,53 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++)
 		etp->second->count = 0;
 
-#if 0
-	printf("matching path-thread %d (root)\n", p->root_thread);
-	printf("  trying exp-thread <root>... ");
-#endif
 	if (!root->check(p->children.find(p->root_thread)->second, 0, false,
 			resources)) {
-#if 0
-		puts("no");
-#endif
+		if (debug_failed_matches) {
+			printf("Recognizer %s\n", name.c_str());
+			printf("  P.root (tid=%d) does not match R.root\n", p->root_thread);
+			debug_failed_matches_individually = true;
+			(void)root->check(p->children.find(p->root_thread)->second, 0, false, resources);
+			debug_failed_matches_individually = false;
+		}
 		return false;
 	}
-#if 0
-	puts("yes");
-#endif
 
 	for (std::map<int,PathEventList>::const_iterator ptp=p->children.begin(); ptp!=p->children.end(); ptp++) {
 		if (ptp->first == p->root_thread) continue;
-#if 0
-		printf("matching path-thread %d\n", ptp->first);
-#endif
 		bool matched = false;
 		for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
 			if (etp->second == root) continue;
-#if 0
-			printf("  trying exp-thread \"%s\"... ", etp->first.c_str());
-#endif
 			if (etp->second->check(ptp->second, 0, false, resources)) {
-#if 0
-				puts("yes");
-#endif
 				matched = true;
 				break;
 			}
-#if 0
-			puts("no");
-#endif
 		}
-		if (!matched) return false;
+		if (!matched) {
+			if (debug_failed_matches) {
+				printf("Recognizer %s\n", name.c_str());
+				printf("  P.thread[%d] did not match anything.  Let's see why...\n", ptp->first);
+				debug_failed_matches_individually = true;
+				for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
+					if (etp->second == root) continue;
+					printf("    R.thread %s...\n", etp->first.c_str());
+					if (etp->second->check(ptp->second, 0, false, resources)) continue;
+				}
+				debug_failed_matches_individually = false;
+			}
+			return false;
+		}
 	}
 
 	for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
 		if (etp->second->count > etp->second->max) {
-			printf("Rejected because there were too many of thread \"%s\"\n", etp->first.c_str());
+			if (debug_failed_matches)
+				printf("Rejected because there were too many of thread \"%s\"\n", etp->first.c_str());
 			return false;
 		}
 		if (etp->second->count < etp->second->min) {
-			printf("Rejected because there weren't enough of thread \"%s\"\n", etp->first.c_str());
+			if (debug_failed_matches)
+				printf("Rejected because there weren't enough of thread \"%s\"\n", etp->first.c_str());
 			return false;
 		}
 	}

@@ -16,7 +16,8 @@ class PathNotice;
 class PathMessageSend;
 class PathMessageRecv;
 
-enum PathEventType { PEV_TASK, PEV_NOTICE, PEV_MESSAGE_SEND, PEV_MESSAGE_RECV };
+enum PathEventType { PEV_TASK=0, PEV_NOTICE, PEV_MESSAGE_SEND, PEV_MESSAGE_RECV };
+extern const char *path_type_name[];
 enum PathCompareResult { PCMP_EXACT=0, PCMP_NAMES, PCMP_NONE };
 
 class PathEvent {

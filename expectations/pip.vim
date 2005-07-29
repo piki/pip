@@ -1,7 +1,7 @@
 " Pip syntax file
 " Language:     Pip
 " Maintainer:   Patrick Reynolds <reynolds@cs.duke.edu>
-" Last change:  2005 Mar 23
+" Last change:  2005 Jul 29
 
 if version < 600
 	syn clear
@@ -12,7 +12,7 @@ endif
 syn keyword  pipType       validator invalidator fragment recognizer
 syn keyword  pipStatement  repeat message task thread
 syn keyword  pipStatement  limit branch send recv
-syn keyword  pipStatement  notice xor call between and
+syn keyword  pipStatement  notice xor call between and maybe
 syn keyword  pipStatement  assert instances unique in
 syn keyword  pipStatement  during any average stddev
 syn keyword  pipStatement  max min

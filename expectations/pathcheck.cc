@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <getopt.h>
 #include <string>
 #include <stdarg.h>
 #include <stdio.h>
@@ -28,19 +29,27 @@ static std::vector<int> match_count;     // how many paths matched recognizer N
 static std::vector<int> resources_count; // # paths matching N, but over limits
 static int malformed_paths_count = 0;
 
+static void usage(const char *prog);
+
+static bool verbose = false;
 int main(int argc, char **argv) {
 	std::map<std::string,Recognizer*>::const_iterator rp;
 	unsigned int i;
 	int just_one = -1;
+	char c;
 
-	if (argc < 3 || argc > 4) {
-		fprintf(stderr, "Usage:\n  %s table-name expect-file [pathid]\n\n", argv[0]);
-		return 1;
+	while ((c = getopt(argc, argv, "v")) != -1) {
+		switch (c) {
+			case 'v':   verbose = true;
+			default: usage(argv[0]);
+		}
 	}
 
-	if (argc == 4) just_one = atoi(argv[3]);
+	if (argc-optind < 2) usage(argv[0]);
 
-	if (!expect_parse(argv[2])) return 1;
+	if (argc-optind == 3) just_one = atoi(argv[optind+2]);
+
+	if (!expect_parse(argv[optind+1])) return 1;
 	printf("%d recognizers registered.\n", recognizers.size());
 #if 0
 	for (rp=recognizers.begin(); rp!=recognizers.end(); rp++)
@@ -57,7 +66,7 @@ int main(int argc, char **argv) {
 	match_count.insert(match_count.end(), recognizers.size(), 0);
 	resources_count.insert(resources_count.end(), recognizers.size(), 0);
 
-	const char *base = argv[1];
+	const char *base = argv[optind];
 
 	mysql_init(&mysql);
 	if (!mysql_real_connect(&mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
@@ -139,13 +148,31 @@ static bool check_path(const char *base, int pathid) {
 			}
 		}
 	}
-	if (!tally || invalidated) {
+	if (!tally) {
+		printf("%d ---> nothing matched\n", pathid);
+		if (!printed) path.print();
+		if (verbose) {
+			debug_failed_matches = true;
+			for (i=0,rp=recognizers.begin(); rp!=recognizers.end(); i++,rp++) {
+				bool resources = false;
+				(void)rp->second->check(&path, &resources);
+			}
+			debug_failed_matches = false;
+		}
+	}
+	if (invalidated) {
+		printf("%d ---> invalidated\n", pathid);
 		if (!printed) {
 			printf("# path %d:\n", pathid);
 			path.print();
 		}
-		printf("%d ---> nothing matched\n", pathid);
 	}
 	match_tally[invalidated ? 0 : tally]++;
 	return tally > 0;
+}
+
+static void usage(const char *prog) {
+	fprintf(stderr, "Usage: %s [-v] table-name expect-file [pathid]\n\n", prog);
+	fprintf(stderr, "  -v      verbose: show why a path does not match\n\n");
+	exit(1);
 }

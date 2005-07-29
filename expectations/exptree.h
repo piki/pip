@@ -25,7 +25,7 @@ protected:
 class StringMatch : public Match {
 public:
 	StringMatch(const std::string &_data, bool _negate) : Match(_negate), data(_data) {}
-	virtual const char *to_string(void) const { return data.c_str(); }
+	virtual const char *to_string(void) const;
 	virtual bool check(const std::string &test) const;
 private:
 	std::string data;
@@ -35,9 +35,10 @@ class RegexMatch : public Match {
 public:
 	RegexMatch(const std::string &_data, bool _negate);
 	virtual ~RegexMatch(void);
-	virtual const char *to_string(void) const { return "m/.../"; }
+	virtual const char *to_string(void) const;
 	virtual bool check(const std::string &test) const;
 private:
+	const std::string data;
 	pcre *regex;
 	pcre_extra *study;
 };
@@ -223,5 +224,6 @@ public:
 };
 
 const char *path_type_to_string(int pathtype);
+extern bool debug_failed_matches;
 
 #endif
