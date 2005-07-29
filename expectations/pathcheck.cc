@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
 	while ((c = getopt(argc, argv, "v")) != -1) {
 		switch (c) {
-			case 'v':   verbose = true;
+			case 'v':   verbose = true;  break;
 			default: usage(argv[0]);
 		}
 	}
