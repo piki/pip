@@ -127,6 +127,7 @@ statement:
 		| path_expr
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| MAYBE statement													{ $$ = opr(REPEAT, 2, opr(RANGE, 2, new IntNode(0), new IntNode(1)), $2); }
+		| ANY	'(' ')' ';'													{ $$ = opr(ANY, 0); }
 		| '{' statement_list '}'									{ $$ = $2; }
 		| error ';'																{ $$ = NULL; }
 		;

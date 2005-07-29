@@ -9,7 +9,7 @@
 #include "parsetree.h"
 #include "path.h"
 
-enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_SPLIT, EXP_CALL };
+enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_SPLIT, EXP_CALL, EXP_ANY };
 
 class Match {
 public:
@@ -189,6 +189,15 @@ public:
 	virtual int check(const PathEventList &test, unsigned int ofs, bool *resources) const;
 
 	std::string target;
+};
+
+class ExpAny : public ExpEvent {
+public:
+	ExpAny(const OperatorNode *onode);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_ANY; }
+	virtual int check(const PathEventList &test, unsigned int ofs,
+			bool *resources) const;
 };
 
 class Recognizer {

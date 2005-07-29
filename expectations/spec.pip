@@ -37,6 +37,12 @@ fragment recognizer E3 {
   }
 }
 
+recognizer E5 {
+	thread Mumble(*, {1,100}) {
+		any();
+	}
+}
+
 validator E4 {
 	thread Client(*, 1) {
 		send(Client,Mumble);

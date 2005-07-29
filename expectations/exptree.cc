@@ -300,7 +300,6 @@ int ExpTask::check(const PathEventList &test, unsigned int ofs,
 	if (test[ofs]->type() != PEV_TASK) return -1;
 	PathTask *pt = (PathTask*)test[ofs];
 	if (!name->check(pt->name)) return -1;  // name
-	// !! host
 	if (resources)
 		for (unsigned int i=0; i<limits.size(); i++)
 			if (!limits[i]->check(pt)) {
@@ -331,7 +330,6 @@ int ExpNotice::check(const PathEventList &test, unsigned int ofs,
 	if (test[ofs]->type() != PEV_NOTICE) return -1;
 	PathNotice *pn = (PathNotice*)test[ofs];
 	if (!name->check(pn->name)) return -1;  // name
-	// !! host
 	return 1;
 }
 
@@ -488,6 +486,21 @@ int ExpXor::check(const PathEventList &test, unsigned int ofs,
 		if (res != -1) return res;  // !! greedy, continuation needed
 	}
 	return -1;
+}
+
+ExpAny::ExpAny(const OperatorNode *onode) {
+	assert(onode->op == ANY);
+	assert(onode->nops() == 0);
+}
+
+void ExpAny::print(FILE *fp, int depth) const {
+	fprintf(fp, "%*s<any />\n", depth*2, "");
+}
+
+int ExpAny::check(const PathEventList &test, unsigned int ofs,
+		bool *resources) const {
+	// !! greedy, continuation needed
+	return test.size() - ofs;  // match them all!  even if there aren't any!
 }
 
 ExpCall::ExpCall(const OperatorNode *onode) {
@@ -700,7 +713,6 @@ int Recognizer::check(const PathEventList &test, const ExpEventList &list,
 }
 
 static void add_statements(const ListNode *list_node, ExpEventList *where) {
-	// !! now what?
 	unsigned int i;
 	assert(where != NULL);
 	ExpEventList *local_where = where;
@@ -733,6 +745,9 @@ static void add_statements(const ListNode *list_node, ExpEventList *where) {
 							break;
 						case RECV:
 							local_where->push_back(new ExpMessageRecv(onode));
+							break;
+						case ANY:
+							local_where->push_back(new ExpAny(onode));
 							break;
 						case '=':
 							fprintf(stderr, "op %s not implemented yet\n", get_op_name(onode->op));
