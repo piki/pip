@@ -1,0 +1,232 @@
+fragment invalidator taskTooSlow {
+  task(*) limit(REAL_TIME,{50ms+}) {
+    any();
+  }
+}
+fragment recognizer mcRouteDirect {
+  notice ("data_::routeDirect::GenericTreeMulticast::data");
+  task ("Pastry::routeDirect(Route)") { 
+    task ("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+      task ("GenericTreeMulticast::forward::data(ReceiveDataHandler)");
+    }
+    xor {
+branch:
+      notice ("HIGH::route::Pastry::data");
+      send(Receiver);
+branch:
+      notice ("HIGH::route::Pastry::data_path_req");
+      send(Receiver);
+    }
+  }
+}
+fragment invalidator tooManyKids {
+  task ("GenericTreeMulticast::deliver::data(ReceiveDataHandler)") {
+    task ("SplitStreamMS::deliver(ReceiveDataHandler)") {
+      task (*);
+    }
+    notice ("tree_::getParent");
+    task ("ScribeMS::getParent(Tree)");
+    repeat between 0 and 1 {
+      call(mcRouteDirect);
+    }
+    notice ("tree_::getChildren");
+    task ("ScribeMS::getChildren(Tree)");
+    repeat between 19 and 10000000 {
+      call(mcRouteDirect);
+    }
+  }
+}
+fragment recognizer mcGtmFwd {
+  task ("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+    task ("GenericTreeMulticast::forward::data(ReceiveDataHandler)") {
+      task ("SplitStreamMS::forward(ReceiveDataHandler)") {
+        task ("SplitStreamMS::forward::Data(ReceiveDataHandler)");
+      }
+    }
+  }
+}
+fragment recognizer mcGtmMcData {
+  task ("SplitStreamMS::deliver(ReceiveDataHandler)") {
+    task ("SplitStreamMS::deliver::Data(ReceiveDataHandler)");
+  }
+  notice ("tree_::getParent");
+  task ("ScribeMS::getParent(Tree)");
+  repeat between 0 and 1 {
+    call (mcRouteDirect);
+  }
+  notice ("tree_::getChildren");
+  task ("ScribeMS::getChildren(Tree)");
+  repeat between 0 and 18 {
+    call (mcRouteDirect);
+  }
+}
+fragment recognizer mcGtmRcv {
+  task ("GenericTreeMulticast::deliver(ReceiveDataHandler)") {
+    task ("GenericTreeMulticast::deliver::data(ReceiveDataHandler)") {
+      call(mcGtmMcData);
+    }
+  }
+}
+fragment recognizer updateState {
+  maybe {
+    notice ("UDP::route::Pastry::probe");
+    send(probe);
+  }
+  maybe {
+    notice ("control_::route::Pastry::inform_request");
+    send(inform_request);
+  }
+}
+fragment recognizer pastryPathReqFwd {
+  recv(Sender_Receiver_Forwarder);
+  task ("macedon_tcp_transport::deliver") {
+    task ("Pastry::deliver(ReceiveDataHandler)") {
+      task ("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+        call(updateState);
+        notice ("HIGH::route::Pastry::data_path_req");
+        send(Receiver_Forwarder);
+      }
+    }
+  }
+}
+fragment recognizer pastryRecvProbe {
+  recv(probe);
+  task ("macedon_udp_transport::deliver") {
+    task ("Pastry::deliver(ReceiveDataHandler)") {
+      task ("Pastry::deliver::probe(ReceiveDataHandler)") {
+        notice("UDP::route::Pastry::probe_reply");
+        maybe { //sometimes the UDP message will be dropped in the network
+          send(probe_reply);
+        }
+      }
+    }
+  }
+}
+fragment recognizer pastryRecvProbeReply {
+  recv(probe_reply);
+  task("macedon_udp_transport::deliver") {
+    task("Pastry::deliver(ReceiveDataHandler)") {
+      task("Pastry::deliver::probe_reply(ReceiveDataHandler)");
+    }
+  }
+}
+fragment recognizer pastryRecvMapping {
+  recv(mapping);
+  task("macedon_tcp_transport::deliver") {
+    task("Pastry::deliver(ReceiveDataHandler)") {
+      task("Pastry::deliver::mapping(ReceiveDataHandler)");
+    }
+  }
+}
+recognizer McPath {
+  thread Sender ("client0",1) {
+    task ("SplitStreamMS::multicast(Multicast)") {
+      notice ("mc_::multicast::SplitStreamMS::Data");
+      task ("GenericTreeMulticast::multicast(HierarchicalMulticast)") {
+        call(mcGtmMcData);
+      }
+    }
+  }
+  thread Receiver(!"client0",{0,99}) { //Truly it should be 99, but hey . . .
+    repeat between 0 and 99 {
+      call (pastryPathReqFwd);
+    }
+    maybe {
+      recv(Sender_Receiver_Forwarder);
+      task ("macedon_tcp_transport::deliver") {
+        task ("Pastry::deliver(ReceiveDataHandler)") {
+          xor { 
+branch:
+            task ("Pastry::deliver::data(ReceiveDataHandler)") {
+              call (updateState);
+              call (mcGtmFwd);
+              call (mcGtmRcv);
+            }
+branch:
+            task ("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+              call (updateState); //once for the 1-hop sender, once for the origin
+              call (updateState); //once for the 1-hop sender, once for the origin
+              call (mcGtmFwd);
+              maybe { notice("control_::route::Pastry::mapping"); send(Sender); } //Mapping message
+              call (mcGtmRcv);
+            }
+          }
+        }
+      }
+    }
+    repeat between 0 and 99 {
+      call (pastryPathReqFwd);
+    }
+  }
+  thread RecvProbe(*,{0,100}) {
+    repeat between 1 and 200 {
+      xor {
+        branch:
+        call (pastryRecvProbe);
+        branch:
+        call (pastryRecvProbeReply);
+      }
+    }
+  }
+  thread RecvMapping(*,{0,100}) {
+    repeat between 1 and 18 {
+      call (pastryRecvMapping);
+    }
+  }
+}
+recognizer dud {
+  thread dude (*,1) {
+    any();
+  }
+  thread dude2 (*,{0,10000}) {
+    recv(foo);
+    any();
+  }
+}
+validator pMaceInit {
+  thread dude (*,1) {
+    task("Pastry::maceInit(Route)") {
+      notice("control_::getLocalAddress");
+    }
+  }
+}
+validator gtmMaceInit {
+  thread dude (*,1) {
+    task("GenericTreeMulticast::maceInit(HierarchicalMulticast)") {
+      notice("data_::getLocalAddress");
+      task("Pastry::getLocalAddress(Route)");
+      notice("tree_::isJoinedOverlay");
+      task("ScribeMS::getOverlayJoinStatus(Tree)") {
+        notice("overlay_::getOverlayJoinStatus");
+        task("Pastry::getOverlayJoinStatus(OverlayRoute)");
+      }
+    }
+  }
+}
+fragment validator netError { //This will eventually be more complex
+  task("Pastry::error(NetworkErrorHandler)");
+}
+validator ssMaceInitLocal { 
+  limit(HOSTS, {=1});
+  thread dude(*,1) {
+    task("SplitStreamMS::maceInit(Multicast)") {
+      notice("tree_::getLocalAddress");
+      task("ScribeMS::getLocalAddress(Tree)");
+      send(printer_timer);
+      notice("tree_::joinGroup");
+      task("ScribeMS::joinGroup(ScribeTree)");//joinGroup(ScribeTree) could be much more complex
+    }
+  }
+  thread printer(*,1) { //works only until the scheduler thread changes
+    repeat between 0 and 100000 {
+      recv(printer_timer);
+      task("SplitStreamMS::timer printer") {
+        send(printer_timer);
+      }
+    }
+    repeat between 0 and 1 {
+      recv(printer_timer);
+      task("SplitStreamMS::timer printer");
+    }
+  }
+}
