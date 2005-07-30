@@ -121,8 +121,12 @@ class PathMessage {
 public:
 	PathMessage(const MYSQL_ROW &row) {
 		send = new PathMessageSend(row);
-		recv = new PathMessageRecv(row);
-		recv->send = send;
+		if (row[5] && row[8]) {
+			recv = new PathMessageRecv(row);
+			recv->send = send;
+		}
+		else
+			recv = NULL;
 		send->recv = recv;
 	}
 	PathMessageSend *send;
@@ -143,8 +147,10 @@ public:
 	void insert(PathNotice *pn) { insert_event(pn, children[pn->thread_id]); }
 	void insert(PathMessage *pm) {
 		insert_event(pm->send, children[pm->send->thread_send]);
-		insert_event(pm->recv, children[pm->recv->thread_recv]);
-		pm->send->dest = &children[pm->recv->thread_recv];
+		if (pm->recv) {
+			insert_event(pm->recv, children[pm->recv->thread_recv]);
+			pm->send->dest = &children[pm->recv->thread_recv];
+		}
 		delete pm;  // does not delete its children
 	}
 	void print_dot(FILE *fp = stdout) const;

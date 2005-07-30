@@ -156,7 +156,7 @@ void PathMessageSend::print_dot(FILE *fp) const {
 
 void PathMessageSend::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<message_send size=\"%d\" send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" addr=\"%p\"/>\n",
-		depth*2, "", size, thread_send, recv->thread_recv, ts_send.tv_sec, ts_send.tv_usec, this);
+		depth*2, "", size, thread_send, recv?recv->thread_recv:-1, ts_send.tv_sec, ts_send.tv_usec, this);
 }
 
 PathMessageRecv::PathMessageRecv(const MYSQL_ROW &row) : send(NULL) {
@@ -347,19 +347,19 @@ int Path::compare(const Path &other) const {
 }
 
 void Path::insert_task(PathTask *pt, std::vector<PathEvent *> &where) {
-	// !! really only need to compare against last child
-	for (unsigned int i=0; i<where.size(); i++) {
-		switch (tvcmp(where[i], pt)) {
+	if (where.size() != 0) {
+		int idx = where.size() - 1;
+		switch (tvcmp(where[idx], pt)) {
 			case OV_START:
 				assert(!"New PathTask overlaps start of existing");
 			case OV_END:
 				assert(!"New PathTask overlaps end of existing");
 			case OV_BEFORE:
-				where.insert(where.begin()+i, pt);
+				where.insert(where.begin()+idx, pt);
 				return;
 			case OV_WITHIN:
-				assert(where[i]->type() == PEV_TASK);
-				insert_task(pt, ((PathTask*)where[i])->children);
+				assert(where[idx]->type() == PEV_TASK);
+				insert_task(pt, ((PathTask*)where[idx])->children);
 				return;
 			case OV_AFTER:
 				break;
@@ -369,26 +369,28 @@ void Path::insert_task(PathTask *pt, std::vector<PathEvent *> &where) {
 			default:
 				assert(!"invalid overlap type");
 		}
+
+		assert(where[idx]->end() <= pt->start());
 	}
-	if (where.size() != 0)
-		assert(where[where.size()-1]->end() <= pt->start());
 	where.push_back(pt);
 }
 
 void Path::insert_event(PathEvent *pe, std::vector<PathEvent *> &where) {
 	assert(pe->type() != PEV_TASK);
-	for (unsigned int i=0; i<where.size(); i++) {
-		if (pe->start() < where[i]->start()) {      // before where[i]
-			where.insert(where.begin()+i, pe);
-			return;
-		}
-		if (where[i]->type() != PEV_TASK) continue;
-		if (pe->start() <= where[i]->end()) {       // inside where[i]
-			insert_event(pe, ((PathTask*)where[i])->children);
-			return;
-		}
+	const timeval &start = pe->start();
+	int low=0, high=where.size()-1;
+	while (low <= high) {
+		unsigned int mid = (low+high)/2;
+		const timeval &test_start = where[mid]->start();
+		if (start < test_start) high = mid-1;
+		else if (start > test_start) low = mid+1;
 	}
-	where.push_back(pe);
+	assert(low == high+1);
+
+	if (high >= 0 && where[high]->type() == PEV_TASK && start <= where[high]->end())
+		insert_event(pe, ((PathTask*)where[high])->children);
+	else
+		where.insert(where.begin()+low, pe);
 }
 
 void Path::print_dot(FILE *fp) const {
@@ -473,14 +475,7 @@ static void check_order(const PathEventList &list) {
 	unsigned int i;
 	for (i=0; i<list.size(); i++) {
 		assert(list[i]->start() <= list[i]->end());
-		if (i < list.size()-1) {
-			if (list[i]->end() > list[i+1]->start()) {
-				fprintf(stderr, "Events %d/%d out of order:\n", i, i+1);
-				list[i]->print(stderr, 1);
-				list[i+1]->print(stderr, 1);
-			}
-			assert(list[i]->end() <= list[i+1]->start());
-		}
+		if (i < list.size()-1) assert(list[i]->end() <= list[i+1]->start());
 		if (list[i]->type() == PEV_TASK) {
 			const PathTask *t = (const PathTask*)list[i];
 			if (t->children.size() > 0) {
@@ -492,19 +487,15 @@ static void check_order(const PathEventList &list) {
 	}
 }
 
-static int message_depth(const PathEvent *pm) {
-	PathEvent *pred;
-	switch (pm->type()) {
-		case PEV_MESSAGE_SEND:
-			pred = ((PathMessageSend*)pm)->pred;
-			return pred ? message_depth(pred) : 1;
-		case PEV_MESSAGE_RECV:
-			pred = ((PathMessageRecv*)pm)->send;
-			return 1+message_depth(pred);
-		default:
-			fprintf(stderr, "message_depth: Invalid event type %d\n", pm->type());
-			abort();
-	}
+static int recv_message_depth(const PathMessageRecv *pmr);
+static int send_message_depth(const PathMessageSend *pms) {
+	const PathMessageRecv *pred = pms->pred;
+	return pred ? recv_message_depth(pred) : 1;
+}
+
+static int recv_message_depth(const PathMessageRecv *pmr) {
+	const PathMessageSend *pred = pmr->send;
+	return 1+send_message_depth(pred);
 }
 
 static int max_message_depth(const PathEventList &list) {
@@ -516,7 +507,7 @@ static int max_message_depth(const PathEventList &list) {
 				depth = max_message_depth(((PathTask*)list[i])->children);
 				break;
 			case PEV_MESSAGE_RECV:
-				depth = message_depth(list[i]);
+				depth = recv_message_depth((PathMessageRecv*)list[i]);
 				break;
 			default: ;
 		}

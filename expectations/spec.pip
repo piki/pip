@@ -1,4 +1,4 @@
-fragment recognizer E1 {
+fragment recognizer FR1 {
 limit(REAL_TIME, 15s);
 	{ notice("FOO"); }
 	task("PARSE_REQUEST")
@@ -14,9 +14,11 @@ limit(REAL_TIME, 15s);
 		branch: notice("THIS");
 		branch: notice("THAT");
 	}
+	repeat between 2 and 4 task("your mom");
+	maybe task("your mom");
 }
 
-invalidator X1 {
+invalidator I2 {
 	thread Client(*, 1) {
 		task("outer") {
 			task("inner");   // "inner" cannot be nested alone in "outer"
@@ -24,26 +26,25 @@ invalidator X1 {
 	}
 }
 
-fragment invalidator X2 {
+fragment invalidator FI3 {
 	task(*) limit(REAL_TIME, {1s+});  // no tasks over one second
 }
 
-fragment recognizer E2 { }
+fragment recognizer FR4 { }
 
-fragment recognizer E3 {
+fragment recognizer FR5 {
   xor {
-    branch: call(E1);
-    branch: call(E2);
+    branch: call(FR1);
+    branch: call(FI3);
   }
 }
 
-recognizer E5 {
-	thread Mumble(*, {1,100}) {
-		any();
-	}
+recognizer R6 {
+	thread Root(*, 1) { any(); }
+	thread Mumble(*, {0, 99}) { any(); }
 }
 
-validator E4 {
+validator V7 {
 	thread Client(*, 1) {
 		send(Client,Mumble);
 		task("foo");
@@ -53,7 +54,7 @@ validator E4 {
 	}
 }
 
-validator DHT_recursive_shortcut {
+validator V_DHT_recursive_shortcut {
 	thread Client(*, 1) {
 		limit(SIZE, 10kb);
 		task(m/^DHT/);
@@ -68,7 +69,7 @@ validator DHT_recursive_shortcut {
 	}
 }
 
-validator DHT_iterative {
+validator V_DHT_iterative {
 	thread Client(*, 1) {
 		task("DHT");
 		repeat between 1 and 5 {
@@ -80,7 +81,7 @@ validator DHT_iterative {
 	}
 }
 
-validator DHT_recursive {
+validator V_DHT_recursive {
 	thread Client(*, 1) {
 		task("DHT");
 		send(Client);
@@ -94,7 +95,7 @@ validator DHT_recursive {
 	}
 }
 
-validator DHT_Coral {
+validator V_DHT_Coral {
 	thread Client(*, 1) {
 		task("DHT");
 		send(Client);
@@ -116,23 +117,23 @@ validator DHT_Coral {
 	}
 }
 
-fragment recognizer Timer {
+fragment recognizer FR_Timer {
   notice("timer");
 }
 
-assert( instances(E1) in { 1, 5 } );
-assert( instances(E1) < 5 );
-assert( instances(E1) > 1 );
-assert( instances(E1) >= 4 );
-assert( instances(E1) <= 5 );
-assert( instances(E1) != 0 );
+assert( instances(FR1) in { 1, 5 } );
+assert( instances(FR1) < 5 );
+assert( instances(FR1) > 1 );
+assert( instances(FR1) >= 4 );
+assert( instances(FR1) <= 5 );
+assert( instances(FR1) != 0 );
 assert( 5. < 2.**3. );
 assert( exp(2.) < ln(10000.) );
 assert( log(1000000.) == 6. );
-//during(any 0) assert( unique(E1) == unique(E2) );
-//during(any 5) assert( instances(E1) > 0 -> instances(E2) == 0 );
+//during(any 0) assert( unique(FR1) == unique(I2) );
+//during(any 5) assert( instances(E1) > 0 -> instances(I2) == 0 );
 //during(1, 10) assert( unique($HERE) == 1 );
-assert( average(CPU_TIME, E1) < 5s );
-assert( stddev(INVOL_CS, E1) < 5ms );
+assert( average(CPU_TIME, FR1) < 5s );
+assert( stddev(INVOL_CS, FR1) < 5ms );
 //assert( max(REAL_TIME, "DHT") in { 0, 10 } );
 //assert( min(REAL_TIME, "DHT") in { 0, 10 } );

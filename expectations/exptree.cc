@@ -6,6 +6,7 @@
 #include "expect.tab.hh"
 
 static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources);
+static void add_statement(const Node *node, ExpEventList *where);
 static void add_statements(const ListNode *list_node, ExpEventList *where);
 static void add_limits(const ListNode *limit_list, LimitList *limits);
 static bool debug_failed_matches_individually = false;
@@ -466,8 +467,7 @@ ExpRepeat::ExpRepeat(const OperatorNode *onode) {
 	min = ((IntNode*)range->operands[0])->value;
 	max = ((IntNode*)range->operands[1])->value;
 
-	assert(onode->operands[1]->type() == NODE_LIST);
-	add_statements((ListNode*)onode->operands[1], &children);
+	add_statement(onode->operands[1], &children);
 }
 
 ExpRepeat::~ExpRepeat(void) {
@@ -764,58 +764,59 @@ int Recognizer::check(const PathEventList &test, const ExpEventList &list,
 	return my_ofs - ofs;
 }
 
+static void add_statement(const Node *node, ExpEventList *where) {
+	switch (node->type()) {
+		case NODE_LIST:
+			add_statements((ListNode*)node, where);
+			break;
+		case NODE_OPERATOR:{
+				OperatorNode *onode = (OperatorNode*)node;
+				switch (onode->op) {
+					case TASK:
+						where->push_back(new ExpTask(onode));
+						break;
+					case NOTICE:
+						where->push_back(new ExpNotice(onode));
+						break;
+					case REPEAT:
+						where->push_back(new ExpRepeat(onode));
+						break;
+					case XOR:
+						where->push_back(new ExpXor(onode));
+						break;
+					case CALL:
+						where->push_back(new ExpCall(onode));
+						break;
+					case SEND:
+						where->push_back(new ExpMessageSend(onode));
+						break;
+					case RECV:
+						where->push_back(new ExpMessageRecv(onode));
+						break;
+					case ANY:
+						where->push_back(new ExpAny(onode));
+						break;
+					case '=':
+						fprintf(stderr, "op %s not implemented yet\n", get_op_name(onode->op));
+						break;
+					default:
+						fprintf(stderr, "unknown op %s (%d)\n", get_op_name(onode->op), onode->op);
+						abort();
+				}
+			}
+			break;
+		default:
+			fprintf(stderr, "Invalid node type %d when expecting statement\n",
+				node->type());
+			exit(1);
+	}
+}
+
 static void add_statements(const ListNode *list_node, ExpEventList *where) {
 	unsigned int i;
 	assert(where != NULL);
-	ExpEventList *local_where = where;
-	for (i=0; i<list_node->size(); i++) {
-		const Node *node = (*list_node)[i];
-		switch (node->type()) {
-			case NODE_LIST:
-				add_statements((ListNode*)node, local_where);
-				break;
-			case NODE_OPERATOR:{
-					OperatorNode *onode = (OperatorNode*)node;
-					switch (onode->op) {
-						case TASK:
-							local_where->push_back(new ExpTask(onode));
-							break;
-						case NOTICE:
-							local_where->push_back(new ExpNotice(onode));
-							break;
-						case REPEAT:
-							local_where->push_back(new ExpRepeat(onode));
-							break;
-						case XOR:
-							local_where->push_back(new ExpXor(onode));
-							break;
-						case CALL:
-							local_where->push_back(new ExpCall(onode));
-							break;
-						case SEND:
-							local_where->push_back(new ExpMessageSend(onode));
-							break;
-						case RECV:
-							local_where->push_back(new ExpMessageRecv(onode));
-							break;
-						case ANY:
-							local_where->push_back(new ExpAny(onode));
-							break;
-						case '=':
-							fprintf(stderr, "op %s not implemented yet\n", get_op_name(onode->op));
-							break;
-						default:
-							fprintf(stderr, "unknown op %s (%d)\n", get_op_name(onode->op), onode->op);
-							abort();
-					}
-				}
-				break;
-			default:
-				fprintf(stderr, "Invalid node type %d when expecting statement\n",
-					node->type());
-				exit(1);
-		}
-	}
+	for (i=0; i<list_node->size(); i++)
+		add_statement((*list_node)[i], where);
 }
 
 static void add_limits(const ListNode *limit_list, LimitList *limits) {

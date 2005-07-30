@@ -4,6 +4,7 @@ CXXFLAGS = -g -Wall
 CPPFLAGS = -I.
 PROGS = pathcheck uniqpaths showpaths makeexp
 LDLIBS = -lm -lmysqlclient -lpcre
+#LDFLAGS = -pg
 YACC = bison
 
 .PRECIOUS: expect.c
