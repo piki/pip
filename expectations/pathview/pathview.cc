@@ -112,7 +112,6 @@ int main(int argc, char **argv) {
 	}
 	table_base = argv[1];
 	if (!expect_parse(argv[2])) return 1;
-	printf("%d recognizers registered.\n", recognizers.size());
   glade_init();
   main_xml = glade_xml_new("pathview.glade", "main", NULL);
   glade_xml_signal_autoconnect(main_xml);
@@ -283,25 +282,28 @@ static void init_paths(GtkTreeView *tree) {
 }
 
 static void init_recognizers(GtkTreeView *tree) {
-	list_recognizers = gtk_list_store_new(6,
-		G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_INT, G_TYPE_INT);
-	gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(list_recognizers), 0, GTK_SORT_ASCENDING);
+	list_recognizers = gtk_list_store_new(7,
+		G_TYPE_BOOLEAN, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_INT, G_TYPE_INT);
+	gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(list_recognizers), 1, GTK_SORT_ASCENDING);
 	gtk_tree_view_set_model(tree, GTK_TREE_MODEL(list_recognizers));
-	GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
-	GtkTreeViewColumn *col = gtk_tree_view_column_new_with_attributes("Recognizer", renderer, "text", 0, NULL);
+	GtkCellRenderer *renderer = gtk_cell_renderer_toggle_new();
+	GtkTreeViewColumn *col = gtk_tree_view_column_new_with_attributes("", renderer, "active", 0, NULL);
 	gtk_tree_view_append_column(tree, col);
 	gtk_tree_view_column_set_sort_column_id(col, 0);
-	col = gtk_tree_view_column_new_with_attributes("", renderer, "text", 1, NULL);
+	renderer = gtk_cell_renderer_text_new();
+	col = gtk_tree_view_column_new_with_attributes("Recognizer", renderer, "text", 1, NULL);
 	gtk_tree_view_append_column(tree, col);
+	gtk_tree_view_column_set_sort_column_id(col, 1);
 	col = gtk_tree_view_column_new_with_attributes("", renderer, "text", 2, NULL);
 	gtk_tree_view_append_column(tree, col);
-	col = gtk_tree_view_column_new_with_attributes("Paths", renderer, "text", 3, NULL);
+	gtk_tree_view_column_set_sort_column_id(col, 2);
+	col = gtk_tree_view_column_new_with_attributes("", renderer, "text", 3, NULL);
 	gtk_tree_view_append_column(tree, col);
 	gtk_tree_view_column_set_sort_column_id(col, 3);
-	col = gtk_tree_view_column_new_with_attributes("Resource violations", renderer, "text", 4, NULL);
+	col = gtk_tree_view_column_new_with_attributes("Paths", renderer, "text", 4, NULL);
 	gtk_tree_view_append_column(tree, col);
 	gtk_tree_view_column_set_sort_column_id(col, 4);
-	col = gtk_tree_view_column_new_with_attributes("#", renderer, "text", 5, NULL);
+	col = gtk_tree_view_column_new_with_attributes("Resource violations", renderer, "text", 5, NULL);
 	gtk_tree_view_append_column(tree, col);
 	gtk_tree_view_column_set_sort_column_id(col, 5);
 	fill_recognizers();
@@ -435,19 +437,20 @@ void fill_recognizers(void) {
 			pathtype[0] = toupper(path_type_to_string(rp->second->pathtype)[0]);
 			gtk_list_store_append(list_recognizers, &iter);
 			gtk_list_store_set(list_recognizers, &iter,
-				0, rp->first.c_str(),
-				1, pathtype,
-				2, rp->second->complete ? "C" : "F",
-				3, match_count[i],
-				4, resources_count[i],
-				5, i,
+				0, FALSE,
+				1, rp->first.c_str(),
+				2, pathtype,
+				3, rp->second->complete ? "C" : "F",
+				4, match_count[i],
+				5, resources_count[i],
+				6, i,
 				-1);
 		}
 	gtk_list_store_append(list_recognizers, &iter);
 	gtk_list_store_set(list_recognizers, &iter,
-		0, "(unvalidated)",
-		3, invalid_paths_count,
-		5, recognizers.size(),
+		1, "(unvalidated)",
+		4, invalid_paths_count,
+		6, recognizers.size(),
 		-1);
 }
 
@@ -562,7 +565,6 @@ static bool popup_fill_events(const PathEventList &list, PathMessageRecv *match,
 
 void dag_node_clicked(GtkDAG *dag, DAGNode *node) {
 	if (!dagpopup_xml) {
-		printf("initializing dagpopup\n");
 		dagpopup_xml = glade_xml_new("pathview.glade", "dagpopup", NULL);
 		glade_xml_signal_autoconnect(dagpopup_xml);
 
@@ -603,7 +605,7 @@ void dag_node_clicked(GtkDAG *dag, DAGNode *node) {
 void each_recognizer(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *iter,
 		gpointer data) {
 	int recog;
-	gtk_tree_model_get(GTK_TREE_MODEL(list_recognizers), iter, 5, &recog, -1);
+	gtk_tree_model_get(GTK_TREE_MODEL(list_recognizers), iter, 6, &recog, -1);
 	recognizers_filter->set(recog, true);
 	(*(int*)data)++;
 }
@@ -856,12 +858,30 @@ void hosts_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn 
 	printf("hosts_activate\n");
 }
 
+static gboolean set_if_matched(GtkTreeModel *model, GtkTreePath *path, GtkTreeIter *iter, gpointer data) {
+	assert(model == GTK_TREE_MODEL(list_recognizers));
+	PathStub *ps = (PathStub*)data;
+	if (ps) {
+		int rid;
+		gtk_tree_model_get(model, iter, 6, &rid, -1);
+		bool matched = ps->recognizers[rid];
+		gtk_list_store_set(list_recognizers, iter, 0, matched, -1);
+	}
+	else
+		gtk_list_store_set(list_recognizers, iter, 0, FALSE, -1);
+	
+	return FALSE;
+}
+
 void paths_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewColumn *tvc) {
 	GtkTreeIter iter;
 	int pathid;
 	char *pathname;
 	gtk_tree_model_get_iter(GTK_TREE_MODEL(list_paths), &iter, path);
 	gtk_tree_model_get(GTK_TREE_MODEL(list_paths), &iter, 0, &pathid, 1, &pathname, -1);
+	PathStub *ps = paths[pathid];
+	// call it even if ps==NULL -- it will just set to false
+	gtk_tree_model_foreach(GTK_TREE_MODEL(list_recognizers), set_if_matched, ps);
 	if (active_path) delete active_path;
 	active_path = new Path(&mysql, table_base, pathid);
 	if (!active_path->valid()) {
@@ -888,12 +908,10 @@ void recognizers_activate_row(GtkTreeView *tree, GtkTreePath *path, GtkTreeViewC
 }
 
 void on_graph_quantity_changed(GtkComboBox *cb) {
-	printf("graph quantity changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
 	regraph();
 }
 
 void on_graph_style_changed(GtkComboBox *cb) {
-	printf("graph style changed to %d/%s\n", gtk_combo_box_get_active(cb), gtk_combo_box_get_active_text(cb));
 	regraph();
 }
 
@@ -1086,7 +1104,6 @@ void on_dagpopup_row_activated(GtkTreeView *tree, GtkTreePath *path, GtkTreeView
 	PathTask *task = (PathTask*)ev;
 
 	if (!taskpopup_xml) {
-		printf("initializing taskpopup\n");
 		taskpopup_xml = glade_xml_new("pathview.glade", "taskpopup", NULL);
 		glade_xml_signal_autoconnect(taskpopup_xml);
 
