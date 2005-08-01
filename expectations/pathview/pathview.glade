@@ -3,7 +3,7 @@
 
 <glade-interface>
 
-<widget class="GtkWindow" id="main">
+<widget class="GtkWindow" id="pathview_main">
   <property name="width_request">800</property>
   <property name="height_request">600</property>
   <property name="visible">True</property>
@@ -1496,7 +1496,7 @@ Ignore task+notice names</property>
   </child>
 </widget>
 
-<widget class="GtkWindow" id="dagpopup">
+<widget class="GtkWindow" id="pathview_dagpopup">
   <property name="visible">True</property>
   <property name="title" translatable="yes">Thread events</property>
   <property name="type">GTK_WINDOW_TOPLEVEL</property>
@@ -1736,7 +1736,7 @@ Ignore task+notice names</property>
   </child>
 </widget>
 
-<widget class="GtkWindow" id="taskpopup">
+<widget class="GtkWindow" id="pathview_taskpopup">
   <property name="visible">True</property>
   <property name="title" translatable="yes">Task properties</property>
   <property name="type">GTK_WINDOW_TOPLEVEL</property>

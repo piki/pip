@@ -45,6 +45,7 @@ struct _GtkPlotClass {
 
 struct _GtkPlotPoint {
 	double x, y;
+	gpointer user_data;
 };
 
 GType      gtk_plot_get_type(void);
@@ -52,7 +53,7 @@ GtkWidget* gtk_plot_new(GtkPlotFlags flags);
 void       gtk_plot_free(GtkPlot *plot);
 void       gtk_plot_clear(GtkPlot *plot);
 void       gtk_plot_start_new_line(GtkPlot *plot);
-void       gtk_plot_add_point(GtkPlot *plot, double x, double y);
+void       gtk_plot_add_point(GtkPlot *plot, double x, double y, gpointer user_data);
 void       gtk_plot_freeze(GtkPlot *plot);
 void       gtk_plot_thaw(GtkPlot *plot);
 void       gtk_plot_set_xrange(GtkPlot *plot, double xmin, double xmax);

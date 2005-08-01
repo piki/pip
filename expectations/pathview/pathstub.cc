@@ -14,6 +14,8 @@ PathStub::PathStub(const Path &path, int nrecognizers)
 	messages = path.messages;
 	depth = path.depth;
 	hosts = path.hosts;
+	bytes = path.size;
+	threads = path.children.size();
 	path_id = path.path_id;
 	valid = path.valid();
 	validated = false;

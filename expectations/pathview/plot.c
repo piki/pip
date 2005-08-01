@@ -143,8 +143,8 @@ void gtk_plot_thaw(GtkPlot *plot) {
 	gtk_widget_queue_draw(GTK_WIDGET(plot));
 }
 
-void gtk_plot_add_point(GtkPlot *plot, double x, double y) {
-	GtkPlotPoint p = { x, y };
+void gtk_plot_add_point(GtkPlot *plot, double x, double y, gpointer user_data) {
+	GtkPlotPoint p = { x, y, user_data };
 
 	g_return_if_fail(plot);
 	g_return_if_fail(GTK_IS_PLOT(plot));

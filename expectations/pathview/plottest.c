@@ -7,6 +7,7 @@ static void point_clicked(GtkPlot *plot, GtkPlotPoint *point);
 int main(int argc, char **argv) {
 	GtkWidget *w, *plot;
 	int i;
+	char *string = "ABCDEFGHIJKLMNOPQRSTUV";
 
 	gtk_init(&argc, &argv);
 
@@ -21,10 +22,10 @@ int main(int argc, char **argv) {
 	gtk_plot_freeze(GTK_PLOT(plot));
 	gtk_plot_start_new_line(GTK_PLOT(plot));
 	for (i=1; i<10; i++)
-		gtk_plot_add_point(GTK_PLOT(plot), i, i*i);
+		gtk_plot_add_point(GTK_PLOT(plot), i, i*i, string+i-1);
 	gtk_plot_start_new_line(GTK_PLOT(plot));
 	for (i=1; i<10; i++)
-		gtk_plot_add_point(GTK_PLOT(plot), i, (i-3)*(i-3));
+		gtk_plot_add_point(GTK_PLOT(plot), i, (i-3)*(i-3), string+i-1+10);
 	gtk_plot_thaw(GTK_PLOT(plot));
 
 	gtk_main();
@@ -34,7 +35,7 @@ int main(int argc, char **argv) {
 
 static void point_clicked(GtkPlot *plot, GtkPlotPoint *point) {
 	if (point)
-		printf("point clicked: %.3f %.3f\n", point->x, point->y);
+		printf("point clicked: %.3f %.3f \"%s\"\n", point->x, point->y, (char*)point->user_data);
 	else
 		printf("point cleared\n");
 }

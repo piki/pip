@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 	table_base = argv[1];
 	if (!expect_parse(argv[2])) return 1;
   glade_init();
-  main_xml = glade_xml_new("pathview.glade", "main", NULL);
+  main_xml = glade_xml_new("pathview.glade", "pathview_main", NULL);
   glade_xml_signal_autoconnect(main_xml);
   //gtk_object_unref(GTK_OBJECT(main_xml));
 	mysql_init(&mysql);
@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
 	}
 
 	char *title = g_strconcat("Path View: ", table_base, NULL);
-	gtk_window_set_title(GTK_WINDOW(WID("main")), title);
+	gtk_window_set_title(GTK_WINDOW(WID("pathview_main")), title);
 	g_free(title);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(WID("graph_quantity")), 0);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(WID("graph_style")), 0);
@@ -502,6 +502,12 @@ void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point) {
 	if (point) {
 		sprintf(buf, "(%.3f, %.3f)", point->x, point->y);
 		gtk_label_set_text(GTK_LABEL(WID("graph_pos")), buf);
+		if (graph_showing == GRAPH_PATHS && point->user_data) {
+			PathStub *ps = (PathStub*)point->user_data;
+			printf("path = %p { id=%d start=%ld.%06ld end=%ld.%06ld }\n",
+				ps, ps->path_id, ps->ts_start.tv_sec, ps->ts_start.tv_usec,
+				ps->ts_end.tv_sec, ps->ts_end.tv_usec);
+		}
 	}
 	else
 		gtk_label_set_text(GTK_LABEL(WID("graph_pos")), "(X, Y)");
@@ -565,7 +571,7 @@ static bool popup_fill_events(const PathEventList &list, PathMessageRecv *match,
 
 void dag_node_clicked(GtkDAG *dag, DAGNode *node) {
 	if (!dagpopup_xml) {
-		dagpopup_xml = glade_xml_new("pathview.glade", "dagpopup", NULL);
+		dagpopup_xml = glade_xml_new("pathview.glade", "pathview_dagpopup", NULL);
 		glade_xml_signal_autoconnect(dagpopup_xml);
 
 		GtkTreeView *tree = GTK_TREE_VIEW(WID_D("dagpopup_list"));
@@ -579,7 +585,7 @@ void dag_node_clicked(GtkDAG *dag, DAGNode *node) {
 	}
 	else {
 		printf("showing dagpopup\n");
-		gtk_widget_show(WID_D("dagpopup"));
+		gtk_widget_show(WID_D("pathview_dagpopup"));
 	}
 
 	PathMessageRecv *pmr = (PathMessageRecv*)node->user_data;
@@ -684,23 +690,23 @@ static void tasks_plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *i
 		switch (style) {
 			case STYLE_CDF:
 				if (n % skip == 0 || n == row_count - 1)
-					gtk_plot_add_point(plot, atof(row[0]), (double)n/(row_count-1));
+					gtk_plot_add_point(plot, atof(row[0]), (double)n/(row_count-1), NULL);
 				n++;
 				break;
 			case STYLE_PDF:
 				x = atoi(row[0]);
 				if (x == last_x + 2)
-					gtk_plot_add_point(plot, x-1, 0);
+					gtk_plot_add_point(plot, x-1, 0, NULL);
 				else if (x > last_x + 2) {
-					gtk_plot_add_point(plot, last_x+1, 0);
-					gtk_plot_add_point(plot, x-1, 0);
+					gtk_plot_add_point(plot, last_x+1, 0, NULL);
+					gtk_plot_add_point(plot, x-1, 0, NULL);
 				}
 				last_x = x;
-				gtk_plot_add_point(plot, x, atof(row[1]));
+				gtk_plot_add_point(plot, x, atof(row[1]), NULL);
 				break;
 			case STYLE_TIME:
 				if (n % skip == 0 || n == row_count - 1)
-					gtk_plot_add_point(plot, atof(row[1]), atof(row[0]));
+					gtk_plot_add_point(plot, atof(row[1]), atof(row[0]), NULL);
 				n++;
 				break;
 		}
@@ -736,13 +742,13 @@ void tasks_graph(void) {
 
 struct PlotPoint {
 	float x, y;
+	PathStub *ps;
 };
 
-static int ppcmp(const void *a, const void *b) {
-	if (((PlotPoint*)a)->x < ((PlotPoint*)b)->x) return -1;
-	if (((PlotPoint*)a)->x > ((PlotPoint*)b)->x) return 1;
-	return 0;
-}
+struct PlotPointX {
+	float x;
+	PathStub *ps;
+};
 
 template<typename T>
 static int cmp(const void *a, const void *b) {
@@ -758,7 +764,12 @@ void paths_graph(void) {
 
 	int quant = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_quantity")));
 	int style = gtk_combo_box_get_active(GTK_COMBO_BOX(WID("graph_style")));
-	if (!task_quant[quant]) {
+
+	if (quant != QUANT_START && quant != QUANT_REAL && quant != QUANT_CPU &&
+			quant != QUANT_UTIME && quant != QUANT_STIME && quant != QUANT_MAJFLT &&
+			quant != QUANT_MINFLT && quant != QUANT_VCS && quant != QUANT_IVCS &&
+			quant != QUANT_MESSAGES && quant != QUANT_DEPTH && quant != QUANT_HOSTS &&
+			quant != QUANT_BYTES && quant != QUANT_THREADS) {
 		gtk_plot_thaw(plot);
 		printf("quant %d is not defined for paths (yet?)\n", quant);
 		return;
@@ -768,11 +779,11 @@ void paths_graph(void) {
 
 	union {
 		PlotPoint *pp;
-		float *f;
 		unsigned int *i;
+		PlotPointX *f;
 	} points;
 	switch (style) {
-		case STYLE_CDF:   points.f = new float[shown_paths.size()];         break;
+		case STYLE_CDF:   points.f = new PlotPointX[shown_paths.size()];    break;
 		case STYLE_PDF:   points.i = new unsigned int[shown_paths.size()];  break;
 		case STYLE_TIME:  points.pp = new PlotPoint[shown_paths.size()];    break;
 	}
@@ -794,20 +805,26 @@ void paths_graph(void) {
 			case QUANT_MESSAGES:  val = p->messages;                             break;
 			case QUANT_DEPTH:     val = p->depth;                                break;
 			case QUANT_HOSTS:     val = p->hosts;                                break;
+			case QUANT_BYTES:     val = p->bytes;                                break;
+			case QUANT_THREADS:   val = p->threads;                              break;
 			case QUANT_LATENCY:
-			case QUANT_BYTES:
-			case QUANT_THREADS:
 				fprintf(stderr, "Quant %d not implemented for paths yet\n", quant);
 				break;
 			default: assert(!"invalid quant");
 		}
 		assert(val >= 0);
 		switch (style) {
-			case STYLE_CDF:   points.f[npoints] = val;                break;
-			case STYLE_PDF:   points.i[npoints] = (int)(val + 0.5);   break;
+			case STYLE_CDF:
+				points.f[npoints].x = val;
+				points.f[npoints].ps = p;
+				break;
+			case STYLE_PDF:
+				points.i[npoints] = (int)(val + 0.5);
+				break;
 			case STYLE_TIME:
 				points.pp[npoints].x = (p->ts_start - first_time)/1000000.0;
 				points.pp[npoints].y = val;
+				points.pp[npoints].ps = p;
 				break;
 		}
 		npoints++;
@@ -816,11 +833,11 @@ void paths_graph(void) {
 	int skip = npoints / (MAX_GRAPH_POINTS - 1) + 1;
 	switch (style) {
 		case STYLE_CDF:
-			qsort(points.f, npoints, sizeof(float), &cmp<float>);
+			qsort(points.f, npoints, sizeof(PlotPointX), &cmp<float>);
 			for (unsigned int i=0; i<npoints; i+=skip)
-				gtk_plot_add_point(plot, points.f[i], (double)i/(npoints-1));
+				gtk_plot_add_point(plot, points.f[i].x, (double)i/(npoints-1), points.f[i].ps);
 			if ((npoints-1) % skip != 0)
-				gtk_plot_add_point(plot, points.f[npoints-1], 1.0);
+				gtk_plot_add_point(plot, points.f[npoints-1].x, 1.0, points.f[npoints-1].ps);
 			delete[] points.f;
 			break;
 		case STYLE_PDF:
@@ -830,21 +847,21 @@ void paths_graph(void) {
 			for (unsigned int i=0; i<npoints; ) {
 				for (j=i+1; j<npoints && points.i[j] == points.i[i]; j++)  ;
 				if (points.i[i] == last_x + 2)
-					gtk_plot_add_point(plot, points.i[i]-1, 0);
+					gtk_plot_add_point(plot, points.i[i]-1, 0, NULL);
 				else if (points.i[i] > last_x + 2) {
-					gtk_plot_add_point(plot, last_x+1, 0);
-					gtk_plot_add_point(plot, points.i[i]-1, 0);
+					gtk_plot_add_point(plot, last_x+1, 0, NULL);
+					gtk_plot_add_point(plot, points.i[i]-1, 0, NULL);
 				}
 				last_x = points.i[i];
-				gtk_plot_add_point(plot, points.i[i], j-i);
+				gtk_plot_add_point(plot, points.i[i], j-i, NULL);
 				i=j;
 			}
 			delete[] points.i;
 			break;
 		case STYLE_TIME:
-			qsort(points.pp, npoints, sizeof(PlotPoint), &ppcmp);
+			qsort(points.pp, npoints, sizeof(PlotPoint), &cmp<float>);
 			for (unsigned int i=0; i<npoints; i++)
-				gtk_plot_add_point(plot, points.pp[i].x, points.pp[i].y);
+				gtk_plot_add_point(plot, points.pp[i].x, points.pp[i].y, points.pp[i].ps);
 			delete[] points.pp;
 			break;
 	}
@@ -1104,7 +1121,7 @@ void on_dagpopup_row_activated(GtkTreeView *tree, GtkTreePath *path, GtkTreeView
 	PathTask *task = (PathTask*)ev;
 
 	if (!taskpopup_xml) {
-		taskpopup_xml = glade_xml_new("pathview.glade", "taskpopup", NULL);
+		taskpopup_xml = glade_xml_new("pathview.glade", "pathview_taskpopup", NULL);
 		glade_xml_signal_autoconnect(taskpopup_xml);
 
 		GtkTreeView *tree = GTK_TREE_VIEW(WID_T("taskpopup_list"));
@@ -1118,7 +1135,7 @@ void on_dagpopup_row_activated(GtkTreeView *tree, GtkTreePath *path, GtkTreeView
 	}
 	else {
 		printf("showing taskpopup\n");
-		gtk_widget_show(WID_T("taskpopup"));
+		gtk_widget_show(WID_T("pathview_taskpopup"));
 		gtk_list_store_clear(taskpopup_props);
 	}
 
