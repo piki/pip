@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <gtk/gtksignal.h>
 
 #include "dag.h"
@@ -372,26 +373,21 @@ static void gtk_dag_size_allocate(GtkWidget *widget, GtkAllocation *allocation) 
       allocation->x, allocation->y, allocation->width, allocation->height);
 }
 
-static GdkColor black = {0};
-static GdkColor white = {0};
-static GdkColor yellow = {0,0xff00,0xff00,0x6600};
 static void dag_node_draw_nodes(GtkDAG *dag, GdkDrawable *draw, GdkGC *gc,
 		DAGNode *node, GdkRectangle *area) {
 	int i, width, height, x, y;
 
+	GtkStateType node_state;
+	if (dag->button_down == node)
+		node_state = GTK_STATE_SELECTED;
+	else if (dag->button_down != NULL && !strcmp(dag->button_down->label, node->label))
+		node_state = GTK_STATE_ACTIVE;
+	else
+		node_state = GTK_STATE_NORMAL;
+
 	if (node->seen++) return;
 
-	if (dag->button_down == node)
-		gdk_gc_set_foreground(gc, &yellow);
-	else {
-		int b = node->brightness;
-		GdkColor c = {0};
-		c.red =   (b * 0xff00 + (255-b) * 0xcc00) / 255;
-		c.green = (b * 0x6600 + (255-b) * 0xcc00) / 255;
-		c.blue =  (b * 0x7700 + (255-b) * 0xcc00) / 255;
-		gdk_color_alloc(gtk_widget_get_colormap(GTK_WIDGET(dag)), &c);
-		gdk_gc_set_foreground(gc, &c);
-	}
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(GTK_WIDGET(dag))->base[node_state]);
 
 	x = dag->zoom * node->xpos - area->x;
 	if (x + dag->zoom*NODE_WIDTH < 0) goto children;
@@ -400,7 +396,7 @@ static void dag_node_draw_nodes(GtkDAG *dag, GdkDrawable *draw, GdkGC *gc,
 	if (y + dag->zoom*NODE_HEIGHT < 0) goto children;
 	if (y > area->height) return;
 	gdk_draw_arc(draw, gc, TRUE, x, y, dag->zoom*NODE_WIDTH, dag->zoom*NODE_HEIGHT, 0, 64*360);
-	gdk_gc_set_foreground(gc, &black);
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(GTK_WIDGET(dag))->text[node_state]);
 	gdk_draw_arc(draw, gc, FALSE, x, y, dag->zoom*NODE_WIDTH, dag->zoom*NODE_HEIGHT, 0, 64*360);
 	if (dag->zoom >= MIN_ZOOM_TEXT_VISIBLE) {
 		pango_layout_set_text(dag->pango, node->label, -1);
@@ -499,12 +495,14 @@ static gint gtk_dag_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	dag = GTK_DAG(widget);
 	g_return_val_if_fail(!dag->frozen, FALSE);
 
+#if 0
 	if (white.pixel == 0) {
 		GdkColormap *cmap = gdk_window_get_colormap(widget->window);
 		gdk_color_black(cmap, &black);
 		gdk_color_white(cmap, &white);
 		gdk_color_alloc(cmap, &yellow);
 	}
+#endif
 
 #if 0
 	printf("expose %d,%d  %dx%d  %d roots\n",
@@ -514,10 +512,10 @@ static gint gtk_dag_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	drawbuffer = gdk_pixmap_new(widget->window,
 		ev->area.width, ev->area.height, -1);
 	gc = gdk_gc_new(drawbuffer);
-	gdk_gc_set_foreground(gc, &white);
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->base[GTK_STATE_NORMAL]);
 	gdk_draw_rectangle(drawbuffer, gc, TRUE, 0, 0,
 		ev->area.width, ev->area.height);
-	gdk_gc_set_foreground(gc, &black);
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->text[GTK_STATE_NORMAL]);
 
 	/* draw captions */
 	if (dag->zoom >= MIN_ZOOM_TEXT_VISIBLE) {

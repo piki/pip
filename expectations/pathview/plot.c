@@ -350,8 +350,6 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	GdkGC *gc;
 	GdkPixmap *drawbuffer;
 	int i, j;
-	static GdkColor black = {0};
-	static GdkColor white = {0};
 	static GdkColor color[] = {
 		{ 0, 0xff00, 0x0000, 0x0000 },
 		{ 0, 0x0000, 0x9900, 0x0000 },
@@ -375,17 +373,15 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	plot = GTK_PLOT(widget);
 	g_return_val_if_fail(!plot->frozen, FALSE);
 
-	if (white.pixel == 0) {
+	if (color[0].pixel == 0) {
 		GdkColormap *cmap = gdk_window_get_colormap(widget->window);
-		gdk_color_black(cmap, &black);
-		gdk_color_white(cmap, &white);
 		for (i=0; i<ncolors; i++)
 			gdk_color_alloc(cmap, &color[i]);
 	}
 
 	if (plot->lines->len == 0) {
 		gc = gdk_gc_new(widget->window);
-		gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->bg[GTK_STATE_NORMAL]);
+		gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->base[GTK_STATE_NORMAL]);
 		gdk_draw_rectangle(widget->window, gc, TRUE, ev->area.x, ev->area.y,
 			ev->area.width, ev->area.height);
 		gdk_gc_destroy(gc);
@@ -405,10 +401,10 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	drawbuffer = gdk_pixmap_new(widget->window,
 		ev->area.width, ev->area.height, -1);
 	gc = gdk_gc_new(drawbuffer);
-	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->bg[GTK_STATE_NORMAL]);
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->base[GTK_STATE_NORMAL]);
 	gdk_draw_rectangle(drawbuffer, gc, TRUE, 0, 0,
 		ev->area.width, ev->area.height);
-	gdk_gc_set_foreground(gc, &black);
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->text[GTK_STATE_NORMAL]);
 
 	/* draw axes */
 	gdk_draw_line(drawbuffer, gc,
@@ -466,7 +462,7 @@ static gint gtk_plot_expose(GtkWidget *widget, GdkEventExpose *ev) {
 			if (plot->flags & PLOT_POINTS)
 				gdk_draw_rectangle(drawbuffer, gc, FALSE, x-2, y-2, 4, 4);
 			if (i == plot->highlight_line && j == plot->highlight_point) {
-				gdk_gc_set_foreground(gc, &black);
+				gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->text[GTK_STATE_NORMAL]);
 				gdk_draw_arc(drawbuffer, gc, FALSE, x-5, y-5, 10, 10, 0, 64*360);
 				gdk_gc_set_foreground(gc, &color[i % ncolors]);
 			}

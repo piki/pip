@@ -249,7 +249,15 @@ static void gtk_graph_layout(GtkGraph *graph) {
 	int i;
 	if ((wfp = fdopen(wfd[1], "w")) == NULL) { perror("fdopen"); goto done; }
 	if ((rfp = fdopen(rfd[0], "r")) == NULL) { perror("fdopen"); goto done; }
+	GdkColor text_color = gtk_widget_get_style(GTK_WIDGET(graph))->text[GTK_STATE_NORMAL];
+	printf("text_color = %d %d %d\n", text_color.red, text_color.green, text_color.blue);
+
 	fprintf(wfp, "digraph world {\n");
+	fprintf(wfp, "node [ color=\"#%02x%02x%02x\",fontcolor=\"#%02x%02x%02x\" ];\n",
+		text_color.red>>8, text_color.green>>8, text_color.blue>>8,
+		text_color.red>>8, text_color.green>>8, text_color.blue>>8);
+	fprintf(wfp, "edge [ color=\"#%02x%02x%02x\" ];\n",
+		text_color.red>>8, text_color.green>>8, text_color.blue>>8);
 	for (i=0; i<graph->nodes->len; i++)
 		fprintf(wfp, "  n%x [ label = \"%s\" ];\n", (int)NODE(graph, i), NODE(graph, i)->label);
 	for (i=0; i<graph->edges->len; i++) {
@@ -338,7 +346,7 @@ static gint gtk_graph_expose(GtkWidget *widget, GdkEventExpose *ev) {
 	if (graph->needs_layout) gtk_graph_layout(graph);
 
 	gc = gdk_gc_new(widget->window);
-	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->bg[GTK_STATE_NORMAL]);
+	gdk_gc_set_foreground(gc, &gtk_widget_get_style(widget)->base[GTK_STATE_NORMAL]);
 	gdk_draw_rectangle(widget->window, gc, TRUE, ev->area.x, ev->area.y,
 		ev->area.width, ev->area.height);
 	if (graph->nodes->len == 0) {
