@@ -1,10 +1,12 @@
+OPT = 
+PROFILE = -pg
 CC = g++
-CFLAGS = -g -Wall
-CXXFLAGS = -g -Wall
+CFLAGS = -g -Wall $(OPT) $(PROFILE)
+CXXFLAGS = -g -Wall $(OPT) $(PROFILE)
 CPPFLAGS = -I.
 PROGS = pathcheck uniqpaths showpaths makeexp
 LDLIBS = -lm -lmysqlclient -lpcre
-#LDFLAGS = -pg
+LDFLAGS = $(PROFILE)
 YACC = bison
 
 .PRECIOUS: expect.c

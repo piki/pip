@@ -5,10 +5,10 @@
 #include "exptree.h"
 #include "expect.tab.hh"
 
-static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources);
+static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources, int max_level);
 static void add_statement(const Node *node, ExpEventList *where);
 static void add_statements(const ListNode *list_node, ExpEventList *where);
-static void add_limits(const ListNode *limit_list, LimitList *limits);
+static void add_limits(const ListNode *limit_list, LimitList *limits, int *max_level);
 static bool debug_failed_matches_individually = false;
 
 Match *Match::create(Node *node, bool negate) {
@@ -227,7 +227,7 @@ ExpThread::ExpThread(const OperatorNode *onode) {
 	max = ((IntNode*)range->operands[1])->value;
 	assert(max >= min);
 
-	add_limits((ListNode*)onode->operands[3], &limits);
+	add_limits((ListNode*)onode->operands[3], &limits, NULL);
 	assert(onode->operands[3]->type() == NODE_LIST);
 	add_statements((ListNode*)onode->operands[4], &events);
 }
@@ -239,7 +239,7 @@ ExpThread::ExpThread(const ListNode *limit_list, const ListNode *statements) {
 
 	assert(limit_list->type() == NODE_LIST);
 	assert(statements->type() == NODE_LIST);
-	add_limits(limit_list, &limits);
+	add_limits(limit_list, &limits, NULL);
 	add_statements(statements, &events);
 }
 
@@ -255,13 +255,13 @@ void ExpThread::print(FILE *fp) const {
 		events[i]->print(fp, 1);
 }
 
-bool ExpThread::check(const PathEventList &test, int ofs, bool fragment, bool *resources) {
+bool ExpThread::check(const PathEventList &test, int ofs, bool fragment, bool *resources, int max_level) {
 	// !! check limits
 	bool match;
 	if (fragment)
-		match = check_fragment(test, events, ofs, resources);
+		match = check_fragment(test, events, ofs, resources, max_level);
 	else
-		match = ofs+Recognizer::check(test, events, ofs, resources) == (int)test.size();
+		match = ofs+Recognizer::check(test, events, ofs, resources, max_level) == (int)test.size();
 	if (match && ++count <= max) return true;
 	return false;
 }
@@ -276,7 +276,7 @@ ExpTask::ExpTask(const OperatorNode *onode) {
 
 	name = Match::create((StringNode*)task_decl->operands[0], false);
 
-	add_limits((ListNode*)onode->operands[1], &limits);
+	add_limits((ListNode*)onode->operands[1], &limits, NULL);
 
 	if (onode->operands[2]) {
 		assert(onode->operands[2]->type() == NODE_LIST);
@@ -307,7 +307,7 @@ void ExpTask::print(FILE *fp, int depth) const {
 }
 
 int ExpTask::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	if (ofs == test.size()) {
 		if (debug_failed_matches_individually) printf("      Task(%s) has nothing left to match.\n", name->to_string());
 		return -1;  // we need at least one
@@ -328,7 +328,7 @@ int ExpTask::check(const PathEventList &test, unsigned int ofs,
 				break;
 			}
 
-	int matched_children = Recognizer::check(pt->children, children, 0, resources);
+	int matched_children = Recognizer::check(pt->children, children, 0, resources, max_level);
 	assert(matched_children <= (int)pt->children.size());
 	if (matched_children == -1) {
 		if (debug_failed_matches_individually) printf("      Task(%s) children did not match\n", name->to_string());
@@ -355,13 +355,16 @@ void ExpNotice::print(FILE *fp, int depth) const {
 }
 
 int ExpNotice::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	if (ofs == test.size()) {
 		if (debug_failed_matches_individually) printf("      Notice(%s) has nothing left to match.\n", name->to_string());
 		return -1;  // we need at least one
 	}
 	if (test[ofs]->type() != PEV_NOTICE) {
-		if (debug_failed_matches_individually) printf("      Notice(%s) expectation does not match %s event.\n", name->to_string(), path_type_name[test[ofs]->type()]);
+		if (debug_failed_matches_individually) {
+			printf("      Notice(%s) expectation does not match %s event.\n", name->to_string(), path_type_name[test[ofs]->type()]);
+			test[ofs]->print(stdout, 8);
+		}
 		return -1;
 	}
 	PathNotice *pn = (PathNotice*)test[ofs];
@@ -381,7 +384,7 @@ ExpMessageSend::ExpMessageSend(const OperatorNode *onode) {
 	for (unsigned int i=0; i<lnode->size(); i++) ;
 		//!! we're supposed to care about where Send goes
 	if (onode->operands[1])
-		add_limits((ListNode*)onode->operands[1], &limits);
+		add_limits((ListNode*)onode->operands[1], &limits, NULL);
 }
 
 ExpMessageSend::~ExpMessageSend(void) {
@@ -400,7 +403,7 @@ void ExpMessageSend::print(FILE *fp, int depth) const {
 }
 
 int ExpMessageSend::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	if (ofs == test.size()) {
 		if (debug_failed_matches_individually) printf("      Send has nothing left to match.\n");
 		return -1;  // we need at least one
@@ -431,7 +434,7 @@ ExpMessageRecv::ExpMessageRecv(const OperatorNode *onode) {
 	for (unsigned int i=0; i<lnode->size(); i++) ;
 		//!! we're supposed to care about where Recv goes
 	if (onode->operands[1])
-		add_limits((ListNode*)onode->operands[1], &limits);
+		add_limits((ListNode*)onode->operands[1], &limits, NULL);
 }
 
 void ExpMessageRecv::print(FILE *fp, int depth) const {
@@ -439,7 +442,7 @@ void ExpMessageRecv::print(FILE *fp, int depth) const {
 }
 
 int ExpMessageRecv::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	if (ofs == test.size()) {
 		if (debug_failed_matches_individually) printf("      Recv has nothing left to match.\n");
 		return -1;  // we need at least one
@@ -483,10 +486,10 @@ void ExpRepeat::print(FILE *fp, int depth) const {
 }
 
 int ExpRepeat::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	int count, my_ofs=ofs;
 	for (count=0; count<max; count++) {
-		int res = Recognizer::check(test, children, my_ofs, resources);
+		int res = Recognizer::check(test, children, my_ofs, resources, max_level);
 		if (res == -1) break;
 		my_ofs += res;
 	}
@@ -532,9 +535,9 @@ void ExpXor::print(FILE *fp, int depth) const {
 }
 
 int ExpXor::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	for (unsigned int i=0; i<branches.size(); i++) {
-		int res = Recognizer::check(test, branches[i], ofs, resources);
+		int res = Recognizer::check(test, branches[i], ofs, resources, max_level);
 		if (res != -1) return res;  // !! greedy, continuation needed
 	}
 	if (debug_failed_matches_individually) printf("      Xor(%d branches) had no match.\n", branches.size());
@@ -551,7 +554,7 @@ void ExpAny::print(FILE *fp, int depth) const {
 }
 
 int ExpAny::check(const PathEventList &test, unsigned int ofs,
-		bool *resources) const {
+		bool *resources, int max_level) const {
 	// !! greedy, continuation needed
 	return test.size() - ofs;  // match them all!  even if there aren't any!
 }
@@ -568,27 +571,27 @@ void ExpCall::print(FILE *fp, int depth) const {
 	fprintf(fp, "%*s<call target=\"%s\" />\n", depth*2, "", target.c_str());
 }
 
-int ExpCall::check(const PathEventList &test, unsigned int ofs, bool *resources) const {
-	Recognizer *r = recognizers[target];
-	if (!r) {
+int ExpCall::check(const PathEventList &test, unsigned int ofs, bool *resources, int max_level) const {
+	Recognizer *called = recognizers[target];
+	if (!called) {
 		fprintf(stderr, "call(%s): recognizer not found\n", target.c_str());
 		exit(1);
 	}
-	assert(!r->complete);
-	return r->check(test, r->threads.begin()->second->events, ofs, resources);
+	assert(!called->complete);
+	return Recognizer::check(test, called->threads.begin()->second->events, ofs, resources, max_level);
 	// !! if the called recognizer sets whole-path limits, check those
 }
 
 Recognizer::Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements,
 		bool _complete, int _pathtype)
-		: root(NULL), complete(_complete), pathtype(_pathtype), instances(0), unique(0) {
+		: root(NULL), complete(_complete), pathtype(_pathtype), max_level(-1), instances(0), unique(0) {
 	assert(ident->type() == NODE_IDENTIFIER);
 	assert(pathtype == VALIDATOR || pathtype == INVALIDATOR || pathtype == RECOGNIZER);
 	name = ident->sym->name;
 
 	unsigned int i;
 
-	add_limits(limit_list, &limits);
+	add_limits(limit_list, &limits, &max_level);
 
 	assert(statements->type() == NODE_LIST);
 	if (complete)
@@ -633,11 +636,11 @@ void Recognizer::print(FILE *fp) const {
 	fprintf(fp, "</recognizer>\n");
 }
 
-static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources) {
+static bool check_fragment(const PathEventList &test, const ExpEventList &list, int ofs, bool *resources, int max_level) {
 	for (unsigned int i=0; i<test.size(); i++) {
-		if (Recognizer::check(test, list, i, resources) != -1) return true;
+		if (Recognizer::check(test, list, i, resources, max_level) != -1) return true;
 		if (test[i]->type() == PEV_TASK)
-			if (check_fragment(((PathTask*)test[i])->children, list, 0, resources)) return true;
+			if (check_fragment(((PathTask*)test[i])->children, list, 0, resources, max_level)) return true;
 	}
 	return false;
 }
@@ -647,7 +650,7 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	if (!complete) {
 		assert(threads.size() == 1);
 		for (std::map<int,PathEventList>::const_iterator tp=p->children.begin(); tp!=p->children.end(); tp++)
-			if (threads.begin()->second->check(tp->second, 0, true, resources)) {
+			if (threads.begin()->second->check(tp->second, 0, true, resources, max_level)) {
 				instances++;
 				// !! what about the resources?
 				return true;
@@ -681,12 +684,12 @@ bool Recognizer::check(const Path *p, bool *resources) {
 		etp->second->count = 0;
 
 	if (!root->check(p->children.find(p->root_thread)->second, 0, false,
-			resources)) {
+			resources, max_level)) {
 		if (debug_failed_matches) {
 			printf("Recognizer %s\n", name.c_str());
 			printf("  P.root (tid=%d) does not match R.root\n", p->root_thread);
 			debug_failed_matches_individually = true;
-			(void)root->check(p->children.find(p->root_thread)->second, 0, false, resources);
+			(void)root->check(p->children.find(p->root_thread)->second, 0, false, resources, max_level);
 			debug_failed_matches_individually = false;
 		}
 		return false;
@@ -697,7 +700,7 @@ bool Recognizer::check(const Path *p, bool *resources) {
 		bool matched = false;
 		for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
 			if (etp->second == root) continue;
-			if (etp->second->check(ptp->second, 0, false, resources)) {
+			if (etp->second->check(ptp->second, 0, false, resources, max_level)) {
 				matched = true;
 				break;
 			}
@@ -710,7 +713,7 @@ bool Recognizer::check(const Path *p, bool *resources) {
 				for (ExpThreadSet::const_iterator etp=threads.begin(); etp!=threads.end(); etp++) {
 					if (etp->second == root) continue;
 					printf("    R.thread %s...\n", etp->first.c_str());
-					if (etp->second->check(ptp->second, 0, false, resources)) continue;
+					if (etp->second->check(ptp->second, 0, false, resources, max_level)) continue;
 				}
 				debug_failed_matches_individually = false;
 			}
@@ -752,11 +755,12 @@ bool Recognizer::check(const Path *p, bool *resources) {
 }
 
 int Recognizer::check(const PathEventList &test, const ExpEventList &list,
-		int ofs, bool *resources) {
+		unsigned int ofs, bool *resources, int max_level) {
 	unsigned int my_ofs = ofs;
-	unsigned int i;
-	for (i=0; i<list.size(); i++) {
-		int res = list[i]->check(test, my_ofs, resources);
+	for (unsigned int i=0; i<list.size(); i++) {
+		if (max_level != -1)
+			while (my_ofs < test.size() && test[my_ofs]->level > max_level) my_ofs++;
+		int res = list[i]->check(test, my_ofs, resources, max_level);
 		if (res == -1) { return -1; }
 		my_ofs += res;
 		assert(my_ofs <= test.size());
@@ -819,11 +823,20 @@ static void add_statements(const ListNode *list_node, ExpEventList *where) {
 		add_statement((*list_node)[i], where);
 }
 
-static void add_limits(const ListNode *limit_list, LimitList *limits) {
+static void add_limits(const ListNode *limit_list, LimitList *limits, int *max_level) {
 	assert(limit_list->type() == NODE_LIST);
 	for (unsigned int i=0; i<limit_list->size(); i++) {
-		assert(((OperatorNode*)(*limit_list)[i])->op == LIMIT);
-		limits->push_back(new Limit((OperatorNode*)(*limit_list)[i]));
+		OperatorNode *stmt = (OperatorNode*)(*limit_list)[i];
+		if (stmt->op == LEVEL) {
+			assert(max_level);
+			assert(stmt->nops() == 1);
+			assert(stmt->operands[0]->type() == NODE_INT);
+			*max_level = ((IntNode*)stmt->operands[0])->value;
+		}
+		else {
+			assert(stmt->op == LIMIT);
+			limits->push_back(new Limit(stmt));
+		}
 	}
 }
 

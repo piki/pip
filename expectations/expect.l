@@ -32,6 +32,7 @@ letter	[A-Za-z_]
 "invalidator"										return INVALIDATOR;
 "fragment"											return FRAGMENT;
 "recognizer"										return RECOGNIZER;
+"level"													return LEVEL;
 "repeat"												return REPEAT;
 "send"													return SEND;
 "recv"													return RECV;

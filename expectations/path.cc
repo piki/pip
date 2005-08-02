@@ -16,7 +16,7 @@ timeval ts_to_tv(long long ts) {
 PathTask::PathTask(const MYSQL_ROW &row) {
 	// pathid = atoi(row[0]);
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
-	// level = atoi(row[2]);
+	level = atoi(row[2]);
 	name = strdup(row[3]);
 	ts_start = ts_to_tv(strtoll(row[4], NULL, 10));
 	ts_end = ts_to_tv(strtoll(row[5], NULL, 10));
@@ -62,9 +62,9 @@ void PathTask::print_dot(FILE *fp) const {
 void PathTask::print(FILE *fp, int depth) const {
 	bool empty = children.size() == 0;
 
-	fprintf(fp, "%*s<task name=\"%s\" start=\"%ld.%06ld\" end=\"%ld.%06ld\"%s",
+	fprintf(fp, "%*s<task name=\"%s\" start=\"%ld.%06ld\" end=\"%ld.%06ld\" level=\"%d\"%s",
 		depth*2, "", name, ts_start.tv_sec, ts_start.tv_usec,
-		ts_end.tv_sec, ts_end.tv_usec, empty ? " />\n" : ">\n");
+		ts_end.tv_sec, ts_end.tv_usec, level, empty ? " />\n" : ">\n");
 	if (!empty) {
 		for (unsigned int i=0; i<children.size(); i++)
 			children[i]->print(fp, depth+1);
@@ -80,7 +80,7 @@ PathTask::~PathTask(void) {
 PathNotice::PathNotice(const MYSQL_ROW &row) {
 	// pathid = atoi(row[0]);
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
-	// level = atoi(row[2]);
+	level = atoi(row[2]);
 	name = strdup(row[3]);
 	ts = ts_to_tv(strtoll(row[4], NULL, 10));
 	thread_id = atoi(row[5]);
@@ -103,14 +103,14 @@ std::string PathNotice::to_string(void) const {
 void PathNotice::print_dot(FILE *fp) const { }
 
 void PathNotice::print(FILE *fp, int depth) const {
-	fprintf(fp, "%*s<notice name=\"%s\" ts=\"%ld.%06ld\" />\n", depth*2, "",
-		name, ts.tv_sec, ts.tv_usec);
+	fprintf(fp, "%*s<notice name=\"%s\" ts=\"%ld.%06ld\" level=\"%d\" />\n", depth*2, "",
+		name, ts.tv_sec, ts.tv_usec, level);
 }
 
 PathMessageSend::PathMessageSend(const MYSQL_ROW &row) : dest(NULL), pred(NULL) {
 	// pathid = atoi(row[0]);
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
-	// level = atoi(row[2]);
+	level = atoi(row[2]);
 	// msgid is row[3]
 	ts_send = ts_to_tv(strtoll(row[4], NULL, 10));
 	// ts_recv is row[5]
@@ -155,14 +155,14 @@ void PathMessageSend::print_dot(FILE *fp) const {
 }
 
 void PathMessageSend::print(FILE *fp, int depth) const {
-	fprintf(fp, "%*s<message_send size=\"%d\" send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" addr=\"%p\"/>\n",
-		depth*2, "", size, thread_send, recv?recv->thread_recv:-1, ts_send.tv_sec, ts_send.tv_usec, this);
+	fprintf(fp, "%*s<message_send size=\"%d\" send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" addr=\"%p\" level=\"%d\" />\n",
+		depth*2, "", size, thread_send, recv?recv->thread_recv:-1, ts_send.tv_sec, ts_send.tv_usec, this, level);
 }
 
 PathMessageRecv::PathMessageRecv(const MYSQL_ROW &row) : send(NULL) {
 	// pathid = atoi(row[0]);
 	// roles = row[1][0] ? strdup(row[1]) : NULL;
-	// level = atoi(row[2]);
+	level = atoi(row[2]);
 	// msgid is row[3]
 	// ts_send is row[4]
 	ts_recv = ts_to_tv(strtoll(row[5], NULL, 10));
@@ -203,8 +203,8 @@ void PathMessageRecv::print_dot(FILE *fp) const {
 }
 
 void PathMessageRecv::print(FILE *fp, int depth) const {
-	fprintf(fp, "%*s<message_recv send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" send=\"%p\" />\n",
-		depth*2, "", send->thread_send, thread_recv, ts_recv.tv_sec, ts_recv.tv_usec, send);
+	fprintf(fp, "%*s<message_recv send=\"%d\" recv=\"%d\" ts=\"%ld.%06ld\" send=\"%p\" level=\"%d\" />\n",
+		depth*2, "", send->thread_send, thread_recv, ts_recv.tv_sec, ts_recv.tv_usec, send, level);
 }
 
 PathThread::PathThread(const MYSQL_ROW &row) {
@@ -271,6 +271,7 @@ void Path::read(MYSQL *mysql, const char *base, int _path_id) {
 	while ((row = mysql_fetch_row(res)) != NULL) {
 		assert(atoi(row[0]) == path_id);
 		PathNotice *pn = new PathNotice(row);
+		//pn->print(stderr);
 		insert(pn);
 	}
 	mysql_free_result(res);

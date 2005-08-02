@@ -10,7 +10,7 @@ elseif exists("b:current_syntax")
 endif
 
 syn keyword  pipType       validator invalidator fragment recognizer
-syn keyword  pipStatement  repeat message task thread
+syn keyword  pipStatement  level repeat message task thread
 syn keyword  pipStatement  limit branch send recv
 syn keyword  pipStatement  notice xor call between and maybe
 syn keyword  pipStatement  assert instances unique in

@@ -19,6 +19,7 @@ limit(REAL_TIME, 15s);
 }
 
 invalidator I2 {
+	level(3);
 	thread Client(*, 1) {
 		task("outer") {
 			task("inner");   // "inner" cannot be nested alone in "outer"

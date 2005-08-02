@@ -138,6 +138,7 @@ static struct {
 	{ VALIDATOR, "VALIDATOR" },
 	{ RECOGNIZER, "RECOGNIZER" },
 	{ FRAGMENT, "FRAGMENT" },
+	{ LEVEL, "LEVEL" },
 	{ REPEAT, "REPEAT" },
 	{ BRANCH, "BRANCH" },
 	{ XOR, "XOR" },

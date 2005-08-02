@@ -30,6 +30,7 @@ public:
 	virtual void print(FILE *fp = stdout, int depth = 0) const = 0;
 	virtual const timeval &start(void) const = 0;
 	virtual const timeval &end(void) const = 0;
+	int level;
 };
 typedef std::vector<PathEvent *> PathEventList;
 

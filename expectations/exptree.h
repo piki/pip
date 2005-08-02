@@ -11,6 +11,8 @@
 
 enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_SPLIT, EXP_CALL, EXP_ANY };
 
+class Recognizer;
+
 class Match {
 public:
 	Match(bool _negate) : negate(_negate) {}
@@ -91,7 +93,7 @@ public:
 	// !! we need a way to return a continuation, i.e., for recursive
 	// searches if we could have matched a varying number
 	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs,
-			bool *resources) const = 0;
+			bool *resources, int max_level) const = 0;
 };
 typedef std::vector<ExpEvent*> ExpEventList;
 
@@ -102,7 +104,7 @@ public:
 	~ExpThread(void);
 	void print(FILE *fp) const;
 	// not const, because it increments check itself
-	bool check(const PathEventList &test, int ofs, bool fragment, bool *resources);
+	bool check(const PathEventList &test, int ofs, bool fragment, bool *resources, int max_level);
 
 	int min, max, count;
 	LimitList limits;
@@ -117,7 +119,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_TASK; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 
 	Match *name;
 	LimitList limits;
@@ -131,7 +133,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_NOTICE; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 
 	Match *name;
 };
@@ -143,7 +145,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_MESSAGE_SEND; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 	LimitList limits;
 };
 
@@ -153,7 +155,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_MESSAGE_RECV; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 	LimitList limits;
 };
 
@@ -164,7 +166,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_REPEAT; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 
 	int min, max;
 	ExpEventList children;
@@ -177,7 +179,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_XOR; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 
 	std::vector<ExpEventList> branches;
 };
@@ -187,7 +189,7 @@ public:
 	ExpCall(const OperatorNode *onode);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_CALL; }
-	virtual int check(const PathEventList &test, unsigned int ofs, bool *resources) const;
+	virtual int check(const PathEventList &test, unsigned int ofs, bool *resources, int max_level) const;
 
 	std::string target;
 };
@@ -198,7 +200,7 @@ public:
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_ANY; }
 	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources) const;
+			bool *resources, int max_level) const;
 };
 
 class Recognizer {
@@ -207,8 +209,8 @@ public:
 	~Recognizer(void);
 	void print(FILE *fp = stdout) const;
 	bool check(const Path *path, bool *resources);
-	static int check(const PathEventList &test, const ExpEventList &list, int ofs,
-			bool *resources);
+	static int check(const PathEventList &test, const ExpEventList &list,
+			unsigned int ofs, bool *resources, int max_level);
 
 	std::string name;
 	ExpThreadSet threads;
@@ -216,6 +218,7 @@ public:
 	LimitList limits;
 	bool complete;    // match full paths (true) or fragments (false)
 	int pathtype;     // validator, invalidator, or recognizer?
+	int max_level;    // only expect events at <= max_level
 
 	int instances, unique;
 	Counter real_time, utime, stime, cpu_time, busy_time, major_fault;

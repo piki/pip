@@ -8,6 +8,58 @@ fragment recognizer SPSub {
 		branch:   // actor not found
 	}
 }
+fragment recognizer SPSub0 {
+	xor {
+		branch:   // cache miss
+			task("shortest path") limit(CPU_TIME, 1.0s);
+		branch:   // cache hit or actor not found
+	}
+}
+
+validator Link0 {
+	level(0);
+	limit(DEPTH, {=3});
+	limit(MESSAGES, {=2});
+	limit(THREADS, {=2});
+	limit(HOSTS, {1,2});
+	thread Client(*, 1) {
+		task("link") {
+			send(Server);
+			recv(Server);
+		}
+	}
+	thread Server(*, 1) {
+		task("link") {
+			recv(Client);
+			call(SPSub0);
+			send(Client);
+		}
+	}
+}
+
+validator Link1 {
+	level(1);
+	limit(DEPTH, {=3});
+	limit(MESSAGES, {=2});
+	limit(THREADS, {=2});
+	limit(HOSTS, {1,2});
+	thread Client(*, 1) {
+		task("link") {
+			send(Server);
+			recv(Server);
+		}
+	}
+	thread Server(*, 1) {
+		task("link") {
+			recv(Client);
+			repeat between 0 and 2 {
+				task("fuzzy find") limit(CPU_TIME, 400ms);
+			}
+			call(SPSub0);
+			send(Client);
+		}
+	}
+}
 
 validator Link {
 	limit(DEPTH, {=3});

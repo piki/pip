@@ -1,3 +1,4 @@
+// vim: set sw=2 ts=2 tw=0:
 %{
 #include "parsetree.h"
 #include "aggregates.h"
@@ -16,6 +17,7 @@
 %token INVALIDATOR
 %token RECOGNIZER
 %token FRAGMENT
+%token LEVEL
 %token REPEAT
 %token BRANCH
 %token XOR
@@ -65,7 +67,7 @@
 %type <iValue> VALIDATOR INVALIDATOR RECOGNIZER pathtype
 %type <nList> limit_list statement_list thread_list xor_list path_limits msg_list
 %type <nPtr> statement thread thread_count_range
-%type <nPtr> repeat limit limit_range limit_spec repeat_range path_expr
+%type <nPtr> repeat limit level limit_range limit_spec repeat_range path_expr
 %type <nPtr> string_expr xor task assert assertdecl bool_expr
 %type <nPtr> int_expr float_expr window string_literal unit_qty count_range
 
@@ -168,6 +170,7 @@ repeat:
 
 path_limits:
 		path_limits limit ';'											{ $$ = $1; ($$)->add($2); }
+		| path_limits level ';'										{ $$ = $1; ($$)->add($2); }
 		|																					{ $$ = new ListNode; }
 		;
 
@@ -177,8 +180,11 @@ limit_list:
 		;
 
 limit:
-		LIMIT '(' IDENTIFIER ',' limit_spec ')'	{ $$ = opr(LIMIT, 2, idcg($3,METRIC), $5); }
+		LIMIT '(' IDENTIFIER ',' limit_spec ')'		{ $$ = opr(LIMIT, 2, idcg($3,METRIC), $5); }
 		;
+
+level:
+		LEVEL '(' INTEGER ')'											{ $$ = opr(LEVEL, 1, new IntNode($3)); }
 
 limit_spec:
 		limit_range
