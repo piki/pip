@@ -1,3 +1,13 @@
+/*
+ * SS Buglist and working progress:
+ * - receiving data message destined for someone else (data_path_req)
+ * - GenericTreeMulticast doesn't let SS "forward" data if it's destined for the groupId rather than me.  Possible fix: use nexthop instead
+ * - getParent returns NONE from client0 during temporary periods of no parent.  Fix: use avoidKids to avoid client0 being part of join anyway
+ * - Pushdown code was buggy -- pushing down kids on the wrong group -- causing too many kids
+ * - duplicate data delivers.
+ * - data messages sent and not received
+ * - notifyIdSpaceChanged on a multicast path
+ */
 fragment invalidator taskTooSlow {
   task(*) limit(REAL_TIME,{50ms+}) {
     any();
@@ -11,10 +21,10 @@ fragment recognizer mcRouteDirect {
     }
     xor {
 branch:
-      notice ("HIGH::route::Pastry::data");
+      notice ("data_::route::Pastry::data");
       send(Receiver);
 branch:
-      notice ("HIGH::route::Pastry::data_path_req");
+      notice ("data_::route::Pastry::data_path_req");
       send(Receiver);
     }
   }
@@ -70,7 +80,9 @@ fragment recognizer mcGtmRcv {
 fragment recognizer updateState {
   maybe {
     notice ("UDP::route::Pastry::probe");
-    send(probe);
+    maybe {
+      send(probe); //udp probes may be dropped.
+    }
   }
   maybe {
     notice ("control_::route::Pastry::inform_request");
@@ -81,11 +93,23 @@ fragment recognizer pastryPathReqFwd {
   recv(Sender_Receiver_Forwarder);
   task ("macedon_tcp_transport::deliver") {
     task ("Pastry::deliver(ReceiveDataHandler)") {
+    xor {
+branch:
       task ("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
         call(updateState);
-        notice ("HIGH::route::Pastry::data_path_req");
+        notice ("data_::route::Pastry::data_path_req");
         send(Receiver_Forwarder);
       }
+branch: //This branch REALLY shouldn't happen!
+      task ("Pastry::deliver::data(ReceiveDataHandler)") {
+        call(updateState);
+        task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+          task("GenericTreeMulticast::forward::data(ReceiveDataHandler)");
+        }
+        notice ("data_::route::Pastry::data");
+        send(Receiver_Forwarder);
+      }
+    }
     }
   }
 }
@@ -119,6 +143,7 @@ fragment recognizer pastryRecvMapping {
   }
 }
 recognizer McPath {
+  level(3);
   thread Sender ("client0",1) {
     task ("SplitStreamMS::multicast(Multicast)") {
       notice ("mc_::multicast::SplitStreamMS::Data");
@@ -174,7 +199,63 @@ branch:
     }
   }
 }
+validator ValidMcPath {
+  level(3);
+  thread Sender ("client0",1) {
+    task ("SplitStreamMS::multicast(Multicast)") {
+      notice ("mc_::multicast::SplitStreamMS::Data");
+      task ("GenericTreeMulticast::multicast(HierarchicalMulticast)") {
+        call(mcGtmMcData);
+      }
+    }
+  }
+  thread Receiver(!"client0",99) { 
+    repeat between 0 and 99 {
+      call (pastryPathReqFwd);
+    }
+    recv(Sender_Receiver_Forwarder);
+    task ("macedon_tcp_transport::deliver") {
+      task ("Pastry::deliver(ReceiveDataHandler)") {
+        xor { 
+branch:
+          task ("Pastry::deliver::data(ReceiveDataHandler)") {
+            call (updateState);
+            call (mcGtmFwd);
+            call (mcGtmRcv);
+          }
+branch:
+          task ("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+            call (updateState); //once for the 1-hop sender, once for the origin
+            call (updateState); //once for the 1-hop sender, once for the origin
+            call (mcGtmFwd);
+            maybe { notice("control_::route::Pastry::mapping"); send(Sender); } //Mapping message
+            call (mcGtmRcv);
+          }
+        }
+      }
+    }
+    repeat between 0 and 99 {
+      call (pastryPathReqFwd);
+    }
+  }
+  thread RecvProbe(*,{0,100}) {
+    repeat between 1 and 200 {
+      xor {
+        branch:
+        call (pastryRecvProbe);
+        branch:
+        call (pastryRecvProbeReply);
+      }
+    }
+  }
+  thread RecvMapping(*,{0,100}) {
+    repeat between 1 and 18 {
+      call (pastryRecvMapping);
+    }
+  }
+}
 recognizer dud {
+  level(3);
   thread dude (*,1) {
     any();
   }
@@ -184,6 +265,7 @@ recognizer dud {
   }
 }
 validator pMaceInit {
+  level(3);
   thread dude (*,1) {
     task("Pastry::maceInit(Route)") {
       notice("control_::getLocalAddress");
@@ -191,6 +273,7 @@ validator pMaceInit {
   }
 }
 validator gtmMaceInit {
+  level(3);
   thread dude (*,1) {
     task("GenericTreeMulticast::maceInit(HierarchicalMulticast)") {
       notice("data_::getLocalAddress");
@@ -207,11 +290,14 @@ fragment validator netError { //This will eventually be more complex
   task("Pastry::error(NetworkErrorHandler)");
 }
 validator ssMaceInitLocal { 
+  level(3);
   limit(HOSTS, {=1});
   thread dude(*,1) {
     task("SplitStreamMS::maceInit(Multicast)") {
       notice("tree_::getLocalAddress");
       task("ScribeMS::getLocalAddress(Tree)");
+      notice("tree_::setAuthoritativeGroupJoinHandler");
+      task("ScribeMS::setAuthoritativeGroupJoinHandler(ScribeTree)");
       send(printer_timer);
       notice("tree_::joinGroup");
       task("ScribeMS::joinGroup(ScribeTree)");//joinGroup(ScribeTree) could be much more complex
@@ -227,6 +313,44 @@ validator ssMaceInitLocal {
     repeat between 0 and 1 {
       recv(printer_timer);
       task("SplitStreamMS::timer printer");
+    }
+  }
+}
+validator pPrinter {
+  level(3);
+  limit(HOSTS, {=1});
+  thread dude(*,1) {
+    send(printer_timer);
+  }
+  thread printer(*,1) { //works only until the scheduler thread changes
+    repeat between 0 and 100000 {
+      recv(printer_timer);
+      task("Pastry::timer printer") {
+        send(printer_timer);
+      }
+    }
+    maybe {
+      recv(printer_timer);
+      task("Pastry::timer printer");
+    }
+  }
+}
+validator sPrinter {
+  level(3);
+  limit(HOSTS, {=1});
+  thread dude(*,1) {
+    send(printer_timer);
+  }
+  thread printer(*,1) { //works only until the scheduler thread changes
+    repeat between 0 and 100000 {
+      recv(printer_timer);
+      task("ScribeMS::timer printer") {
+        send(printer_timer);
+      }
+    }
+    maybe {
+      recv(printer_timer);
+      task("ScribeMS::timer printer");
     }
   }
 }
