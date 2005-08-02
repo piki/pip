@@ -44,8 +44,7 @@ const char *task_quant[] = {
 	//!! might be nice to implement latency, messages, and bytes for tasks
 };
 
-#define MAX_GRAPH_POINTS 5000
-
+static int max_graph_points = 256;
 static char *table_base;
 MYSQL mysql;
 static GtkListStore *list_tasks, *list_hosts, *list_paths, *list_recognizers;
@@ -77,8 +76,10 @@ GtkWidget *create_comm_graph(const char *wid);
 GtkWidget *create_plot(const char *wid);
 GtkWidget *create_pathtl(const char *wid);
 gchar *zoom_format_value(GtkScale *scale, gdouble value);
+gchar *zoom_format_value_int(GtkScale *scale, gdouble value);
 void dag_zoom_value_changed(GtkRange *range);
 void comm_zoom_value_changed(GtkRange *range);
+void max_points_value_changed(GtkRange *range);
 void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point);
 void dag_node_clicked(GtkDAG *dag, DAGNode *node);
 void filter_by_recognizers(void);
@@ -171,11 +172,13 @@ static std::string stringf(const char *fmt, ...) {
 }
 
 static void min_time(MYSQL_ROW row, void *ign) {
+	if (!row[0]) return;
 	timeval temp = ts_to_tv(strtoll(row[0], NULL, 10));
 	if (first_time.tv_sec == 0 || temp < first_time) first_time = temp;
 }
 
 static void max_time(MYSQL_ROW row, void *ign) {
+	if (!row[0]) return;
 	timeval temp = ts_to_tv(strtoll(row[0], NULL, 10));
 	if (last_time.tv_sec == 0 || temp > last_time) last_time = temp;
 }
@@ -487,6 +490,10 @@ gchar *zoom_format_value(GtkScale *scale, gdouble value) {
 	return g_strdup_printf("%.2f", SLIDER_TO_ZOOM(value));
 }
 
+gchar *zoom_format_value_int(GtkScale *scale, gdouble value) {
+	return g_strdup_printf("%d", (int)SLIDER_TO_ZOOM(value));
+}
+
 void dag_zoom_value_changed(GtkRange *range) {
 	gtk_dag_set_zoom(GTK_DAG(WID("dag")),
 		SLIDER_TO_ZOOM(gtk_range_get_value(range)));
@@ -495,6 +502,11 @@ void dag_zoom_value_changed(GtkRange *range) {
 void comm_zoom_value_changed(GtkRange *range) {
 	gtk_graph_set_zoom(GTK_GRAPH(WID("comm_graph")),
 		SLIDER_TO_ZOOM(gtk_range_get_value(range)));
+}
+
+void max_points_value_changed(GtkRange *range) {
+	max_graph_points = (int)SLIDER_TO_ZOOM(gtk_range_get_value(range));
+	regraph();
 }
 
 void plot_point_clicked(GtkPlot *plot, GtkPlotPoint *point) {
@@ -659,7 +671,7 @@ static void tasks_plot_row(GtkTreeModel *ign1, GtkTreePath *ign2, GtkTreeIter *i
 		res = mysql_use_result(&mysql);
 		row = mysql_fetch_row(res);
 		row_count = atoi(row[0]);
-		skip = row_count / (MAX_GRAPH_POINTS - 1) + 1;
+		skip = row_count / (max_graph_points - 1) + 1;
 		mysql_free_result(res);
 	}
 
@@ -830,7 +842,7 @@ void paths_graph(void) {
 		npoints++;
 	}
 	unsigned int j, last_x = 1<<30;
-	int skip = npoints / (MAX_GRAPH_POINTS - 1) + 1;
+	int skip = npoints / (max_graph_points - 1) + 1;
 	switch (style) {
 		case STYLE_CDF:
 			qsort(points.f, npoints, sizeof(PlotPointX), &cmp<float>);
