@@ -19,6 +19,7 @@ int errors = 0;
 std::map<std::string, std::set<Task*, ltEvP> > unpaired_tasks;
 MessageMap sends;
 MessageMap receives;
+bool save_unmatched_sends = false;
 
 static void check_unpaired_tasks(void);
 static void check_unpaired_messages(void);
@@ -64,9 +65,9 @@ void reconcile_init(const char *table_base) {
 
 void reconcile_done(void) {
 	check_unpaired_tasks();
+	check_unpaired_messages();
 	run_sql("UNLOCK TABLES");
 	mysql_close(&mysql);
-	check_unpaired_messages();
 }
 
 void run_sql(const char *fmt, ...) {
@@ -156,12 +157,25 @@ static void check_unpaired_tasks(void) {
 // print all sends and receives left in the hash table
 static void check_unpaired_messages(void) {
 	MessageMap::const_iterator msgp;
+
 	fprintf(stderr, "Unmatched send count = %d\n", sends.size());
-	for (msgp=sends.begin(); msgp!=sends.end(); msgp++) {
-		fprintf(stderr, "Unmatched send: ");
-		msgp->second->print(stderr);
-		errors++;
+	if (save_unmatched_sends) {
+		for (msgp=sends.begin(); msgp!=sends.end(); msgp++) {
+			run_sql("INSERT INTO %s VALUES (%d, \"%s\", %d, '%s', %lld, NULL, %d, %d, NULL)",
+			table_messages.c_str(), msgp->second->path_id,
+			msgp->second->roles ? msgp->second->roles : "", msgp->second->level,
+			msgp->second->msgid.to_string(), tv_to_ts(msgp->second->tv), /* no recv time */
+			msgp->second->size, msgp->second->thread_id /* no recv thread */);
+		}
 	}
+	else {
+		for (msgp=sends.begin(); msgp!=sends.end(); msgp++) {
+			fprintf(stderr, "Unmatched send: ");
+			msgp->second->print(stderr);
+			errors++;
+		}
+	}
+
 	fprintf(stderr, "Unmatched recv count = %d\n", receives.size());
 	for (msgp=receives.begin(); msgp!=receives.end(); msgp++) {
 		fprintf(stderr, "Unmatched recv: ");

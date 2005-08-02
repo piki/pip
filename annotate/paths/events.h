@@ -121,7 +121,7 @@ public:
 	Message(int version, const unsigned char *buf);
 
 	IDBlock msgid;
-	int size, thread_id;
+	int size, thread_id, path_id;
 };
 
 class MessageSend : public Message {

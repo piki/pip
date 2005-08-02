@@ -1,19 +1,25 @@
+#include <getopt.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string>
 #include "client.h"
 
+static void usage(const char *prog);
 static void read_file(const char *fn);
 
 int main(int argc, char **argv) {
-	if (argc < 3) {
-		fprintf(stderr, "Usage:\n  %s table-name trace-file [trace-file [...]]\n\n", argv[0]);
-		return 1;
+	char c;
+	while ((c = getopt(argc, argv, "u")) != -1) {
+		switch (c) {
+			case 'u':  save_unmatched_sends = true;  break;
+			default:   usage(argv[0]);
+		}
 	}
+	if (argc - optind < 2) usage(argv[0]);
 
-	reconcile_init(argv[1]);
+	reconcile_init(argv[optind]);
 
-	for (int i=2; i<argc; i++)
+	for (int i=optind+1; i<argc; i++)
 		read_file(argv[i]);
 
 	reconcile_done();
@@ -56,4 +62,11 @@ static void read_file(const char *fn) {
 
 	if (is_pipe) pclose(fp); else fclose(fp);
 	cl.end();
+}
+
+static void usage(const char *prog) {
+	fprintf(stderr, "Usage:  %s [-u] table-name trace-file [trace-file [...]]\n\n", prog);
+	fprintf(stderr, "  -u    Add unreceived sends to the database.\n\n");
+	fprintf(stderr, "        The default behavior is to ignore them.\n\n");
+	exit(1);
 }

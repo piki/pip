@@ -9,8 +9,9 @@ CC = gcc
 LDFLAGS = -L.
 LDLIBS = -lrt -lannotate -lpthread
 #CPPFLAGS += -DPROC_GETRUSAGE
+TESTS = threadtest evtest belief pushpop
 
-all: libannotate.a libjannotate.so threadtest evtest AnnTest.class belief
+all: libannotate.a libjannotate.so AnnTest.class $(TESTS)
 
 annotate_Annotate.h: Annotate.class
 	javah annotate.Annotate && touch $@
@@ -25,6 +26,6 @@ libjannotate.so: $(OBJS) jannotate.o
 	gcc -shared -o $@ $(OBJS) jannotate.o
 
 clean:
-	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) threadtest evtest *.class annotate_Annotate.h belief
+	rm -f libannotate.a libjannotate.so jannotate.o $(OBJS) *.class annotate_Annotate.h $(TESTS)
 
 jannotate.o:: annotate_Annotate.h

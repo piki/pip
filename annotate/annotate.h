@@ -10,6 +10,8 @@ void ANNOTATE_START_TASK(const char *roles, int level, const char *name);
 void ANNOTATE_END_TASK(const char *roles, int level, const char *name);
 void ANNOTATE_SET_PATH_ID(const char *roles, int level, const void *path_id, int idsz);
 const void *ANNOTATE_GET_PATH_ID(int *len);
+void ANNOTATE_PUSH_PATH_ID(const char *roles, int level, const void *path_id, int idsz);
+void ANNOTATE_POP_PATH_ID(const char *roles, int level);
 void ANNOTATE_END_PATH_ID(const char *roles, int level, const void *path_id, int idsz);
 void ANNOTATE_NOTICE(const char *roles, int level, const char *fmt, ...);
 void ANNOTATE_SEND(const char *roles, int level, const void *msgid, int idsz, int size);
@@ -17,10 +19,12 @@ void ANNOTATE_RECEIVE(const char *roles, int level, const void *msgid, int idsz,
 
 #define ANNOTATE_SET_PATH_ID_INT(roles, level, n) do{int x=n;ANNOTATE_SET_PATH_ID(roles, level, &(x), sizeof(x));}while(0)
 #define ANNOTATE_END_PATH_ID_INT(roles, level, n) do{int x=n;ANNOTATE_END_PATH_ID(roles, level, &(x), sizeof(x));}while(0)
+#define ANNOTATE_PUSH_PATH_ID_INT(roles, level, n) do{int x=n;ANNOTATE_PUSH_PATH_ID(roles, level, &(x), sizeof(x));}while(0)
 #define ANNOTATE_SEND_INT(roles, level, n, size) do{int x=n;ANNOTATE_SEND(roles, level, &(x), sizeof(x), size);}while(0)
 #define ANNOTATE_RECEIVE_INT(roles, level, n, size) do{int x=n;ANNOTATE_RECEIVE(roles, level, &(x), sizeof(x), size);}while(0)
 void ANNOTATE_SET_PATH_ID_STR(const char *roles, int level, const char *fmt, ...);
 void ANNOTATE_END_PATH_ID_STR(const char *roles, int level, const char *fmt, ...);
+void ANNOTATE_PUSH_PATH_ID_STR(const char *roles, int level, const char *fmt, ...);
 void ANNOTATE_SEND_STR(const char *roles, int level, int size, const char *fmt, ...);
 void ANNOTATE_RECEIVE_STR(const char *roles, int level, int size, const char *fmt, ...);
 

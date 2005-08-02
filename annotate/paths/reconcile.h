@@ -33,6 +33,7 @@ extern std::string table_paths;
 extern std::map<std::string, std::set<Task*, ltEvP> > unpaired_tasks;
 extern MessageMap sends;
 extern MessageMap receives;
+extern bool save_unmatched_sends;
 
 long long tv_to_ts(const timeval tv);
 void reconcile_init(const char *table_base);

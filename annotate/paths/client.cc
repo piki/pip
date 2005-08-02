@@ -107,9 +107,11 @@ void Client::handle_event(Event *ev) {
 			break;
 			}
 		case EV_SEND:
+			((Message*)ev)->path_id = current_id;
 			reconcile((Message*)ev, receives.find(((Message*)ev)->msgid)->second, true, thread_id, current_id);
 			break;
 		case EV_RECV:
+			((Message*)ev)->path_id = current_id;
 			reconcile(sends.find(((Message*)ev)->msgid)->second, (Message*)ev, false, thread_id, current_id);
 			break;
 		case EV_BELIEF_FIRST:
@@ -139,6 +141,7 @@ static void reconcile(Message *send, Message *recv, bool is_send, int thread_id,
 	else
 		recv->thread_id = thread_id;
 	if (send && recv) {
+		assert(send->path_id == recv->path_id);
 		if (send->size != recv->size) {
 			fprintf(stderr, "packet size mismatch:\n  "); send->print(stderr);
 			fprintf(stderr, "  "); recv->print(stderr);

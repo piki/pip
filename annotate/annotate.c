@@ -16,12 +16,20 @@
 #define BASEPATH "/tmp"
 #define MAGIC 0x416e6e6f  // 'Anno'
 #define VERSION 3
+#define MAXSTACK 10
+#define ID(ctx) ((ctx)->idstack[(ctx)->idpos].data)
+#define IDLEN(ctx) ((ctx)->idstack[(ctx)->idpos].len)
+
+typedef struct {
+	void *data;
+	int len;
+} PathID;
 
 typedef struct {
 	int fd;
 	int procfd;
-	void *path_id;
-	int path_id_len;
+	PathID idstack[MAXSTACK];
+	int idpos;
 	int log_level;
 } ThreadContext;
 
@@ -98,8 +106,9 @@ void ANNOTATE_INIT(void) {
 		pctx->fd = open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 		if (pctx->fd == -1) { perror(fn); exit(1); }
 		pctx->procfd = -1;
-		pctx->path_id = NULL;
-		pctx->path_id_len = 0;
+		pctx->idpos = 0;
+		ID(pctx) = NULL;
+		IDLEN(pctx) = 0;
 		const char *lvl = getenv("ANNOTATE_LOG_LEVEL");
 		pctx->log_level = lvl ? atoi(lvl) : 255;
 	}
@@ -156,7 +165,7 @@ void ANNOTATE_START_TASK(const char *roles, int level, const char *name) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	if (level > pctx->log_level) return;
-	assert(pctx->path_id);
+	assert(ID(pctx));
 	gettimeofday(&tv, NULL);
 	if (GETRUSAGE(&ru) == -1) { perror("getrusage"); exit(1); }
 	output(pctx->fd,
@@ -178,7 +187,7 @@ void ANNOTATE_END_TASK(const char *roles, int level, const char *name) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	if (level > pctx->log_level) return;
-	assert(pctx->path_id);
+	assert(ID(pctx));
 	gettimeofday(&tv, NULL);
 	if (GETRUSAGE(&ru) == -1) { perror("getrusage"); exit(1); }
 	output(pctx->fd,
@@ -195,17 +204,12 @@ void ANNOTATE_END_TASK(const char *roles, int level, const char *name) {
 		END);
 }
 
-void ANNOTATE_SET_PATH_ID(const char *roles, int level, const void *path_id, int idsz) {
-	ThreadContext *pctx = GET_CTX;
-	if (level > pctx->log_level) return;
-
-	if (pctx->path_id_len == idsz && memcmp(path_id, pctx->path_id, idsz) == 0) return;  // already set
-
+static void path_common(int fd, const char *roles, int level, const void *path_id, int idsz) {
 	struct rusage ru;
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	if (GETRUSAGE(&ru) == -1) { perror("getrusage"); exit(1); }
-	output(pctx->fd,
+	output(fd,
 		CHAR, 'P',
 		STRING, roles, CHAR, level,
 		INT, tv.tv_sec, INT, tv.tv_usec,
@@ -217,21 +221,50 @@ void ANNOTATE_SET_PATH_ID(const char *roles, int level, const void *path_id, int
 		INT, ru.ru_nivcsw,  // involuntary context switches -- cpu hog
 		VOIDP, path_id, idsz,
 		END);
+}
 
-	if (pctx->path_id) free(pctx->path_id);
-	pctx->path_id = malloc(idsz);
-	memcpy(pctx->path_id, path_id, idsz);
-	pctx->path_id_len = idsz;
+void ANNOTATE_SET_PATH_ID(const char *roles, int level, const void *path_id, int idsz) {
+	ThreadContext *pctx = GET_CTX;
+	if (level > pctx->log_level) return;
+
+	if (IDLEN(pctx) == idsz && memcmp(path_id, ID(pctx), idsz) == 0) return;  // already set
+
+	path_common(pctx->fd, roles, level, path_id, idsz);
+
+	if (!ID(pctx))
+		ID(pctx) = malloc(idsz);
+	else if (IDLEN(pctx) != idsz)
+		ID(pctx) = realloc(ID(pctx), idsz);
+	// else keep the old block as is
+	memcpy(ID(pctx), path_id, idsz);
+	IDLEN(pctx) = idsz;
 }
 
 const void *ANNOTATE_GET_PATH_ID(int *len) {
 	ThreadContext *pctx = GET_CTX;
-	if (len) *len = pctx->path_id_len;
-	return pctx->path_id;
+	if (len) *len = IDLEN(pctx);
+	return ID(pctx);
+}
+
+void ANNOTATE_PUSH_PATH_ID(const char *roles, int level, const void *path_id, int idsz) {
+	ThreadContext *pctx = GET_CTX;
+	assert(++pctx->idpos < MAXSTACK);
+	path_common(pctx->fd, roles, level, path_id, idsz);
+	ID(pctx) = malloc(idsz);
+	memcpy(ID(pctx), path_id, idsz);
+	IDLEN(pctx) = idsz;
+}
+
+void ANNOTATE_POP_PATH_ID(const char *roles, int level) {
+	ThreadContext *pctx = GET_CTX;
+	free(ID(pctx));
+	assert(--pctx->idpos >= 0);
+	path_common(pctx->fd, roles, level, ID(pctx), IDLEN(pctx));
 }
 
 void ANNOTATE_END_PATH_ID(const char *roles, int level, const void *path_id, int idsz) {
 	ThreadContext *pctx = GET_CTX;
+	assert(ID(pctx));
 	if (level > pctx->log_level) return;
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
@@ -241,11 +274,9 @@ void ANNOTATE_END_PATH_ID(const char *roles, int level, const void *path_id, int
 		INT, tv.tv_sec, INT, tv.tv_usec,
 		VOIDP, path_id, idsz,
 		END);
-	if (pctx->path_id) {
-		free(pctx->path_id);
-		pctx->path_id = NULL;
-		pctx->path_id_len = 0;
-	}
+	free(ID(pctx));
+	ID(pctx) = NULL;
+	IDLEN(pctx) = 0;
 }
 
 void ANNOTATE_NOTICE(const char *roles, int level, const char *fmt, ...) {
@@ -253,7 +284,7 @@ void ANNOTATE_NOTICE(const char *roles, int level, const char *fmt, ...) {
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	if (level > pctx->log_level) return;
-	assert(pctx->path_id);
+	assert(ID(pctx));
 	char buf[256 - 1 - 9];
 	gettimeofday(&tv, NULL);
 	va_start(args, fmt);
@@ -271,7 +302,7 @@ void ANNOTATE_SEND(const char *roles, int level, const void *msgid, int idsz, in
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	if (level > pctx->log_level) return;
-	assert(pctx->path_id);
+	assert(ID(pctx));
 	gettimeofday(&tv, NULL);
 	output(pctx->fd,
 		CHAR, 'M',
@@ -287,7 +318,7 @@ void ANNOTATE_RECEIVE(const char *roles, int level, const void *msgid, int idsz,
 	struct timeval tv;
 	ThreadContext *pctx = GET_CTX;
 	if (level > pctx->log_level) return;
-	assert(pctx->path_id);
+	assert(ID(pctx));
 	gettimeofday(&tv, NULL);
 	output(pctx->fd,
 		CHAR, 'm',
@@ -345,6 +376,11 @@ void ANNOTATE_SET_PATH_ID_STR(const char *roles, int level, const char *fmt, ...
 void ANNOTATE_END_PATH_ID_STR(const char *roles, int level, const char *fmt, ...) {
 	VSNPRINTF
 	ANNOTATE_END_PATH_ID(roles, level, buf, len);
+}
+
+void ANNOTATE_PUSH_PATH_ID_STR(const char *roles, int level, const char *fmt, ...) {
+	VSNPRINTF
+	ANNOTATE_PUSH_PATH_ID(roles, level, buf, len);
 }
 
 void ANNOTATE_SEND_STR(const char *roles, int level, int size, const char *fmt, ...) {
@@ -426,8 +462,9 @@ static ThreadContext *new_context() {
 	}
 	output_header(pctx->fd);
 	pctx->procfd = -1;
-	pctx->path_id = NULL;
-	pctx->path_id_len = 0;
+	pctx->idpos = 0;
+	ID(pctx) = NULL;
+	IDLEN(pctx) = 0;
 	const char *lvl = getenv("ANNOTATE_LOG_LEVEL");
 	pctx->log_level = lvl ? atoi(lvl) : 255;
 	pthread_setspecific(ctx_key, pctx);
