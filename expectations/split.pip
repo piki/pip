@@ -4,9 +4,14 @@
  * - GenericTreeMulticast doesn't let SS "forward" data if it's destined for the groupId rather than me.  Possible fix: use nexthop instead
  * - getParent returns NONE from client0 during temporary periods of no parent.  Fix: use avoidKids to avoid client0 being part of join anyway
  * - Pushdown code was buggy -- pushing down kids on the wrong group -- causing too many kids
+ * - splitstream not properly registered for verify handlers -- caused Pushdown bug a second time. (previously known but not mattered)
+ * - Pastry forwarding was not properly passing in the hash id for next hop (previously known but not mattered)
  * - duplicate data delivers.
  * - data messages sent and not received
  * - notifyIdSpaceChanged on a multicast path
+ * - avoidKids bug: join was accepting a child when it had no state even if group was to avoid kids
+ * - mapping messages not sent when message not forwarded
+ * - notifyIdSpaceChanged before update to address cache
  */
 fragment invalidator taskTooSlow {
   task(*) limit(REAL_TIME,{50ms+}) {
@@ -79,12 +84,6 @@ fragment recognizer mcGtmRcv {
 }
 fragment recognizer updateState {
   maybe {
-    notice ("UDP::route::Pastry::probe");
-    maybe {
-      send(probe); //udp probes may be dropped.
-    }
-  }
-  maybe {
     notice ("control_::route::Pastry::inform_request");
     send(inform_request);
   }
@@ -113,32 +112,42 @@ branch: //This branch REALLY shouldn't happen!
     }
   }
 }
-fragment recognizer pastryRecvProbe {
-  recv(probe);
-  task ("macedon_udp_transport::deliver") {
-    task ("Pastry::deliver(ReceiveDataHandler)") {
-      task ("Pastry::deliver::probe(ReceiveDataHandler)") {
-        notice("UDP::route::Pastry::probe_reply");
-        maybe { //sometimes the UDP message will be dropped in the network
-          send(probe_reply);
-        }
-      }
-    }
-  }
-}
-fragment recognizer pastryRecvProbeReply {
-  recv(probe_reply);
-  task("macedon_udp_transport::deliver") {
-    task("Pastry::deliver(ReceiveDataHandler)") {
-      task("Pastry::deliver::probe_reply(ReceiveDataHandler)");
-    }
-  }
-}
 fragment recognizer pastryRecvMapping {
   recv(mapping);
   task("macedon_tcp_transport::deliver") {
     task("Pastry::deliver(ReceiveDataHandler)") {
       task("Pastry::deliver::mapping(ReceiveDataHandler)");
+    }
+  }
+}
+fragment recognizer scribeForwardHBMsg {
+  task("ScribeMS::forward(ReceiveDataHandler)") {
+    task("ScribeMS::forward::Heartbeat(ReceiveDataHandler)");
+  }
+}
+fragment recognizer scribeRecvHBMsg {
+  task("ScribeMS::deliver(ReceiveDataHandler)") {
+    task("ScribeMS::deliver::Heartbeat(ReceiveDataHandler)");
+  }
+}
+fragment recognizer scribeRecvHeartbeat {
+  recv(heartbeat);
+  task("macedon_tcp_transport::deliver") {
+    task("Pastry::deliver(ReceiveDataHandler)") {
+      xor {
+      branch:
+        task("Pastry::deliver::data(ReceiveDataHandler)") {
+          call(scribeForwardHBMsg);
+          call(scribeRecvHBMsg);
+        }
+      branch:
+        task("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+          call(scribeForwardHBMsg);
+          notice("control_::route::Pastry::mapping");
+          send(myprince);
+          call(scribeRecvHBMsg);
+        }
+      }
     }
   }
 }
@@ -181,16 +190,6 @@ branch:
     }
     repeat between 0 and 99 {
       call (pastryPathReqFwd);
-    }
-  }
-  thread RecvProbe(*,{0,100}) {
-    repeat between 1 and 200 {
-      xor {
-        branch:
-        call (pastryRecvProbe);
-        branch:
-        call (pastryRecvProbeReply);
-      }
     }
   }
   thread RecvMapping(*,{0,100}) {
@@ -236,16 +235,6 @@ branch:
     }
     repeat between 0 and 99 {
       call (pastryPathReqFwd);
-    }
-  }
-  thread RecvProbe(*,{0,100}) {
-    repeat between 1 and 200 {
-      xor {
-        branch:
-        call (pastryRecvProbe);
-        branch:
-        call (pastryRecvProbeReply);
-      }
     }
   }
   thread RecvMapping(*,{0,100}) {
@@ -354,3 +343,242 @@ validator sPrinter {
     }
   }
 }
+recognizer pProbe {
+  limit(HOSTS, {1,2});
+  thread prober(*,1) {
+    notice("UDP::route::Pastry::probe");
+    maybe {
+      send(probee);
+    }
+  }
+  thread probee(*,{0,1}) {
+    recv(prober);
+    task("macedon_udp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::probe(ReceiveDataHandler)") {
+          notice("UDP::route::Pastry::probe_reply");
+          maybe {
+            send(probee2);
+          }
+        }
+      }
+    }
+  }
+  thread probee2(*,{0,1}) {
+    recv(probee);
+    task("macedon_udp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::probe_reply(ReceiveDataHandler)");
+      }
+    }
+  }
+}
+validator pValidProbe {
+  limit(HOSTS, {=2});
+  thread prober(*,1) {
+    notice("UDP::route::Pastry::probe");
+    send(probee);
+  }
+  thread probee(*,1) {
+    recv(prober);
+    task("macedon_udp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::probe(ReceiveDataHandler)") {
+          notice("UDP::route::Pastry::probe_reply");
+          send(probee2);
+        }
+      }
+    }
+  }
+  thread probee2(*,1) {
+    recv(probee);
+    task("macedon_udp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::probe_reply(ReceiveDataHandler)");
+      }
+    }
+  }
+}
+validator sCreateGroup {
+  thread client0app("client0",1) {
+    notice("downcall createGroup");
+    notice("overlay_::route::ScribeMS::CreateGroup");
+    task("Pastry::route(Route)") {
+      task("ScribeMS::forward(ReceiveDataHandler)") {
+        task("ScribeMS::forward::CreateGroup(ReceiveDataHandler)");
+      }
+      task("ScribeMS::deliver(ReceiveDataHandler)") {
+        task("ScribeMS::deliver::CreateGroup(ReceiveDataHandler)");
+      }
+    }
+    send(client0data);
+  }
+  thread client0data("client0",1) {
+    recv(client0app);
+    notice("notifyIdSpaceChanged-avoidKids");
+    notice("overlay_::route::ScribeMS::CreateGroup");
+    task("Pastry::route(Route)") {
+      task("ScribeMS::forward(ReceiveDataHandler)") {
+        task("ScribeMS::forward::CreateGroup(ReceiveDataHandler)");
+      }
+      notice("data_::route::Pastry::data");
+      send(root);
+    }
+    maybe { //XXX: thread pools would be REALLY NICE!
+      recv(client0data);
+      task("macedon_tcp_transport::deliver") {
+        task("Pastry::deliver(ReceiveDataHandler)") {
+          task("Pastry::deliver::no_match(ReceiveDataHandler)") {
+          }
+        }
+      }
+    }
+  }
+  thread client0other("client0",{0,1}) {
+    recv(client0data);
+    task("macedon_tcp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::no_match(ReceiveDataHandler)") {
+        }
+      }
+    }
+  }
+  thread nonroot(!"client0",{0,5}) {
+    recv(client0data);
+    task("macedon_tcp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::data(ReceiveDataHandler)") {
+          task("ScribeMS::forward(ReceiveDataHandler)") {
+            task("ScribeMS::forward::CreateGroup(ReceiveDataHandler)");
+          }
+          notice("data_::route::Pastry::data");
+          send(client0data, root);
+        }
+      }
+    }
+  }
+  thread root(!"client0",1) {
+    recv(client0data,nonroot);
+    task("macedon_tcp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        task("Pastry::deliver::data(ReceiveDataHandler)") {
+          task("ScribeMS::forward(ReceiveDataHandler)") {
+            task("ScribeMS::forward::CreateGroup(ReceiveDataHandler)");
+          }
+          task("ScribeMS::deliver(ReceiveDataHandler)") {
+            task("ScribeMS::deliver::CreateGroup(ReceiveDataHandler)");
+          }
+          maybe {
+            notice("control_::route::Pastry::no_match");
+            send(client0data);
+          }
+        }
+      }
+    }
+  }
+}
+validator ssJoinGroup {
+  thread nonsource(!"client0",1) {
+    task("SplitStreamMS::joinGroup(Group)") {
+      repeat 16 {
+        notice("tree_::joinGroup");
+        task("ScribeMS::joinGroup(ScribeTree)");
+      }
+    }
+  }
+}
+validator ssCreateGroup {
+  thread nonsource("client0",1) {
+    task("SplitStreamMS::createGroup(Group)") {
+      repeat 16 {
+        notice("tree_::createGroup");
+        task("ScribeMS::createGroup(ScribeTree)");
+      }
+    }
+  }
+}
+fragment recognizer computeOutdegree {
+  repeat 16 {
+    notice("tree_::getChildren");
+    task("ScribeMS::getChildren(Tree)");
+  }
+}
+validator sJoinGroupRoot {
+  limit(HOSTS, {=1});
+  thread appJoin(!"client0",1) {
+    notice("downcall joinGroup - am root");
+    send(timer);
+  }
+  thread timer(!"client0",1) {
+    repeat between 0 and 1000000 {
+      recv(appJoin,timer);
+      notice("hbTimer");
+      send(timer);
+    }
+    recv(appJoin,timer);
+    notice("hbTimer");
+  }
+}
+recognizer sJoinGroup {
+  thread appJoin(!"client0",1) {
+    notice("downcall joinGroup - am root");
+    send(joiner);
+  }
+  thread joiner(!"client0",1) {
+    recv(appJoin); //This should be on the same host.
+    notice("notifyIdSpaceChanged-joining"); //NOTE: in the future this could be different.
+    notice("overlay_::routeDirect::ScribeMS::Join");
+    task("Pastry::routeDirect(Route)") {
+      task("ScribeMS::forward(ReceiveDataHandler)") {
+        task("ScribeMS::forward::Join(ReceiveDataHandler)");
+      }
+      xor {
+      branch:
+      notice("data_::route::Pastry::data_path_req");
+      branch:
+      notice("data_::route::Pastry::data");
+      }
+      send(hmm);
+    }
+    send(joinercont);
+    xor { //either the pastry control thread or the scribe data thread
+      branch:
+      repeat between 0 and 100 {
+        call(pastryRecvMapping);
+      }
+      branch:
+      repeat between 0 and 100 {
+        call(scribeRecvHeartbeat);
+      }
+    }
+  }
+  thread dude(*,{0,10000}) {
+    recv(dudette);
+    task("macedon_tcp_transport::deliver") {
+      task("Pastry::deliver(ReceiveDataHandler)") {
+        xor {
+        branch:
+          task("Pastry::deliver:data_path_req(ReceiveDataHandler)") {
+            maybe {
+              task("ScribeMS::notifyIdSpaceChanged(OverlayStructureHandler)");
+            }
+          }
+        branch:
+          task("Pastry::deliver:data(ReceiveDataHandler)");
+        }
+      }
+    }
+  }
+  thread nonjoiner(*,{0,10000}) {
+    recv(someone);
+    any();
+  }
+}
+assert(instances(sCreateGroup)==16);
+assert(instances(ssCreateGroup)==1);
+assert(instances(ssJoinGroup)==99);
+assert(instances(ssMaceInitLocal)==100);
+assert(instances(pMaceInit)==100);
+assert(instances(pPrinter)==100);
+assert(instances(gtmMaceInit)==100);
+assert(instances(sJoinGroupRoot)==16);
