@@ -19,7 +19,7 @@ struct IdleQuery {
 
 static std::deque<IdleQuery> queries;
 static MYSQL_RES *res = NULL;
-extern MYSQL mysql;
+MYSQL idle_mysql;
 static bool registered = false;
 
 static gboolean the_idle_func(void *ign);
@@ -46,8 +46,8 @@ static void next_query(void) {
 	IdleQuery *iq = &(*queries.begin());
 	if (iq->start) iq->start(iq->user_data);
 	//printf("WQ: running query: \"%s\"\n", iq->cmd.c_str());
-	run_sql(&mysql, iq->cmd.c_str());
-	res = mysql_use_result(&mysql);
+	run_sql(&idle_mysql, iq->cmd.c_str());
+	res = mysql_use_result(&idle_mysql);
 }
 
 static gboolean the_idle_func(void *ign) {

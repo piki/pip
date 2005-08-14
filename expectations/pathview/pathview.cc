@@ -122,6 +122,11 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Connection failed: %s\n", mysql_error(&mysql));
 		return 1;
 	}
+	mysql_init(&idle_mysql);
+	if (!mysql_real_connect(&idle_mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
+		fprintf(stderr, "Connection failed: %s\n", mysql_error(&idle_mysql));
+		return 1;
+	}
 
 	char *title = g_strconcat("Path View: ", table_base, NULL);
 	gtk_window_set_title(GTK_WINDOW(WID("pathview_main")), title);
