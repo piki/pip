@@ -12,8 +12,9 @@
  * - avoidKids bug: join was accepting a child when it had no state even if group was to avoid kids
  * - mapping messages not sent when message not forwarded
  * - notifyIdSpaceChanged before update to address cache
+ * - mapping seems "out of date" -- added verify to help prevent this
  */
-fragment invalidator taskTooSlow {
+fragment invalidator TaskTooSlow {
   task(*) limit(REAL_TIME,{50ms+}) {
     any();
   }
@@ -34,7 +35,7 @@ branch:
     }
   }
 }
-fragment invalidator tooManyKids {
+fragment invalidator TooManyKids {
   task ("GenericTreeMulticast::deliver::data(ReceiveDataHandler)") {
     task ("SplitStreamMS::deliver(ReceiveDataHandler)") {
       task (*);
@@ -99,15 +100,15 @@ branch:
         notice ("data_::route::Pastry::data_path_req");
         send(Receiver_Forwarder);
       }
-branch: //This branch REALLY shouldn't happen!
-      task ("Pastry::deliver::data(ReceiveDataHandler)") {
-        call(updateState);
-        task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
-          task("GenericTreeMulticast::forward::data(ReceiveDataHandler)");
-        }
-        notice ("data_::route::Pastry::data");
-        send(Receiver_Forwarder);
-      }
+//branch: //This branch REALLY shouldn't happen!
+ //     task ("Pastry::deliver::data(ReceiveDataHandler)") {
+  //      call(updateState);
+   //     task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+    //      task("GenericTreeMulticast::forward::data(ReceiveDataHandler)");
+     //   }
+      //  notice ("data_::route::Pastry::data");
+       // send(Receiver_Forwarder);
+      //}
     }
     }
   }
@@ -151,6 +152,151 @@ fragment recognizer scribeRecvHeartbeat {
     }
   }
 }
+fragment recognizer scribeForwardPDMsg {
+  task("ScribeMS::forward(ReceiveDataHandler)") {
+    task("ScribeMS::forward::Pushdown(ReceiveDataHandler)");
+  }
+}
+fragment recognizer scribeRecvPDMsg {
+  task("ScribeMS::deliver(ReceiveDataHandler)") {
+    task("ScribeMS::deliver::Pushdown(ReceiveDataHandler)") {
+      xor {
+      branch:
+        task("SplitStreamMS::selectParent(ScribeTreeHandler)");
+        notice("overlay_::routeDirect::ScribeMS::Join");
+        task("Pastry::routeDirect(Route)") {
+          task("ScribeMS::forward(ReceiveDataHandler)") {
+            task("ScribeMS::forward::Join(ReceiveDataHandler)");
+          }
+          xor {
+            branch: notice("data_::route::Pastry::data");
+            branch: notice("data_::route::Pastry::data_path_req");
+          }
+          send(beneath);
+        }
+      branch:
+        task("SplitStreamMS::selectParent(ScribeTreeHandler)") {
+          notice("mc_::anycast::SplitStreamMS::JoinReq");
+          task("GenericTreeMulticast::anycast(HierarchicalMulticast)") {
+            notice("data_::routeDirect::GenericTreeMulticast::anycast_data");
+            task("Pastry::routeDirect(Route)") {
+              task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+                task("GenericTreeMulticast::forward::anycast_data(ReceiveDataHandler)") {
+                  notice("tree_::getChildren");
+                  task("ScribeMS::getChildren(Tree)");
+                  notice("data_::routeDirect::GenericTreeMulticast::anycast_data");
+                  task("Pastry::routeDirect(Route)") {
+                    task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+                      task("GenericTreeMulticast::forward::anycast_data(ReceiveDataHandler)");
+                    }
+                    xor {
+                    branch: notice("data_::route::Pastry::data");
+                    branch: notice("data_::route::Pastry::data_path_req");
+                    }
+                    send(beneath);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+fragment recognizer scribeRecvPushdown {
+  recv(pushdown);
+  task("macedon_tcp_transport::deliver") {
+    task("Pastry::deliver(ReceiveDataHandler)") {
+      xor {
+      branch:
+        task("Pastry::deliver::data(ReceiveDataHandler)") {
+          call(scribeForwardPDMsg);
+          call(scribeRecvPDMsg);
+        }
+      branch:
+        task("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+          call(scribeForwardPDMsg);
+          notice("control_::route::Pastry::mapping");
+          send(myprince);
+          call(scribeRecvPDMsg);
+        }
+      }
+    }
+  }
+}
+recognizer LooseMcPath {
+  level(3);
+  thread Sender ("client0",1) {
+    task ("SplitStreamMS::multicast(Multicast)") {
+      notice ("mc_::multicast::SplitStreamMS::Data");
+      task ("GenericTreeMulticast::multicast(HierarchicalMulticast)") {
+        call(mcGtmMcData);
+      }
+    }
+  }
+  thread Receiver(!"client0",{0,99}) { //Truly it should be 99, but hey . . .
+    repeat between 0 and 99 {
+      call (pastryPathReqFwd);
+    }
+    maybe {
+      recv(Sender_Receiver_Forwarder);
+      task ("macedon_tcp_transport::deliver") {
+        task ("Pastry::deliver(ReceiveDataHandler)") {
+          xor { 
+branch:
+            task ("Pastry::deliver::data(ReceiveDataHandler)") {
+              call (updateState);
+              call (mcGtmFwd);
+              call (mcGtmRcv);
+            }
+branch:
+            task ("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+              call (updateState); //once for the 1-hop sender, once for the origin
+              call (updateState); //once for the 1-hop sender, once for the origin
+              call (mcGtmFwd);
+              notice("control_::route::Pastry::mapping"); 
+              send(Sender); //Mapping message
+              call (mcGtmRcv);
+            }
+          }
+        }
+      }
+    }
+    repeat between 0 and 99 {
+      xor {
+      branch:
+      recv(Sender_Receiver_Forwarder);
+      task ("macedon_tcp_transport::deliver") {
+        task ("Pastry::deliver(ReceiveDataHandler)") {
+          xor { 
+          branch:
+            task ("Pastry::deliver::data(ReceiveDataHandler)") {
+              call (updateState);
+              call (mcGtmFwd);
+            }
+          branch:
+            task ("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+              call (updateState); //once for the 1-hop sender, once for the origin
+              call (updateState); //once for the 1-hop sender, once for the origin
+              call (mcGtmFwd);
+              notice("control_::route::Pastry::mapping"); 
+              send(Sender); //Mapping message
+            }
+          }
+        }
+      }
+      branch:
+      call (pastryPathReqFwd);
+      }
+    }
+  }
+  thread RecvMapping(*,{0,100}) {
+    repeat between 1 and 18 {
+      call (pastryRecvMapping);
+    }
+  }
+}
 recognizer McPath {
   level(3);
   thread Sender ("client0",1) {
@@ -181,7 +327,8 @@ branch:
               call (updateState); //once for the 1-hop sender, once for the origin
               call (updateState); //once for the 1-hop sender, once for the origin
               call (mcGtmFwd);
-              maybe { notice("control_::route::Pastry::mapping"); send(Sender); } //Mapping message
+              notice("control_::route::Pastry::mapping"); 
+              send(Sender); //Mapping message
               call (mcGtmRcv);
             }
           }
@@ -227,7 +374,8 @@ branch:
             call (updateState); //once for the 1-hop sender, once for the origin
             call (updateState); //once for the 1-hop sender, once for the origin
             call (mcGtmFwd);
-            maybe { notice("control_::route::Pastry::mapping"); send(Sender); } //Mapping message
+            notice("control_::route::Pastry::mapping"); 
+            send(Sender); //Mapping message
             call (mcGtmRcv);
           }
         }
@@ -253,7 +401,7 @@ recognizer dud {
     any();
   }
 }
-validator pMaceInit {
+validator PMaceInit {
   level(3);
   thread dude (*,1) {
     task("Pastry::maceInit(Route)") {
@@ -261,7 +409,7 @@ validator pMaceInit {
     }
   }
 }
-validator gtmMaceInit {
+validator GtmMaceInit {
   level(3);
   thread dude (*,1) {
     task("GenericTreeMulticast::maceInit(HierarchicalMulticast)") {
@@ -275,10 +423,13 @@ validator gtmMaceInit {
     }
   }
 }
-fragment validator netError { //This will eventually be more complex
+fragment validator NetError { //This will eventually be more complex
   task("Pastry::error(NetworkErrorHandler)");
 }
-validator ssMaceInitLocal { 
+fragment invalidator SJoinGAnyDeliver {
+  task("SplitStreamMS::deliver::JoinReq(ReceiveDataHandler)");
+}
+validator SsMaceInitLocal { 
   level(3);
   limit(HOSTS, {=1});
   thread dude(*,1) {
@@ -288,8 +439,6 @@ validator ssMaceInitLocal {
       notice("tree_::setAuthoritativeGroupJoinHandler");
       task("ScribeMS::setAuthoritativeGroupJoinHandler(ScribeTree)");
       send(printer_timer);
-      notice("tree_::joinGroup");
-      task("ScribeMS::joinGroup(ScribeTree)");//joinGroup(ScribeTree) could be much more complex
     }
   }
   thread printer(*,1) { //works only until the scheduler thread changes
@@ -305,7 +454,7 @@ validator ssMaceInitLocal {
     }
   }
 }
-validator pPrinter {
+validator PPrinter {
   level(3);
   limit(HOSTS, {=1});
   thread dude(*,1) {
@@ -324,7 +473,7 @@ validator pPrinter {
     }
   }
 }
-validator sPrinter {
+validator SPrinter {
   level(3);
   limit(HOSTS, {=1});
   thread dude(*,1) {
@@ -343,7 +492,7 @@ validator sPrinter {
     }
   }
 }
-recognizer pProbe {
+recognizer PProbe {
   limit(HOSTS, {1,2});
   thread prober(*,1) {
     notice("UDP::route::Pastry::probe");
@@ -373,7 +522,7 @@ recognizer pProbe {
     }
   }
 }
-validator pValidProbe {
+validator PValidProbe {
   limit(HOSTS, {=2});
   thread prober(*,1) {
     notice("UDP::route::Pastry::probe");
@@ -399,7 +548,7 @@ validator pValidProbe {
     }
   }
 }
-validator sCreateGroup {
+validator SCreateGroup {
   thread client0app("client0",1) {
     notice("downcall createGroup");
     notice("overlay_::route::ScribeMS::CreateGroup");
@@ -477,17 +626,17 @@ validator sCreateGroup {
     }
   }
 }
-validator ssJoinGroup {
+validator SsJoinGroup {
   thread nonsource(!"client0",1) {
     task("SplitStreamMS::joinGroup(Group)") {
-      repeat 16 {
+      repeat 17 {
         notice("tree_::joinGroup");
         task("ScribeMS::joinGroup(ScribeTree)");
       }
     }
   }
 }
-validator ssCreateGroup {
+validator SsCreateGroup {
   thread nonsource("client0",1) {
     task("SplitStreamMS::createGroup(Group)") {
       repeat 16 {
@@ -503,7 +652,19 @@ fragment recognizer computeOutdegree {
     task("ScribeMS::getChildren(Tree)");
   }
 }
-validator sJoinGroupRoot {
+fragment recognizer selectPushdownChild {
+  repeat 16 {
+    notice("tree_::isRoot");
+    task("ScribeMS::isRoot(Tree)");
+    notice("tree_::getChildren");
+    task("ScribeMS::getChildren(Tree)");
+  }
+  maybe {
+    notice("tree_::pushdownChild");
+    task("ScribeMS::pushdownChild(ScribeTree)");
+  }
+}
+validator SJoinGroupRoot {
   limit(HOSTS, {=1});
   thread appJoin(!"client0",1) {
     notice("downcall joinGroup - am root");
@@ -519,7 +680,98 @@ validator sJoinGroupRoot {
     notice("hbTimer");
   }
 }
-recognizer sJoinGroup {
+fragment recognizer sendHeartbeat {
+  notice("overlay_::routeDirect::ScribeMS::Heartbeat");
+  task("Pastry::routeDirect(Route)") {
+    task("ScribeMS::forward(ReceiveDataHandler)") {
+      task("ScribeMS::forward::Heartbeat(ReceiveDataHandler)");
+    }
+    xor {
+    branch: notice("data_::route::Pastry::data_path_req");
+    branch: notice("data_::route::Pastry::data");
+    }
+    send(dudder);
+  }
+}
+fragment recognizer joinOtherNodeMsg {
+  maybe {
+    task("ScribeMS::notifyIdSpaceChanged(OverlayStructureHandler)");
+  }
+  xor {
+  branch:
+    task("ScribeMS::forward(ReceiveDataHandler)") {
+      xor {
+      branch:
+        task("ScribeMS::forward::Join(ReceiveDataHandler)") {
+          task("SplitStreamMS::verifyJoinGroup(GroupJoinHandler)") {
+            call(computeOutdegree);
+            maybe {
+              call(selectPushdownChild);
+            }
+          }
+          xor {
+          branch:
+            call(sendHeartbeat);
+            task("SplitStreamMS::notifyChildAdded(TreeStructureHandler)") {
+              call(computeOutdegree);
+              maybe {
+                notice("tree_::leaveGroup");
+                task("ScribeMS::leaveGroup(ScribeTree)");
+              }
+            }
+            send(somewhere);
+          branch:
+            notice("overlay_::route::ScribeMS::Pushdown");
+            task("Pastry::route(Route)") {
+              task("ScribeMS::forward(ReceiveDataHandler)") {
+                task("ScribeMS::forward::Pushdown(ReceiveDataHandler)");
+              }
+              notice("data_::route::Pastry::data");
+              send(lullaby);
+            }
+          }
+        }
+      }
+    }
+  branch:
+    task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+      task("GenericTreeMulticast::forward::anycast_data(ReceiveDataHandler)") {
+        notice("tree_::getChildren");
+        task("ScribeMS::getChildren(Tree)");
+        notice("data_::routeDirect::GenericTreeMulticast::anycast_data");
+        task("Pastry::routeDirect(Route)") {
+          task("GenericTreeMulticast::forward(ReceiveDataHandler)") {
+            task("GenericTreeMulticast::forward::anycast_data(ReceiveDataHandler)");
+          }
+          xor {
+          branch: notice("data_::route::Pastry::data_path_req");
+          branch: notice("data_::route::Pastry::data");
+          }
+          send(foo);
+        }
+      }
+    }
+  }
+  maybe {
+          notice("control_::route::Pastry::mapping");
+          send(myprince);
+  }
+}
+fragment recognizer scribePushdownForwarder {
+  recv(foobar);
+  task("macedon_tcp_transport::deliver") {
+    task("Pastry::deliver(ReceiveDataHandler)") {
+      task("Pastry::deliver::data(ReceiveDataHandler)") {
+        task("ScribeMS::forward(ReceiveDataHandler)") {
+          task("ScribeMS::forward::Pushdown(ReceiveDataHandler)");
+        }
+        notice("data_::route::Pastry::data");
+        send(baz);
+      }
+    }
+  }
+}
+recognizer SJoinGroup {
   thread appJoin(!"client0",1) {
     notice("downcall joinGroup - am root");
     send(joiner);
@@ -552,33 +804,122 @@ recognizer sJoinGroup {
       }
     }
   }
+  thread joinerHbRcv(!"client0",{0,1}) {
+    repeat between 1 and 100 {
+      xor {
+      branch:
+        call(scribeRecvHeartbeat);
+      branch:
+        call(scribeRecvPushdown);
+      }
+    }
+  }
+  thread joinerTimer(!"client0",1) { //Note: this is a recognizer only -- not concerned about the number of times things happen.
+    repeat between 1 and 1000 {
+      recv(joiner,joinerTimer,joinerroot);
+      notice("hbTimer");
+      maybe {
+        xor {
+        branch:
+          notice("overlay_::routeDirect::ScribeMS::Join");
+          task("Pastry::routeDirect(Route)") {
+            task("ScribeMS::forward(ReceiveDataHandler)") {
+              task("ScribeMS::forward::Join(ReceiveDataHandler)");
+            }
+            xor {
+            branch:
+              notice("data_::route::Pastry::data_path_req");
+            branch:
+              notice("data_::route::Pastry::data");
+            }
+            send(elsewhere);
+          }
+        branch:
+          notice("overlay_::route::ScribeMS::Join"); //The route is when the timeout has happened and am rejoining
+          task("Pastry::route(Route)") {
+            task("ScribeMS::forward(ReceiveDataHandler)") {
+              task("ScribeMS::forward::Join(ReceiveDataHandler)");
+            }
+            notice("data_::route::Pastry::data");
+            send(elsewhere);
+          }
+        }
+      }
+      maybe {
+        send(joiner,joinerTimer,joinerroot);
+      }
+    }
+  }
   thread dude(*,{0,10000}) {
     recv(dudette);
     task("macedon_tcp_transport::deliver") {
       task("Pastry::deliver(ReceiveDataHandler)") {
         xor {
         branch:
-          task("Pastry::deliver:data_path_req(ReceiveDataHandler)") {
-            maybe {
-              task("ScribeMS::notifyIdSpaceChanged(OverlayStructureHandler)");
-            }
+          task("Pastry::deliver::data_path_req(ReceiveDataHandler)") {
+            call(joinOtherNodeMsg);
           }
         branch:
-          task("Pastry::deliver:data(ReceiveDataHandler)");
+          task("Pastry::deliver::data(ReceiveDataHandler)") {
+            call(joinOtherNodeMsg);
+          }
         }
       }
     }
+    any(); //downcall pushdownChild
   }
-  thread nonjoiner(*,{0,10000}) {
-    recv(someone);
-    any();
+  thread RecvMapping(*,{0,100}) {
+    repeat between 1 and 18 {
+      call (pastryRecvMapping);
+    }
+  }
+  thread pprf(*,{0,100}) {
+    repeat between 0 and 18 {
+      xor {
+      branch: call(pastryPathReqFwd);
+      branch: call(scribePushdownForwarder);
+      }
+    }
+  }
+  thread client0node("client0",{0,1}) {
+    repeat between 0 and 18 {
+      call (pastryRecvMapping);
+    }
+    recv(rainbow);
+    notice("notifyIdSpaceChanged-avoidKids");
+    notice("overlay_::routeDirect::ScribeMS::Pushdown");
+    task("Pastry::routeDirect(Route)") {
+      task("ScribeMS::forward(ReceiveDataHandler)") {
+        task("ScribeMS::forward::Pushdown(ReceiveDataHandler)");
+      }
+      xor {
+        branch:
+          notice("data_::route::Pastry::data_path_req");
+        branch:
+          notice("data_::route::Pastry::data");
+      }
+      send(over);
+    }
+    repeat between 0 and 18 {
+      call (pastryRecvMapping);
+    }
+  }
+  thread parentHBTimer(*,{1,5}) {
+    repeat between 0 and 40 {
+      recv(elsewhere);
+      notice("hbTimer-parent");
+      call(sendHeartbeat);
+      maybe{
+        send(self);
+      }
+    }
   }
 }
-assert(instances(sCreateGroup)==16);
-assert(instances(ssCreateGroup)==1);
-assert(instances(ssJoinGroup)==99);
-assert(instances(ssMaceInitLocal)==100);
-assert(instances(pMaceInit)==100);
-assert(instances(pPrinter)==100);
-assert(instances(gtmMaceInit)==100);
-assert(instances(sJoinGroupRoot)==16);
+assert(instances(SCreateGroup)==16);
+assert(instances(SsCreateGroup)==1);
+assert(instances(SsJoinGroup)==99);
+assert(instances(SsMaceInitLocal)==100);
+assert(instances(PMaceInit)==100);
+assert(instances(PPrinter)==100);
+assert(instances(GtmMaceInit)==100);
+assert(instances(SJoinGroupRoot)==16);
