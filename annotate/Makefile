@@ -9,7 +9,7 @@ CC = gcc
 LDFLAGS = -L.
 LDLIBS = -lrt -lannotate -lpthread
 #CPPFLAGS += -DPROC_GETRUSAGE
-TESTS = threadtest evtest belief pushpop
+TESTS = threadtest evtest belief pushpop longid
 
 all: libannotate.a libjannotate.so AnnTest.class $(TESTS)
 
