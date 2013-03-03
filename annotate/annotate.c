@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/resource.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
 #include "annotate.h"
@@ -34,7 +35,7 @@ typedef struct {
 } ThreadContext;
 
 #include <linux/unistd.h>
-_syscall0(pid_t,gettid)
+#define gettid() syscall(SYS_gettid)
 
 #define USE_PROC 10
 #define GETRUSAGE(ru) ({int _n;if(rusage_who==USE_PROC)_n=proc_getrusage(0,ru);else _n=getrusage(rusage_who,ru); _n;})
@@ -483,7 +484,7 @@ static int proc_getrusage(int ign, struct rusage *ru) {
 	ThreadContext *pctx = GET_CTX;
 	if (pctx->procfd == -1) {
 		char fn[256];
-		sprintf(fn, "/proc/%d/task/%d/stat", getpid(), gettid());
+		sprintf(fn, "/proc/%d/task/%d/stat", (int)getpid(), (int)gettid());
 		pctx->procfd = open(fn, O_RDONLY);
 		if (pctx->procfd == -1) { perror(fn); exit(1); }
 	}

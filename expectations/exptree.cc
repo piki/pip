@@ -336,7 +336,7 @@ int ExpTask::check(const PathEventList &test, unsigned int ofs,
 	}
 	else if (matched_children < (int)pt->children.size()) {
 		if (debug_failed_matches_individually) printf("      Task(%s) had %d leftover children\n",
-			name->to_string(), pt->children.size() - matched_children);
+			name->to_string(), (int)pt->children.size() - matched_children);
 		return -1;  // children
 	}
 	return 1;
@@ -540,7 +540,7 @@ int ExpXor::check(const PathEventList &test, unsigned int ofs,
 		int res = Recognizer::check(test, branches[i], ofs, resources, max_level);
 		if (res != -1) return res;  // !! greedy, continuation needed
 	}
-	if (debug_failed_matches_individually) printf("      Xor(%d branches) had no match.\n", branches.size());
+	if (debug_failed_matches_individually) printf("      Xor(%d branches) had no match.\n", (int)branches.size());
 	return -1;
 }
 
@@ -666,7 +666,7 @@ bool Recognizer::check(const Path *p, bool *resources) {
 	if (p->children.size() < min || p->children.size() > max) {
 		if (debug_failed_matches) {
 			printf("Recognizer %s\n", name.c_str());
-			printf("  false, R.threads={%d,%d} P.threads=%d\n", min, max, p->children.size());
+			printf("  false, R.threads={%d,%d} P.threads=%d\n", min, max, (int)p->children.size());
 		}
 		return false;
 	}

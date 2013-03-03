@@ -3,6 +3,7 @@
 #include <string>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include "path.h"
 #include <mysql/mysql.h>
 #include <map>
@@ -50,13 +51,13 @@ int main(int argc, char **argv) {
 	if (argc-optind == 3) just_one = atoi(argv[optind+2]);
 
 	if (!expect_parse(argv[optind+1])) return 1;
-	printf("%d recognizers registered.\n", recognizers.size());
+	printf("%d recognizers registered.\n", (int)recognizers.size());
 #if 0
 	for (rp=recognizers.begin(); rp!=recognizers.end(); rp++)
 		rp->second->print();
 	printf("----------------------------------------------------------------\n");
 #endif
-	printf("%d aggregates registered.\n", aggregates.size());
+	printf("%d aggregates registered.\n", (int)aggregates.size());
 #if 0
 	for (i=0; i<aggregates.size(); i++)
 		aggregates[i]->print_tree();

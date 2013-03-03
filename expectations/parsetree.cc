@@ -109,7 +109,7 @@ UnitsNode::UnitsNode(float _amt, const char *_name) : amt(_amt) {
 
 	unit = get_unit_by_name(_name);
 	switch (unit) {
-		case UNIT_HOUR: amt *= 3600*1000000; unit = UNIT_USEC; break;
+		case UNIT_HOUR: amt *= (float)3600*1000000; unit = UNIT_USEC; break;
 		case UNIT_MIN:  amt *= 60*1000000; unit = UNIT_USEC; break;
 		case UNIT_SEC:  amt *= 1000000; unit = UNIT_USEC; break;
 		case UNIT_MSEC: amt *= 1000; unit = UNIT_USEC; break;

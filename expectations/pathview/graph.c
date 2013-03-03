@@ -124,7 +124,7 @@ void gtk_graph_thaw(GtkGraph *graph) {
 
 static guint g_edge_hash(gconstpointer v) {
 	GtkGraphEdge *edge = (GtkGraphEdge*)v;
-	return (int)edge->a ^ (int)edge->b;
+	return (int)(long)edge->a ^ (int)(long)edge->b;
 }
 
 static gint g_edge_equal(gconstpointer a, gconstpointer b) {
@@ -259,9 +259,9 @@ static void gtk_graph_layout(GtkGraph *graph) {
 	fprintf(wfp, "edge [ color=\"#%02x%02x%02x\" ];\n",
 		text_color.red>>8, text_color.green>>8, text_color.blue>>8);
 	for (i=0; i<graph->nodes->len; i++)
-		fprintf(wfp, "  n%x [ label = \"%s\" ];\n", (int)NODE(graph, i), NODE(graph, i)->label);
+		fprintf(wfp, "  n%lx [ label = \"%s\" ];\n", (long)NODE(graph, i), NODE(graph, i)->label);
 	for (i=0; i<graph->edges->len; i++) {
-		fprintf(wfp, "  n%x -> n%x%s;\n", (int)EDGE(graph, i)->a, (int)EDGE(graph, i)->b,
+		fprintf(wfp, "  n%lx -> n%lx%s;\n", (long)EDGE(graph, i)->a, (long)EDGE(graph, i)->b,
 			EDGE(graph, i)->directed ? "" : " [ arrowhead=none ]");
 	}
 	fprintf(wfp, "}\n");

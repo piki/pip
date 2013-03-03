@@ -1,7 +1,7 @@
 #CPPFLAGS = -I/usr/lib/jdk1.5.0_01/include -I/usr/lib/jdk1.5.0_01/include/linux
-JAVA_HOME = /home/patrick/pip/j2sdk1.4.2_04
+JAVA_HOME = $(shell echo $$JAVA_HOME)
 CPPFLAGS = -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -fPIC
 CXXFLAGS = $(CFLAGS)
 OBJS = annotate.o socklib.o
 CPPFLAGS += -DTHREADS
@@ -14,10 +14,10 @@ TESTS = threadtest evtest belief pushpop longid
 all: libannotate.a libjannotate.so AnnTest.class $(TESTS)
 
 annotate_Annotate.h: Annotate.class
-	javah annotate.Annotate && touch $@
+	javah -cp .. annotate.Annotate && touch $@
 
 %.class: %.java
-	javac $<
+	javac -cp .. $<
 
 libannotate.a: $(OBJS)
 	$(AR) r $@ $(OBJS)

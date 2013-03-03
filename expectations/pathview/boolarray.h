@@ -11,7 +11,7 @@ public:
 		bzero(data, realsz);
 	}
 	~BoolArray(void) { delete[] data; }
-	inline bool operator[] (int n) const { return (data[n/8] >> (n%8)) & 1 != 0; }
+	inline bool operator[] (int n) const { return ((data[n/8] >> (n%8)) & 1) != 0; }
 	inline void set(int n, bool d) const {
 		if (d)
 			data[n/8] |= 1 << (n%8);

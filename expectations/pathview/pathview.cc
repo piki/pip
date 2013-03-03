@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
 	match_count.insert(match_count.end(), recognizers.size(), 0);
 	resources_count.insert(resources_count.end(), recognizers.size(), 0);
 	// queue up an idler job to check all paths
-	printf("checking %d paths\n", path_ids.size());
+	printf("checking %d paths\n", (int)path_ids.size());
 	std::set<int>::const_iterator *p = new std::set<int>::const_iterator;
 	*p = path_ids.begin();
 	g_idle_add_full(G_PRIORITY_LOW, check_all_paths, p, NULL);

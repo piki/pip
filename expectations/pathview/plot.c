@@ -517,7 +517,7 @@ static void gtk_plot_set_highlight(GtkPlot *plot, int click_x, int click_y) {
 		plot->highlight_point = closest_point;
 	}
 	else
-		plot->highlight_line = plot->highlight_line = -1;
+		plot->highlight_line = plot->highlight_point = -1;
 }
 
 static gint gtk_plot_button_press(GtkWidget *widget, GdkEventButton *ev) {

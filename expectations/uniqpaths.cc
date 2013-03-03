@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 		threads[atoi(row[0])] = new PathThread(row);
 	}
 	mysql_free_result(res);
-	fprintf(stderr, " done: %d found.\n", threads.size());
+	fprintf(stderr, " done: %d found.\n", (int)threads.size());
 
 	for (std::set<int>::const_iterator p=pathids.begin(); p!=pathids.end(); p++) {
 		read_path(base, *p);
@@ -73,13 +73,13 @@ int main(int argc, char **argv) {
 
 	printf("malformed paths: %d\n", malformed_paths_count);
 
-	printf("%d unique shapes:\n", shapes.size());
+	printf("%d unique shapes:\n", (int)shapes.size());
 	for (std::map<Path*,int>::const_iterator p=shapes.begin(); p!=shapes.end(); p++) {
 		printf("====[ %d time(s) ]====\n", p->second);
 		p->first->print();
 	}
 
-	printf("%d unique shapes+names:\n", shapes_names.size());
+	printf("%d unique shapes+names:\n", (int)shapes_names.size());
 	for (std::map<Path*,int>::const_iterator p=shapes_names.begin(); p!=shapes_names.end(); p++) {
 		printf("====[ %d time(s) ]====\n", p->second);
 		p->first->print();

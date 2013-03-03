@@ -1,8 +1,8 @@
 OPT = 
-PROFILE = -pg
+#PROFILE = -pg
 CC = g++
-CFLAGS = -g -Wall $(OPT) $(PROFILE)
-CXXFLAGS = -g -Wall $(OPT) $(PROFILE)
+CFLAGS = -g -Werror -Wall $(OPT) $(PROFILE)
+CXXFLAGS = -g -Werror -Wall $(OPT) $(PROFILE)
 CPPFLAGS = -I.
 PROGS = pathcheck uniqpaths showpaths makeexp
 LDLIBS = -lm -lmysqlclient -lpcre

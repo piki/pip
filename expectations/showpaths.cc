@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
 		threads[atoi(row[0])] = new PathThread(row);
 	}
 	mysql_free_result(res);
-	fprintf(stderr, " done: %d found.\n", threads.size());
+	fprintf(stderr, " done: %d found.\n", (int)threads.size());
 
 	if (just_one != -1)
 		read_path(base, just_one);

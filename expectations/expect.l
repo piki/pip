@@ -5,6 +5,7 @@ void yyerror(const char *fmt, ...);
 #include "expect.tab.hh"
 int yylno = 1;
 static char string_buf[1024], *string_p;
+static void yyunput (int c, char *buf_ptr) __attribute__((unused));
 %}
 
 digit		[0-9]

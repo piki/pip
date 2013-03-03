@@ -248,12 +248,12 @@ nopath:
 }
 
 static gint gtk_pathtl_button_press(GtkWidget *widget, GdkEventButton *ev) {
-	GtkPathTL *pathtl;
+	//GtkPathTL *pathtl;
 
 	g_return_val_if_fail(widget, FALSE);
 	g_return_val_if_fail(GTK_IS_PATHTL(widget), FALSE);
 	g_return_val_if_fail(ev, FALSE);
-	pathtl = GTK_PATHTL(widget);
+	//pathtl = GTK_PATHTL(widget);
 
 	printf("button pressed: %.2f, %.2f\n", ev->x, ev->y);
 

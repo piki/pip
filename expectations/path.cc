@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdarg.h>
+#include <string.h>
 #include "common.h"
 #include "path.h"
 
@@ -148,8 +149,8 @@ std::string PathMessageSend::to_string(void) const {
 void PathMessageSend::print_dot(FILE *fp) const {
 	if (!pred) {
 		PathThread *t = threads[thread_send];
-		fprintf(fp, "s%x [label = \"%d:%s/%s/%d\"];\n",
-			(int)this, thread_send, t->host.c_str(), t->prog.c_str(), t->tid);
+		fprintf(fp, "s%lx [label = \"%d:%s/%s/%d\"];\n",
+			(long)this, thread_send, t->host.c_str(), t->prog.c_str(), t->tid);
 	}
 	//fprintf(fp, "r%x -> s%x;\n", (int)pred, (int)this);
 }
@@ -194,12 +195,12 @@ std::string PathMessageRecv::to_string(void) const {
 
 void PathMessageRecv::print_dot(FILE *fp) const {
 	PathThread *t = threads[thread_recv];
-	fprintf(fp, "r%x [label = \"%d:%s/%s/%d\"];\n",
-		(int)this, thread_recv, t->host.c_str(), t->prog.c_str(), t->tid);
+	fprintf(fp, "r%lx [label = \"%d:%s/%s/%d\"];\n",
+		(long)this, thread_recv, t->host.c_str(), t->prog.c_str(), t->tid);
 	if (send->pred)
-		fprintf(fp, "r%x -> r%x;\n", (int)send->pred, (int)this);
+		fprintf(fp, "r%lx -> r%lx;\n", (long)send->pred, (long)this);
 	else
-		fprintf(fp, "s%x -> r%x;\n", (int)send, (int)this);
+		fprintf(fp, "s%lx -> r%lx;\n", (long)send, (long)this);
 }
 
 void PathMessageRecv::print(FILE *fp, int depth) const {
@@ -667,7 +668,7 @@ void get_path_ids(MYSQL *mysql, const char *table_base, std::set<int> *pathids) 
 		pathids->insert(atoi(row[0]));
 	mysql_free_result(res);
 
-	fprintf(stderr, " done: %d found.\n", pathids->size());
+	fprintf(stderr, " done: %d found.\n", (int)pathids->size());
 }
 
 void get_threads(MYSQL *mysql, const char *table_base, std::map<int, PathThread*> *threads) {
@@ -678,5 +679,5 @@ void get_threads(MYSQL *mysql, const char *table_base, std::map<int, PathThread*
 	while ((row = mysql_fetch_row(res)) != NULL)
 		(*threads)[atoi(row[0])] = new PathThread(row);
   mysql_free_result(res);
-	fprintf(stderr, " done: %d found.\n", threads->size());
+	fprintf(stderr, " done: %d found.\n", (int)threads->size());
 }
