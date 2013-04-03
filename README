@@ -1,0 +1,12 @@
+Pip finds structural and performance bugs in distributed systems by
+comparing actual system behavior to expected system behavior. Actual
+system behavior is based on program annotations, interposition, or
+sniffing -- or some combination of the above. Expected system behavior is
+described in an external specification of the system's call graph and
+communication protocols.
+
+Pip automatically checks actual behavior against expected behavior and
+helps programmers visualize the result to discover the causes of any
+unexpected behavior.
+
+More at http://issg.cs.duke.edu/pip/
