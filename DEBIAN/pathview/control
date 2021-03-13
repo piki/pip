@@ -8,7 +8,7 @@ Depends: libgtk2.0-0 (>= 2.4), libglade2-0, libpcre3, librsvg2-2, libmysqlclient
 Recommends: graphviz
 Suggests: virtual-mysql-server, virtual-mysql-client
 Installed-Size: <SIZE>
-Maintainer: Patrick Reynolds [reynolds@cs.cornell.edu]
+Maintainer: Patrick Reynolds [patrick@piki.org]
 Description: Pip path viewer GUI
  .
  Pip is a set of debugging tools for distributed systems

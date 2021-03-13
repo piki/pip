@@ -7,7 +7,7 @@ Essential: no
 Depends: libmysqlclient15off, perl, libdbi-perl, libc6 (>= 2.3)
 Suggests: virtual-mysql-server, virtual-mysql-client
 Installed-Size: <SIZE>
-Maintainer: Patrick Reynolds [reynolds@cs.cornell.edu]
+Maintainer: Patrick Reynolds [patrick@piki.org]
 Description: Pip trace file processor
  .
  Pip is a set of debugging tools for distributed systems

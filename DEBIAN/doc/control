@@ -5,7 +5,7 @@ Priority: optional
 Architecture: i386
 Essential: no
 Installed-Size: <SIZE>
-Maintainer: Patrick Reynolds [reynolds@cs.cornell.edu]
+Maintainer: Patrick Reynolds [patrick@piki.org]
 Description: Pip trace file processor
  .
  Pip is a set of debugging tools for distributed systems

@@ -6,7 +6,7 @@ Architecture: i386
 Essential: no
 Depends: libc6 (>= 2.3)
 Installed-Size: <SIZE>
-Maintainer: Patrick Reynolds [reynolds@cs.cornell.edu]
+Maintainer: Patrick Reynolds [patrick@piki.org]
 Description: Pip annotation library
  .
  Pip is a set of debugging tools for distributed systems

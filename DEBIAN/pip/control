@@ -6,7 +6,7 @@ Architecture: i386
 Essential: no
 Depends: pip-dev (= <VERSION>), pip-expectations (= <VERSION>), pip-java (= <VERSION>), pip-pathview (= <VERSION>), pip-reconcile (= <VERSION>)
 Installed-Size: <SIZE>
-Maintainer: Patrick Reynolds [reynolds@cs.cornell.edu]
+Maintainer: Patrick Reynolds [patrick@piki.org]
 Description: Pip debugging suite
  .
  Pip is a set of debugging tools for distributed systems
