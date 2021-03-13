@@ -1,0 +1,3 @@
+expectations/pathcheck		usr/bin/pip-pathcheck		strip
+expectations/showpaths		usr/bin/pip-showpaths		strip
+expectations/makeexp		usr/bin/pip-makeexp		strip

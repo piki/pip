@@ -1,0 +1,4303 @@
+Terminals which are not used
+
+   RANGE
+
+
+State 291 conflicts: 1 reduce/reduce
+
+
+Grammar
+
+    0 $accept: program $end
+
+    1 program: program pathdecl
+    2        | program assertdecl
+    3        | /* empty */
+
+    4 pathdecl: pathtype IDENTIFIER '{' path_limits thread_list '}'
+    5         | FRAGMENT pathtype IDENTIFIER '{' path_limits statement_list '}'
+    6         | pathtype IDENTIFIER ':' pathboolexpr ';'
+
+    7 pathtype: VALIDATOR
+    8         | INVALIDATOR
+    9         | RECOGNIZER
+
+   10 pathboolexpr: pathboolexpr B_AND pathboolexpr
+   11             | pathboolexpr B_OR pathboolexpr
+   12             | pathboolexpr IMPLIES pathboolexpr
+   13             | '!' pathboolexpr
+   14             | '(' pathboolexpr ')'
+   15             | IDENTIFIER
+
+   16 statement_list: statement_list statement
+   17               | /* empty */
+
+   18 statement: string_func
+   19          | int_func
+   20          | CALL '(' IDENTIFIER ')' ';'
+   21          | XOR '{' xor_list '}'
+   22          | MAYBE statement
+   23          | FUTURE statement
+   24          | FUTURE IDENTIFIER statement
+   25          | DONE '(' IDENTIFIER ')' ';'
+   26          | ANY '(' ')' ';'
+   27          | '{' statement_list '}'
+   28          | VARIABLE '=' int_expr
+   29          | VARIABLE '=' string_expr
+   30          | error ';'
+
+   31 string_expr: string_func
+   32            | simple_string_expr ';'
+
+   33 string_func: SEND '(' msg_target ')' limit_list ';'
+   34            | RECV '(' msg_target ')' limit_list ';'
+   35            | NOTICE '(' simple_string_expr ')' ';'
+   36            | task limit_list ';'
+   37            | task limit_list '{' statement_list '}'
+
+   38 simple_string_expr: string_literal
+   39                   | VARIABLE
+   40                   | '!' simple_string_expr
+
+   41 int_expr: int_func
+   42         | simple_int_expr ';'
+
+   43 int_func: REPEAT repeat_range statement
+
+   44 simple_int_expr: INTEGER
+   45                | INSTANCES '(' IDENTIFIER ')'
+   46                | UNIQUE '(' IDENTIFIER ')'
+   47                | UNIQUE '(' VARIABLE ')'
+   48                | simple_int_expr '*' simple_int_expr
+   49                | simple_int_expr '+' simple_int_expr
+   50                | simple_int_expr '-' simple_int_expr
+   51                | VARIABLE
+
+   52 xor_list: xor_list xor
+   53         | /* empty */
+
+   54 xor: BRANCH ':' statement_list
+
+   55 thread_list: thread_list thread
+   56            | /* empty */
+
+   57 msg_target: msg_list
+   58           | simple_string_expr
+
+   59 msg_list: msg_list ',' IDENTIFIER
+   60         | IDENTIFIER
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list '}'
+
+   62 thread_count_range: INTEGER
+   63                   | '{' INTEGER ',' INTEGER '}'
+
+   64 path_limits: path_limits limit ';'
+   65            | path_limits level ';'
+   66            | /* empty */
+
+   67 limit_list: limit_list limit
+   68           | /* empty */
+
+   69 limit: LIMIT '(' IDENTIFIER ',' limit_spec ')'
+
+   70 level: LEVEL '(' INTEGER ')'
+
+   71 limit_spec: limit_range
+   72           | count_range
+   73           | INTEGER
+   74           | unit_qty
+
+   75 limit_range: '{' unit_qty ',' unit_qty '}'
+   76            | '{' unit_qty '+' '}'
+   77            | '{' '=' unit_qty '}'
+
+   78 count_range: '{' simple_int_expr ',' simple_int_expr '}'
+   79            | '{' simple_int_expr '+' '}'
+   80            | '{' '=' simple_int_expr '}'
+   81            | '{' float_expr ',' float_expr '}'
+   82            | '{' float_expr '+' '}'
+   83            | '{' '=' float_expr '}'
+
+   84 unit_qty: INTEGER IDENTIFIER
+   85         | FLOAT IDENTIFIER
+   86         | AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')'
+   87         | AVERAGE '(' IDENTIFIER ',' string_literal ')'
+   88         | STDDEV '(' IDENTIFIER ',' IDENTIFIER ')'
+   89         | STDDEV '(' IDENTIFIER ',' string_literal ')'
+   90         | F_MAX '(' IDENTIFIER ',' IDENTIFIER ')'
+   91         | F_MAX '(' IDENTIFIER ',' string_literal ')'
+   92         | F_MIN '(' IDENTIFIER ',' IDENTIFIER ')'
+   93         | F_MIN '(' IDENTIFIER ',' string_literal ')'
+
+   94 repeat_range: simple_int_expr
+   95             | BETWEEN simple_int_expr AND simple_int_expr
+
+   96 task: TASK '(' simple_string_expr ')'
+
+   97 string_literal: STRING
+   98               | REGEX
+   99               | '*'
+
+  100 assertdecl: DURING '(' window ')' assert
+  101           | assert
+
+  102 window: INTEGER ',' INTEGER
+  103       | ANY INTEGER
+
+  104 assert: ASSERT '(' bool_expr ')' ';'
+
+  105 bool_expr: bool_expr B_AND bool_expr
+  106          | bool_expr B_OR bool_expr
+  107          | bool_expr IMPLIES bool_expr
+  108          | '!' bool_expr
+  109          | '(' bool_expr ')'
+  110          | simple_int_expr IN count_range
+  111          | simple_int_expr '<' simple_int_expr
+  112          | simple_int_expr '>' simple_int_expr
+  113          | simple_int_expr LE simple_int_expr
+  114          | simple_int_expr GE simple_int_expr
+  115          | simple_int_expr EQ simple_int_expr
+  116          | simple_int_expr NE simple_int_expr
+  117          | unit_qty IN limit_range
+  118          | unit_qty '<' unit_qty
+  119          | unit_qty '>' unit_qty
+  120          | unit_qty LE unit_qty
+  121          | unit_qty GE unit_qty
+  122          | unit_qty EQ unit_qty
+  123          | unit_qty NE unit_qty
+  124          | float_expr '<' float_expr
+  125          | float_expr '>' float_expr
+  126          | float_expr LE float_expr
+  127          | float_expr GE float_expr
+  128          | float_expr EQ float_expr
+  129          | float_expr NE float_expr
+
+  130 float_expr: FLOAT
+  131           | simple_int_expr '/' simple_int_expr
+  132           | unit_qty '/' unit_qty
+  133           | float_expr '/' float_expr
+  134           | float_expr '*' float_expr
+  135           | float_expr '-' float_expr
+  136           | float_expr '+' float_expr
+  137           | float_expr F_POW float_expr
+  138           | LOG '(' float_expr ')'
+  139           | LOGN '(' float_expr ')'
+  140           | EXP '(' float_expr ')'
+  141           | SQRT '(' float_expr ')'
+
+
+Terminals, with rules where they appear
+
+$end (0) 0
+'!' (33) 13 40 108
+'(' (40) 14 20 25 26 33 34 35 45 46 47 61 69 70 86 87 88 89 90 91 92
+    93 96 100 104 109 138 139 140 141
+')' (41) 14 20 25 26 33 34 35 45 46 47 61 69 70 86 87 88 89 90 91 92
+    93 96 100 104 109 138 139 140 141
+'*' (42) 48 99 134
+'+' (43) 49 76 79 82 136
+',' (44) 59 61 63 69 75 78 81 86 87 88 89 90 91 92 93 102
+'-' (45) 50 135
+'/' (47) 131 132 133
+':' (58) 6 54
+';' (59) 6 20 25 26 30 32 33 34 35 36 42 64 65 104
+'<' (60) 111 118 124
+'=' (61) 28 29 77 80 83
+'>' (62) 112 119 125
+'{' (123) 4 5 21 27 37 61 63 75 76 77 78 79 80 81 82 83
+'}' (125) 4 5 21 27 37 61 63 75 76 77 78 79 80 81 82 83
+error (256) 30
+VALIDATOR (258) 7
+INVALIDATOR (259) 8
+RECOGNIZER (260) 9
+FRAGMENT (261) 5
+LEVEL (262) 70
+REPEAT (263) 43
+BRANCH (264) 54
+XOR (265) 21
+MAYBE (266) 22
+CALL (267) 20
+FUTURE (268) 23 24
+DONE (269) 25
+BETWEEN (270) 95
+AND (271) 95
+ASSERT (272) 104
+INSTANCES (273) 45
+UNIQUE (274) 46 47
+DURING (275) 100
+ANY (276) 26 103
+AVERAGE (277) 86 87
+STDDEV (278) 88 89
+F_MAX (279) 90 91
+F_MIN (280) 92 93
+F_POW (281) 137
+SQRT (282) 141
+LOG (283) 138
+LOGN (284) 139
+EXP (285) 140
+GE (286) 114 121 127
+LE (287) 113 120 126
+EQ (288) 115 122 128
+NE (289) 116 123 129
+B_AND (290) 10 105
+B_OR (291) 11 106
+IMPLIES (292) 12 107
+IN (293) 110 117
+SEND (294) 33
+RECV (295) 34
+TASK (296) 96
+THREAD (297) 61
+NOTICE (298) 35
+LIMIT (299) 69
+RANGE (300)
+STRING (301) 97
+REGEX (302) 98
+INTEGER (303) 44 62 63 70 73 84 102 103
+FLOAT (304) 85 130
+IDENTIFIER (305) 4 5 6 15 20 24 25 45 46 59 60 61 69 84 85 86 87 88
+    89 90 91 92 93
+VARIABLE (306) 28 29 39 47 51
+
+
+Nonterminals, with rules where they appear
+
+$accept (67)
+    on left: 0
+program (68)
+    on left: 1 2 3, on right: 0 1 2
+pathdecl (69)
+    on left: 4 5 6, on right: 1
+pathtype (70)
+    on left: 7 8 9, on right: 4 5 6
+pathboolexpr (71)
+    on left: 10 11 12 13 14 15, on right: 6 10 11 12 13 14
+statement_list (72)
+    on left: 16 17, on right: 5 16 27 37 54 61
+statement (73)
+    on left: 18 19 20 21 22 23 24 25 26 27 28 29 30,
+    on right: 16 22 23 24 43
+string_expr (74)
+    on left: 31 32, on right: 29
+string_func (75)
+    on left: 33 34 35 36 37, on right: 18 31
+simple_string_expr (76)
+    on left: 38 39 40, on right: 32 35 40 58 61 96
+int_expr (77)
+    on left: 41 42, on right: 28
+int_func (78)
+    on left: 43, on right: 19 41
+simple_int_expr (79)
+    on left: 44 45 46 47 48 49 50 51, on right: 42 48 49 50 78 79 80
+    94 95 110 111 112 113 114 115 116 131
+xor_list (80)
+    on left: 52 53, on right: 21 52
+xor (81)
+    on left: 54, on right: 52
+thread_list (82)
+    on left: 55 56, on right: 4 55
+msg_target (83)
+    on left: 57 58, on right: 33 34
+msg_list (84)
+    on left: 59 60, on right: 57 59
+thread (85)
+    on left: 61, on right: 55
+thread_count_range (86)
+    on left: 62 63, on right: 61
+path_limits (87)
+    on left: 64 65 66, on right: 4 5 61 64 65
+limit_list (88)
+    on left: 67 68, on right: 33 34 36 37 67
+limit (89)
+    on left: 69, on right: 64 67
+level (90)
+    on left: 70, on right: 65
+limit_spec (91)
+    on left: 71 72 73 74, on right: 69
+limit_range (92)
+    on left: 75 76 77, on right: 71 117
+count_range (93)
+    on left: 78 79 80 81 82 83, on right: 72 110
+unit_qty (94)
+    on left: 84 85 86 87 88 89 90 91 92 93, on right: 74 75 76 77 117
+    118 119 120 121 122 123 132
+repeat_range (95)
+    on left: 94 95, on right: 43
+task (96)
+    on left: 96, on right: 36 37
+string_literal (97)
+    on left: 97 98 99, on right: 38 87 89 91 93
+assertdecl (98)
+    on left: 100 101, on right: 2
+window (99)
+    on left: 102 103, on right: 100
+assert (100)
+    on left: 104, on right: 100 101
+bool_expr (101)
+    on left: 105 106 107 108 109 110 111 112 113 114 115 116 117 118
+    119 120 121 122 123 124 125 126 127 128 129, on right: 104 105
+    106 107 108 109
+float_expr (102)
+    on left: 130 131 132 133 134 135 136 137 138 139 140 141,
+    on right: 81 82 83 124 125 126 127 128 129 133 134 135 136 137
+    138 139 140 141
+
+
+state 0
+
+    0 $accept: . program $end
+
+    $default  reduce using rule 3 (program)
+
+    program  go to state 1
+
+
+state 1
+
+    0 $accept: program . $end
+    1 program: program . pathdecl
+    2        | program . assertdecl
+
+    $end         shift, and go to state 2
+    VALIDATOR    shift, and go to state 3
+    INVALIDATOR  shift, and go to state 4
+    RECOGNIZER   shift, and go to state 5
+    FRAGMENT     shift, and go to state 6
+    ASSERT       shift, and go to state 7
+    DURING       shift, and go to state 8
+
+    pathdecl    go to state 9
+    pathtype    go to state 10
+    assertdecl  go to state 11
+    assert      go to state 12
+
+
+state 2
+
+    0 $accept: program $end .
+
+    $default  accept
+
+
+state 3
+
+    7 pathtype: VALIDATOR .
+
+    $default  reduce using rule 7 (pathtype)
+
+
+state 4
+
+    8 pathtype: INVALIDATOR .
+
+    $default  reduce using rule 8 (pathtype)
+
+
+state 5
+
+    9 pathtype: RECOGNIZER .
+
+    $default  reduce using rule 9 (pathtype)
+
+
+state 6
+
+    5 pathdecl: FRAGMENT . pathtype IDENTIFIER '{' path_limits statement_list '}'
+
+    VALIDATOR    shift, and go to state 3
+    INVALIDATOR  shift, and go to state 4
+    RECOGNIZER   shift, and go to state 5
+
+    pathtype  go to state 13
+
+
+state 7
+
+  104 assert: ASSERT . '(' bool_expr ')' ';'
+
+    '('  shift, and go to state 14
+
+
+state 8
+
+  100 assertdecl: DURING . '(' window ')' assert
+
+    '('  shift, and go to state 15
+
+
+state 9
+
+    1 program: program pathdecl .
+
+    $default  reduce using rule 1 (program)
+
+
+state 10
+
+    4 pathdecl: pathtype . IDENTIFIER '{' path_limits thread_list '}'
+    6         | pathtype . IDENTIFIER ':' pathboolexpr ';'
+
+    IDENTIFIER  shift, and go to state 16
+
+
+state 11
+
+    2 program: program assertdecl .
+
+    $default  reduce using rule 2 (program)
+
+
+state 12
+
+  101 assertdecl: assert .
+
+    $default  reduce using rule 101 (assertdecl)
+
+
+state 13
+
+    5 pathdecl: FRAGMENT pathtype . IDENTIFIER '{' path_limits statement_list '}'
+
+    IDENTIFIER  shift, and go to state 17
+
+
+state 14
+
+  104 assert: ASSERT '(' . bool_expr ')' ';'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '!'        shift, and go to state 31
+    '('        shift, and go to state 32
+
+    simple_int_expr  go to state 33
+    unit_qty         go to state 34
+    bool_expr        go to state 35
+    float_expr       go to state 36
+
+
+state 15
+
+  100 assertdecl: DURING '(' . window ')' assert
+
+    ANY      shift, and go to state 37
+    INTEGER  shift, and go to state 38
+
+    window  go to state 39
+
+
+state 16
+
+    4 pathdecl: pathtype IDENTIFIER . '{' path_limits thread_list '}'
+    6         | pathtype IDENTIFIER . ':' pathboolexpr ';'
+
+    '{'  shift, and go to state 40
+    ':'  shift, and go to state 41
+
+
+state 17
+
+    5 pathdecl: FRAGMENT pathtype IDENTIFIER . '{' path_limits statement_list '}'
+
+    '{'  shift, and go to state 42
+
+
+state 18
+
+   45 simple_int_expr: INSTANCES . '(' IDENTIFIER ')'
+
+    '('  shift, and go to state 43
+
+
+state 19
+
+   46 simple_int_expr: UNIQUE . '(' IDENTIFIER ')'
+   47                | UNIQUE . '(' VARIABLE ')'
+
+    '('  shift, and go to state 44
+
+
+state 20
+
+   86 unit_qty: AVERAGE . '(' IDENTIFIER ',' IDENTIFIER ')'
+   87         | AVERAGE . '(' IDENTIFIER ',' string_literal ')'
+
+    '('  shift, and go to state 45
+
+
+state 21
+
+   88 unit_qty: STDDEV . '(' IDENTIFIER ',' IDENTIFIER ')'
+   89         | STDDEV . '(' IDENTIFIER ',' string_literal ')'
+
+    '('  shift, and go to state 46
+
+
+state 22
+
+   90 unit_qty: F_MAX . '(' IDENTIFIER ',' IDENTIFIER ')'
+   91         | F_MAX . '(' IDENTIFIER ',' string_literal ')'
+
+    '('  shift, and go to state 47
+
+
+state 23
+
+   92 unit_qty: F_MIN . '(' IDENTIFIER ',' IDENTIFIER ')'
+   93         | F_MIN . '(' IDENTIFIER ',' string_literal ')'
+
+    '('  shift, and go to state 48
+
+
+state 24
+
+  141 float_expr: SQRT . '(' float_expr ')'
+
+    '('  shift, and go to state 49
+
+
+state 25
+
+  138 float_expr: LOG . '(' float_expr ')'
+
+    '('  shift, and go to state 50
+
+
+state 26
+
+  139 float_expr: LOGN . '(' float_expr ')'
+
+    '('  shift, and go to state 51
+
+
+state 27
+
+  140 float_expr: EXP . '(' float_expr ')'
+
+    '('  shift, and go to state 52
+
+
+state 28
+
+   44 simple_int_expr: INTEGER .
+   84 unit_qty: INTEGER . IDENTIFIER
+
+    IDENTIFIER  shift, and go to state 53
+
+    $default  reduce using rule 44 (simple_int_expr)
+
+
+state 29
+
+   85 unit_qty: FLOAT . IDENTIFIER
+  130 float_expr: FLOAT .
+
+    IDENTIFIER  shift, and go to state 54
+
+    $default  reduce using rule 130 (float_expr)
+
+
+state 30
+
+   51 simple_int_expr: VARIABLE .
+
+    $default  reduce using rule 51 (simple_int_expr)
+
+
+state 31
+
+  108 bool_expr: '!' . bool_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '!'        shift, and go to state 31
+    '('        shift, and go to state 32
+
+    simple_int_expr  go to state 33
+    unit_qty         go to state 34
+    bool_expr        go to state 55
+    float_expr       go to state 36
+
+
+state 32
+
+  109 bool_expr: '(' . bool_expr ')'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '!'        shift, and go to state 31
+    '('        shift, and go to state 32
+
+    simple_int_expr  go to state 33
+    unit_qty         go to state 34
+    bool_expr        go to state 56
+    float_expr       go to state 36
+
+
+state 33
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  110 bool_expr: simple_int_expr . IN count_range
+  111          | simple_int_expr . '<' simple_int_expr
+  112          | simple_int_expr . '>' simple_int_expr
+  113          | simple_int_expr . LE simple_int_expr
+  114          | simple_int_expr . GE simple_int_expr
+  115          | simple_int_expr . EQ simple_int_expr
+  116          | simple_int_expr . NE simple_int_expr
+  131 float_expr: simple_int_expr . '/' simple_int_expr
+
+    GE   shift, and go to state 57
+    LE   shift, and go to state 58
+    EQ   shift, and go to state 59
+    NE   shift, and go to state 60
+    IN   shift, and go to state 61
+    '<'  shift, and go to state 62
+    '>'  shift, and go to state 63
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+    '/'  shift, and go to state 67
+
+
+state 34
+
+  117 bool_expr: unit_qty . IN limit_range
+  118          | unit_qty . '<' unit_qty
+  119          | unit_qty . '>' unit_qty
+  120          | unit_qty . LE unit_qty
+  121          | unit_qty . GE unit_qty
+  122          | unit_qty . EQ unit_qty
+  123          | unit_qty . NE unit_qty
+  132 float_expr: unit_qty . '/' unit_qty
+
+    GE   shift, and go to state 68
+    LE   shift, and go to state 69
+    EQ   shift, and go to state 70
+    NE   shift, and go to state 71
+    IN   shift, and go to state 72
+    '<'  shift, and go to state 73
+    '>'  shift, and go to state 74
+    '/'  shift, and go to state 75
+
+
+state 35
+
+  104 assert: ASSERT '(' bool_expr . ')' ';'
+  105 bool_expr: bool_expr . B_AND bool_expr
+  106          | bool_expr . B_OR bool_expr
+  107          | bool_expr . IMPLIES bool_expr
+
+    B_AND    shift, and go to state 76
+    B_OR     shift, and go to state 77
+    IMPLIES  shift, and go to state 78
+    ')'      shift, and go to state 79
+
+
+state 36
+
+  124 bool_expr: float_expr . '<' float_expr
+  125          | float_expr . '>' float_expr
+  126          | float_expr . LE float_expr
+  127          | float_expr . GE float_expr
+  128          | float_expr . EQ float_expr
+  129          | float_expr . NE float_expr
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    GE     shift, and go to state 81
+    LE     shift, and go to state 82
+    EQ     shift, and go to state 83
+    NE     shift, and go to state 84
+    '<'    shift, and go to state 85
+    '>'    shift, and go to state 86
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+
+state 37
+
+  103 window: ANY . INTEGER
+
+    INTEGER  shift, and go to state 91
+
+
+state 38
+
+  102 window: INTEGER . ',' INTEGER
+
+    ','  shift, and go to state 92
+
+
+state 39
+
+  100 assertdecl: DURING '(' window . ')' assert
+
+    ')'  shift, and go to state 93
+
+
+state 40
+
+    4 pathdecl: pathtype IDENTIFIER '{' . path_limits thread_list '}'
+
+    $default  reduce using rule 66 (path_limits)
+
+    path_limits  go to state 94
+
+
+state 41
+
+    6 pathdecl: pathtype IDENTIFIER ':' . pathboolexpr ';'
+
+    IDENTIFIER  shift, and go to state 95
+    '!'         shift, and go to state 96
+    '('         shift, and go to state 97
+
+    pathboolexpr  go to state 98
+
+
+state 42
+
+    5 pathdecl: FRAGMENT pathtype IDENTIFIER '{' . path_limits statement_list '}'
+
+    $default  reduce using rule 66 (path_limits)
+
+    path_limits  go to state 99
+
+
+state 43
+
+   45 simple_int_expr: INSTANCES '(' . IDENTIFIER ')'
+
+    IDENTIFIER  shift, and go to state 100
+
+
+state 44
+
+   46 simple_int_expr: UNIQUE '(' . IDENTIFIER ')'
+   47                | UNIQUE '(' . VARIABLE ')'
+
+    IDENTIFIER  shift, and go to state 101
+    VARIABLE    shift, and go to state 102
+
+
+state 45
+
+   86 unit_qty: AVERAGE '(' . IDENTIFIER ',' IDENTIFIER ')'
+   87         | AVERAGE '(' . IDENTIFIER ',' string_literal ')'
+
+    IDENTIFIER  shift, and go to state 103
+
+
+state 46
+
+   88 unit_qty: STDDEV '(' . IDENTIFIER ',' IDENTIFIER ')'
+   89         | STDDEV '(' . IDENTIFIER ',' string_literal ')'
+
+    IDENTIFIER  shift, and go to state 104
+
+
+state 47
+
+   90 unit_qty: F_MAX '(' . IDENTIFIER ',' IDENTIFIER ')'
+   91         | F_MAX '(' . IDENTIFIER ',' string_literal ')'
+
+    IDENTIFIER  shift, and go to state 105
+
+
+state 48
+
+   92 unit_qty: F_MIN '(' . IDENTIFIER ',' IDENTIFIER ')'
+   93         | F_MIN '(' . IDENTIFIER ',' string_literal ')'
+
+    IDENTIFIER  shift, and go to state 106
+
+
+state 49
+
+  141 float_expr: SQRT '(' . float_expr ')'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 109
+
+
+state 50
+
+  138 float_expr: LOG '(' . float_expr ')'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 110
+
+
+state 51
+
+  139 float_expr: LOGN '(' . float_expr ')'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 111
+
+
+state 52
+
+  140 float_expr: EXP '(' . float_expr ')'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 112
+
+
+state 53
+
+   84 unit_qty: INTEGER IDENTIFIER .
+
+    $default  reduce using rule 84 (unit_qty)
+
+
+state 54
+
+   85 unit_qty: FLOAT IDENTIFIER .
+
+    $default  reduce using rule 85 (unit_qty)
+
+
+state 55
+
+  105 bool_expr: bool_expr . B_AND bool_expr
+  106          | bool_expr . B_OR bool_expr
+  107          | bool_expr . IMPLIES bool_expr
+  108          | '!' bool_expr .
+
+    $default  reduce using rule 108 (bool_expr)
+
+
+state 56
+
+  105 bool_expr: bool_expr . B_AND bool_expr
+  106          | bool_expr . B_OR bool_expr
+  107          | bool_expr . IMPLIES bool_expr
+  109          | '(' bool_expr . ')'
+
+    B_AND    shift, and go to state 76
+    B_OR     shift, and go to state 77
+    IMPLIES  shift, and go to state 78
+    ')'      shift, and go to state 113
+
+
+state 57
+
+  114 bool_expr: simple_int_expr GE . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 115
+
+
+state 58
+
+  113 bool_expr: simple_int_expr LE . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 116
+
+
+state 59
+
+  115 bool_expr: simple_int_expr EQ . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 117
+
+
+state 60
+
+  116 bool_expr: simple_int_expr NE . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 118
+
+
+state 61
+
+  110 bool_expr: simple_int_expr IN . count_range
+
+    '{'  shift, and go to state 119
+
+    count_range  go to state 120
+
+
+state 62
+
+  111 bool_expr: simple_int_expr '<' . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 121
+
+
+state 63
+
+  112 bool_expr: simple_int_expr '>' . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 122
+
+
+state 64
+
+   49 simple_int_expr: simple_int_expr '+' . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 123
+
+
+state 65
+
+   50 simple_int_expr: simple_int_expr '-' . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 124
+
+
+state 66
+
+   48 simple_int_expr: simple_int_expr '*' . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 125
+
+
+state 67
+
+  131 float_expr: simple_int_expr '/' . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 126
+
+
+state 68
+
+  121 bool_expr: unit_qty GE . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 129
+
+
+state 69
+
+  120 bool_expr: unit_qty LE . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 130
+
+
+state 70
+
+  122 bool_expr: unit_qty EQ . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 131
+
+
+state 71
+
+  123 bool_expr: unit_qty NE . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 132
+
+
+state 72
+
+  117 bool_expr: unit_qty IN . limit_range
+
+    '{'  shift, and go to state 133
+
+    limit_range  go to state 134
+
+
+state 73
+
+  118 bool_expr: unit_qty '<' . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 135
+
+
+state 74
+
+  119 bool_expr: unit_qty '>' . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 136
+
+
+state 75
+
+  132 float_expr: unit_qty '/' . unit_qty
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 137
+
+
+state 76
+
+  105 bool_expr: bool_expr B_AND . bool_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '!'        shift, and go to state 31
+    '('        shift, and go to state 32
+
+    simple_int_expr  go to state 33
+    unit_qty         go to state 34
+    bool_expr        go to state 138
+    float_expr       go to state 36
+
+
+state 77
+
+  106 bool_expr: bool_expr B_OR . bool_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '!'        shift, and go to state 31
+    '('        shift, and go to state 32
+
+    simple_int_expr  go to state 33
+    unit_qty         go to state 34
+    bool_expr        go to state 139
+    float_expr       go to state 36
+
+
+state 78
+
+  107 bool_expr: bool_expr IMPLIES . bool_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '!'        shift, and go to state 31
+    '('        shift, and go to state 32
+
+    simple_int_expr  go to state 33
+    unit_qty         go to state 34
+    bool_expr        go to state 140
+    float_expr       go to state 36
+
+
+state 79
+
+  104 assert: ASSERT '(' bool_expr ')' . ';'
+
+    ';'  shift, and go to state 141
+
+
+state 80
+
+  137 float_expr: float_expr F_POW . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 142
+
+
+state 81
+
+  127 bool_expr: float_expr GE . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 143
+
+
+state 82
+
+  126 bool_expr: float_expr LE . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 144
+
+
+state 83
+
+  128 bool_expr: float_expr EQ . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 145
+
+
+state 84
+
+  129 bool_expr: float_expr NE . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 146
+
+
+state 85
+
+  124 bool_expr: float_expr '<' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 147
+
+
+state 86
+
+  125 bool_expr: float_expr '>' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 148
+
+
+state 87
+
+  136 float_expr: float_expr '+' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 149
+
+
+state 88
+
+  135 float_expr: float_expr '-' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 150
+
+
+state 89
+
+  134 float_expr: float_expr '*' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 151
+
+
+state 90
+
+  133 float_expr: float_expr '/' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 152
+
+
+state 91
+
+  103 window: ANY INTEGER .
+
+    $default  reduce using rule 103 (window)
+
+
+state 92
+
+  102 window: INTEGER ',' . INTEGER
+
+    INTEGER  shift, and go to state 153
+
+
+state 93
+
+  100 assertdecl: DURING '(' window ')' . assert
+
+    ASSERT  shift, and go to state 7
+
+    assert  go to state 154
+
+
+state 94
+
+    4 pathdecl: pathtype IDENTIFIER '{' path_limits . thread_list '}'
+   64 path_limits: path_limits . limit ';'
+   65            | path_limits . level ';'
+
+    LEVEL  shift, and go to state 155
+    LIMIT  shift, and go to state 156
+
+    $default  reduce using rule 56 (thread_list)
+
+    thread_list  go to state 157
+    limit        go to state 158
+    level        go to state 159
+
+
+state 95
+
+   15 pathboolexpr: IDENTIFIER .
+
+    $default  reduce using rule 15 (pathboolexpr)
+
+
+state 96
+
+   13 pathboolexpr: '!' . pathboolexpr
+
+    IDENTIFIER  shift, and go to state 95
+    '!'         shift, and go to state 96
+    '('         shift, and go to state 97
+
+    pathboolexpr  go to state 160
+
+
+state 97
+
+   14 pathboolexpr: '(' . pathboolexpr ')'
+
+    IDENTIFIER  shift, and go to state 95
+    '!'         shift, and go to state 96
+    '('         shift, and go to state 97
+
+    pathboolexpr  go to state 161
+
+
+state 98
+
+    6 pathdecl: pathtype IDENTIFIER ':' pathboolexpr . ';'
+   10 pathboolexpr: pathboolexpr . B_AND pathboolexpr
+   11             | pathboolexpr . B_OR pathboolexpr
+   12             | pathboolexpr . IMPLIES pathboolexpr
+
+    B_AND    shift, and go to state 162
+    B_OR     shift, and go to state 163
+    IMPLIES  shift, and go to state 164
+    ';'      shift, and go to state 165
+
+
+state 99
+
+    5 pathdecl: FRAGMENT pathtype IDENTIFIER '{' path_limits . statement_list '}'
+   64 path_limits: path_limits . limit ';'
+   65            | path_limits . level ';'
+
+    LEVEL  shift, and go to state 155
+    LIMIT  shift, and go to state 156
+
+    $default  reduce using rule 17 (statement_list)
+
+    statement_list  go to state 166
+    limit           go to state 158
+    level           go to state 159
+
+
+state 100
+
+   45 simple_int_expr: INSTANCES '(' IDENTIFIER . ')'
+
+    ')'  shift, and go to state 167
+
+
+state 101
+
+   46 simple_int_expr: UNIQUE '(' IDENTIFIER . ')'
+
+    ')'  shift, and go to state 168
+
+
+state 102
+
+   47 simple_int_expr: UNIQUE '(' VARIABLE . ')'
+
+    ')'  shift, and go to state 169
+
+
+state 103
+
+   86 unit_qty: AVERAGE '(' IDENTIFIER . ',' IDENTIFIER ')'
+   87         | AVERAGE '(' IDENTIFIER . ',' string_literal ')'
+
+    ','  shift, and go to state 170
+
+
+state 104
+
+   88 unit_qty: STDDEV '(' IDENTIFIER . ',' IDENTIFIER ')'
+   89         | STDDEV '(' IDENTIFIER . ',' string_literal ')'
+
+    ','  shift, and go to state 171
+
+
+state 105
+
+   90 unit_qty: F_MAX '(' IDENTIFIER . ',' IDENTIFIER ')'
+   91         | F_MAX '(' IDENTIFIER . ',' string_literal ')'
+
+    ','  shift, and go to state 172
+
+
+state 106
+
+   92 unit_qty: F_MIN '(' IDENTIFIER . ',' IDENTIFIER ')'
+   93         | F_MIN '(' IDENTIFIER . ',' string_literal ')'
+
+    ','  shift, and go to state 173
+
+
+state 107
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  131 float_expr: simple_int_expr . '/' simple_int_expr
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+    '/'  shift, and go to state 67
+
+
+state 108
+
+  132 float_expr: unit_qty . '/' unit_qty
+
+    '/'  shift, and go to state 75
+
+
+state 109
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+  141           | SQRT '(' float_expr . ')'
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    ')'    shift, and go to state 174
+
+
+state 110
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+  138           | LOG '(' float_expr . ')'
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    ')'    shift, and go to state 175
+
+
+state 111
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+  139           | LOGN '(' float_expr . ')'
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    ')'    shift, and go to state 176
+
+
+state 112
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+  140           | EXP '(' float_expr . ')'
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    ')'    shift, and go to state 177
+
+
+state 113
+
+  109 bool_expr: '(' bool_expr ')' .
+
+    $default  reduce using rule 109 (bool_expr)
+
+
+state 114
+
+   44 simple_int_expr: INTEGER .
+
+    $default  reduce using rule 44 (simple_int_expr)
+
+
+state 115
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  114 bool_expr: simple_int_expr GE simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 114 (bool_expr)
+
+
+state 116
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  113 bool_expr: simple_int_expr LE simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 113 (bool_expr)
+
+
+state 117
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  115 bool_expr: simple_int_expr EQ simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 115 (bool_expr)
+
+
+state 118
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  116 bool_expr: simple_int_expr NE simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 116 (bool_expr)
+
+
+state 119
+
+   78 count_range: '{' . simple_int_expr ',' simple_int_expr '}'
+   79            | '{' . simple_int_expr '+' '}'
+   80            | '{' . '=' simple_int_expr '}'
+   81            | '{' . float_expr ',' float_expr '}'
+   82            | '{' . float_expr '+' '}'
+   83            | '{' . '=' float_expr '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '='        shift, and go to state 178
+
+    simple_int_expr  go to state 179
+    unit_qty         go to state 108
+    float_expr       go to state 180
+
+
+state 120
+
+  110 bool_expr: simple_int_expr IN count_range .
+
+    $default  reduce using rule 110 (bool_expr)
+
+
+state 121
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  111 bool_expr: simple_int_expr '<' simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 111 (bool_expr)
+
+
+state 122
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  112 bool_expr: simple_int_expr '>' simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 112 (bool_expr)
+
+
+state 123
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   49                | simple_int_expr '+' simple_int_expr .
+   50                | simple_int_expr . '-' simple_int_expr
+
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 49 (simple_int_expr)
+
+
+state 124
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   50                | simple_int_expr '-' simple_int_expr .
+
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 50 (simple_int_expr)
+
+
+state 125
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   48                | simple_int_expr '*' simple_int_expr .
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+
+    $default  reduce using rule 48 (simple_int_expr)
+
+
+state 126
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+  131 float_expr: simple_int_expr '/' simple_int_expr .
+
+    $default  reduce using rule 131 (float_expr)
+
+
+state 127
+
+   84 unit_qty: INTEGER . IDENTIFIER
+
+    IDENTIFIER  shift, and go to state 53
+
+
+state 128
+
+   85 unit_qty: FLOAT . IDENTIFIER
+
+    IDENTIFIER  shift, and go to state 54
+
+
+state 129
+
+  121 bool_expr: unit_qty GE unit_qty .
+
+    $default  reduce using rule 121 (bool_expr)
+
+
+state 130
+
+  120 bool_expr: unit_qty LE unit_qty .
+
+    $default  reduce using rule 120 (bool_expr)
+
+
+state 131
+
+  122 bool_expr: unit_qty EQ unit_qty .
+
+    $default  reduce using rule 122 (bool_expr)
+
+
+state 132
+
+  123 bool_expr: unit_qty NE unit_qty .
+
+    $default  reduce using rule 123 (bool_expr)
+
+
+state 133
+
+   75 limit_range: '{' . unit_qty ',' unit_qty '}'
+   76            | '{' . unit_qty '+' '}'
+   77            | '{' . '=' unit_qty '}'
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+    '='      shift, and go to state 181
+
+    unit_qty  go to state 182
+
+
+state 134
+
+  117 bool_expr: unit_qty IN limit_range .
+
+    $default  reduce using rule 117 (bool_expr)
+
+
+state 135
+
+  118 bool_expr: unit_qty '<' unit_qty .
+
+    $default  reduce using rule 118 (bool_expr)
+
+
+state 136
+
+  119 bool_expr: unit_qty '>' unit_qty .
+
+    $default  reduce using rule 119 (bool_expr)
+
+
+state 137
+
+  132 float_expr: unit_qty '/' unit_qty .
+
+    $default  reduce using rule 132 (float_expr)
+
+
+state 138
+
+  105 bool_expr: bool_expr . B_AND bool_expr
+  105          | bool_expr B_AND bool_expr .
+  106          | bool_expr . B_OR bool_expr
+  107          | bool_expr . IMPLIES bool_expr
+
+    $default  reduce using rule 105 (bool_expr)
+
+
+state 139
+
+  105 bool_expr: bool_expr . B_AND bool_expr
+  106          | bool_expr . B_OR bool_expr
+  106          | bool_expr B_OR bool_expr .
+  107          | bool_expr . IMPLIES bool_expr
+
+    $default  reduce using rule 106 (bool_expr)
+
+
+state 140
+
+  105 bool_expr: bool_expr . B_AND bool_expr
+  106          | bool_expr . B_OR bool_expr
+  107          | bool_expr . IMPLIES bool_expr
+  107          | bool_expr IMPLIES bool_expr .
+
+    $default  reduce using rule 107 (bool_expr)
+
+
+state 141
+
+  104 assert: ASSERT '(' bool_expr ')' ';' .
+
+    $default  reduce using rule 104 (assert)
+
+
+state 142
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+  137           | float_expr F_POW float_expr .
+
+    F_POW  shift, and go to state 80
+
+    $default  reduce using rule 137 (float_expr)
+
+
+state 143
+
+  127 bool_expr: float_expr GE float_expr .
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 127 (bool_expr)
+
+
+state 144
+
+  126 bool_expr: float_expr LE float_expr .
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 126 (bool_expr)
+
+
+state 145
+
+  128 bool_expr: float_expr EQ float_expr .
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 128 (bool_expr)
+
+
+state 146
+
+  129 bool_expr: float_expr NE float_expr .
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 129 (bool_expr)
+
+
+state 147
+
+  124 bool_expr: float_expr '<' float_expr .
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 124 (bool_expr)
+
+
+state 148
+
+  125 bool_expr: float_expr '>' float_expr .
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 125 (bool_expr)
+
+
+state 149
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  136           | float_expr '+' float_expr .
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 136 (float_expr)
+
+
+state 150
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  135           | float_expr '-' float_expr .
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+
+    $default  reduce using rule 135 (float_expr)
+
+
+state 151
+
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  134           | float_expr '*' float_expr .
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+
+    $default  reduce using rule 134 (float_expr)
+
+
+state 152
+
+  133 float_expr: float_expr . '/' float_expr
+  133           | float_expr '/' float_expr .
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+
+    $default  reduce using rule 133 (float_expr)
+
+
+state 153
+
+  102 window: INTEGER ',' INTEGER .
+
+    $default  reduce using rule 102 (window)
+
+
+state 154
+
+  100 assertdecl: DURING '(' window ')' assert .
+
+    $default  reduce using rule 100 (assertdecl)
+
+
+state 155
+
+   70 level: LEVEL . '(' INTEGER ')'
+
+    '('  shift, and go to state 183
+
+
+state 156
+
+   69 limit: LIMIT . '(' IDENTIFIER ',' limit_spec ')'
+
+    '('  shift, and go to state 184
+
+
+state 157
+
+    4 pathdecl: pathtype IDENTIFIER '{' path_limits thread_list . '}'
+   55 thread_list: thread_list . thread
+
+    THREAD  shift, and go to state 185
+    '}'     shift, and go to state 186
+
+    thread  go to state 187
+
+
+state 158
+
+   64 path_limits: path_limits limit . ';'
+
+    ';'  shift, and go to state 188
+
+
+state 159
+
+   65 path_limits: path_limits level . ';'
+
+    ';'  shift, and go to state 189
+
+
+state 160
+
+   10 pathboolexpr: pathboolexpr . B_AND pathboolexpr
+   11             | pathboolexpr . B_OR pathboolexpr
+   12             | pathboolexpr . IMPLIES pathboolexpr
+   13             | '!' pathboolexpr .
+
+    $default  reduce using rule 13 (pathboolexpr)
+
+
+state 161
+
+   10 pathboolexpr: pathboolexpr . B_AND pathboolexpr
+   11             | pathboolexpr . B_OR pathboolexpr
+   12             | pathboolexpr . IMPLIES pathboolexpr
+   14             | '(' pathboolexpr . ')'
+
+    B_AND    shift, and go to state 162
+    B_OR     shift, and go to state 163
+    IMPLIES  shift, and go to state 164
+    ')'      shift, and go to state 190
+
+
+state 162
+
+   10 pathboolexpr: pathboolexpr B_AND . pathboolexpr
+
+    IDENTIFIER  shift, and go to state 95
+    '!'         shift, and go to state 96
+    '('         shift, and go to state 97
+
+    pathboolexpr  go to state 191
+
+
+state 163
+
+   11 pathboolexpr: pathboolexpr B_OR . pathboolexpr
+
+    IDENTIFIER  shift, and go to state 95
+    '!'         shift, and go to state 96
+    '('         shift, and go to state 97
+
+    pathboolexpr  go to state 192
+
+
+state 164
+
+   12 pathboolexpr: pathboolexpr IMPLIES . pathboolexpr
+
+    IDENTIFIER  shift, and go to state 95
+    '!'         shift, and go to state 96
+    '('         shift, and go to state 97
+
+    pathboolexpr  go to state 193
+
+
+state 165
+
+    6 pathdecl: pathtype IDENTIFIER ':' pathboolexpr ';' .
+
+    $default  reduce using rule 6 (pathdecl)
+
+
+state 166
+
+    5 pathdecl: FRAGMENT pathtype IDENTIFIER '{' path_limits statement_list . '}'
+   16 statement_list: statement_list . statement
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+    '}'       shift, and go to state 208
+
+    statement    go to state 209
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 167
+
+   45 simple_int_expr: INSTANCES '(' IDENTIFIER ')' .
+
+    $default  reduce using rule 45 (simple_int_expr)
+
+
+state 168
+
+   46 simple_int_expr: UNIQUE '(' IDENTIFIER ')' .
+
+    $default  reduce using rule 46 (simple_int_expr)
+
+
+state 169
+
+   47 simple_int_expr: UNIQUE '(' VARIABLE ')' .
+
+    $default  reduce using rule 47 (simple_int_expr)
+
+
+state 170
+
+   86 unit_qty: AVERAGE '(' IDENTIFIER ',' . IDENTIFIER ')'
+   87         | AVERAGE '(' IDENTIFIER ',' . string_literal ')'
+
+    STRING      shift, and go to state 213
+    REGEX       shift, and go to state 214
+    IDENTIFIER  shift, and go to state 215
+    '*'         shift, and go to state 216
+
+    string_literal  go to state 217
+
+
+state 171
+
+   88 unit_qty: STDDEV '(' IDENTIFIER ',' . IDENTIFIER ')'
+   89         | STDDEV '(' IDENTIFIER ',' . string_literal ')'
+
+    STRING      shift, and go to state 213
+    REGEX       shift, and go to state 214
+    IDENTIFIER  shift, and go to state 218
+    '*'         shift, and go to state 216
+
+    string_literal  go to state 219
+
+
+state 172
+
+   90 unit_qty: F_MAX '(' IDENTIFIER ',' . IDENTIFIER ')'
+   91         | F_MAX '(' IDENTIFIER ',' . string_literal ')'
+
+    STRING      shift, and go to state 213
+    REGEX       shift, and go to state 214
+    IDENTIFIER  shift, and go to state 220
+    '*'         shift, and go to state 216
+
+    string_literal  go to state 221
+
+
+state 173
+
+   92 unit_qty: F_MIN '(' IDENTIFIER ',' . IDENTIFIER ')'
+   93         | F_MIN '(' IDENTIFIER ',' . string_literal ')'
+
+    STRING      shift, and go to state 213
+    REGEX       shift, and go to state 214
+    IDENTIFIER  shift, and go to state 222
+    '*'         shift, and go to state 216
+
+    string_literal  go to state 223
+
+
+state 174
+
+  141 float_expr: SQRT '(' float_expr ')' .
+
+    $default  reduce using rule 141 (float_expr)
+
+
+state 175
+
+  138 float_expr: LOG '(' float_expr ')' .
+
+    $default  reduce using rule 138 (float_expr)
+
+
+state 176
+
+  139 float_expr: LOGN '(' float_expr ')' .
+
+    $default  reduce using rule 139 (float_expr)
+
+
+state 177
+
+  140 float_expr: EXP '(' float_expr ')' .
+
+    $default  reduce using rule 140 (float_expr)
+
+
+state 178
+
+   80 count_range: '{' '=' . simple_int_expr '}'
+   83            | '{' '=' . float_expr '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 224
+    unit_qty         go to state 108
+    float_expr       go to state 225
+
+
+state 179
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   78 count_range: '{' simple_int_expr . ',' simple_int_expr '}'
+   79            | '{' simple_int_expr . '+' '}'
+  131 float_expr: simple_int_expr . '/' simple_int_expr
+
+    '+'  shift, and go to state 226
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+    '/'  shift, and go to state 67
+    ','  shift, and go to state 227
+
+
+state 180
+
+   81 count_range: '{' float_expr . ',' float_expr '}'
+   82            | '{' float_expr . '+' '}'
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 228
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    ','    shift, and go to state 229
+
+
+state 181
+
+   77 limit_range: '{' '=' . unit_qty '}'
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 230
+
+
+state 182
+
+   75 limit_range: '{' unit_qty . ',' unit_qty '}'
+   76            | '{' unit_qty . '+' '}'
+
+    '+'  shift, and go to state 231
+    ','  shift, and go to state 232
+
+
+state 183
+
+   70 level: LEVEL '(' . INTEGER ')'
+
+    INTEGER  shift, and go to state 233
+
+
+state 184
+
+   69 limit: LIMIT '(' . IDENTIFIER ',' limit_spec ')'
+
+    IDENTIFIER  shift, and go to state 234
+
+
+state 185
+
+   61 thread: THREAD . IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list '}'
+
+    IDENTIFIER  shift, and go to state 235
+
+
+state 186
+
+    4 pathdecl: pathtype IDENTIFIER '{' path_limits thread_list '}' .
+
+    $default  reduce using rule 4 (pathdecl)
+
+
+state 187
+
+   55 thread_list: thread_list thread .
+
+    $default  reduce using rule 55 (thread_list)
+
+
+state 188
+
+   64 path_limits: path_limits limit ';' .
+
+    $default  reduce using rule 64 (path_limits)
+
+
+state 189
+
+   65 path_limits: path_limits level ';' .
+
+    $default  reduce using rule 65 (path_limits)
+
+
+state 190
+
+   14 pathboolexpr: '(' pathboolexpr ')' .
+
+    $default  reduce using rule 14 (pathboolexpr)
+
+
+state 191
+
+   10 pathboolexpr: pathboolexpr . B_AND pathboolexpr
+   10             | pathboolexpr B_AND pathboolexpr .
+   11             | pathboolexpr . B_OR pathboolexpr
+   12             | pathboolexpr . IMPLIES pathboolexpr
+
+    $default  reduce using rule 10 (pathboolexpr)
+
+
+state 192
+
+   10 pathboolexpr: pathboolexpr . B_AND pathboolexpr
+   11             | pathboolexpr . B_OR pathboolexpr
+   11             | pathboolexpr B_OR pathboolexpr .
+   12             | pathboolexpr . IMPLIES pathboolexpr
+
+    $default  reduce using rule 11 (pathboolexpr)
+
+
+state 193
+
+   10 pathboolexpr: pathboolexpr . B_AND pathboolexpr
+   11             | pathboolexpr . B_OR pathboolexpr
+   12             | pathboolexpr . IMPLIES pathboolexpr
+   12             | pathboolexpr IMPLIES pathboolexpr .
+
+    $default  reduce using rule 12 (pathboolexpr)
+
+
+state 194
+
+   30 statement: error . ';'
+
+    ';'  shift, and go to state 236
+
+
+state 195
+
+   43 int_func: REPEAT . repeat_range statement
+
+    BETWEEN    shift, and go to state 237
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 238
+    repeat_range     go to state 239
+
+
+state 196
+
+   21 statement: XOR . '{' xor_list '}'
+
+    '{'  shift, and go to state 240
+
+
+state 197
+
+   22 statement: MAYBE . statement
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+
+    statement    go to state 241
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 198
+
+   20 statement: CALL . '(' IDENTIFIER ')' ';'
+
+    '('  shift, and go to state 242
+
+
+state 199
+
+   23 statement: FUTURE . statement
+   24          | FUTURE . IDENTIFIER statement
+
+    error       shift, and go to state 194
+    REPEAT      shift, and go to state 195
+    XOR         shift, and go to state 196
+    MAYBE       shift, and go to state 197
+    CALL        shift, and go to state 198
+    FUTURE      shift, and go to state 199
+    DONE        shift, and go to state 200
+    ANY         shift, and go to state 201
+    SEND        shift, and go to state 202
+    RECV        shift, and go to state 203
+    TASK        shift, and go to state 204
+    NOTICE      shift, and go to state 205
+    IDENTIFIER  shift, and go to state 243
+    VARIABLE    shift, and go to state 206
+    '{'         shift, and go to state 207
+
+    statement    go to state 244
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 200
+
+   25 statement: DONE . '(' IDENTIFIER ')' ';'
+
+    '('  shift, and go to state 245
+
+
+state 201
+
+   26 statement: ANY . '(' ')' ';'
+
+    '('  shift, and go to state 246
+
+
+state 202
+
+   33 string_func: SEND . '(' msg_target ')' limit_list ';'
+
+    '('  shift, and go to state 247
+
+
+state 203
+
+   34 string_func: RECV . '(' msg_target ')' limit_list ';'
+
+    '('  shift, and go to state 248
+
+
+state 204
+
+   96 task: TASK . '(' simple_string_expr ')'
+
+    '('  shift, and go to state 249
+
+
+state 205
+
+   35 string_func: NOTICE . '(' simple_string_expr ')' ';'
+
+    '('  shift, and go to state 250
+
+
+state 206
+
+   28 statement: VARIABLE . '=' int_expr
+   29          | VARIABLE . '=' string_expr
+
+    '='  shift, and go to state 251
+
+
+state 207
+
+   27 statement: '{' . statement_list '}'
+
+    $default  reduce using rule 17 (statement_list)
+
+    statement_list  go to state 252
+
+
+state 208
+
+    5 pathdecl: FRAGMENT pathtype IDENTIFIER '{' path_limits statement_list '}' .
+
+    $default  reduce using rule 5 (pathdecl)
+
+
+state 209
+
+   16 statement_list: statement_list statement .
+
+    $default  reduce using rule 16 (statement_list)
+
+
+state 210
+
+   18 statement: string_func .
+
+    $default  reduce using rule 18 (statement)
+
+
+state 211
+
+   19 statement: int_func .
+
+    $default  reduce using rule 19 (statement)
+
+
+state 212
+
+   36 string_func: task . limit_list ';'
+   37            | task . limit_list '{' statement_list '}'
+
+    $default  reduce using rule 68 (limit_list)
+
+    limit_list  go to state 253
+
+
+state 213
+
+   97 string_literal: STRING .
+
+    $default  reduce using rule 97 (string_literal)
+
+
+state 214
+
+   98 string_literal: REGEX .
+
+    $default  reduce using rule 98 (string_literal)
+
+
+state 215
+
+   86 unit_qty: AVERAGE '(' IDENTIFIER ',' IDENTIFIER . ')'
+
+    ')'  shift, and go to state 254
+
+
+state 216
+
+   99 string_literal: '*' .
+
+    $default  reduce using rule 99 (string_literal)
+
+
+state 217
+
+   87 unit_qty: AVERAGE '(' IDENTIFIER ',' string_literal . ')'
+
+    ')'  shift, and go to state 255
+
+
+state 218
+
+   88 unit_qty: STDDEV '(' IDENTIFIER ',' IDENTIFIER . ')'
+
+    ')'  shift, and go to state 256
+
+
+state 219
+
+   89 unit_qty: STDDEV '(' IDENTIFIER ',' string_literal . ')'
+
+    ')'  shift, and go to state 257
+
+
+state 220
+
+   90 unit_qty: F_MAX '(' IDENTIFIER ',' IDENTIFIER . ')'
+
+    ')'  shift, and go to state 258
+
+
+state 221
+
+   91 unit_qty: F_MAX '(' IDENTIFIER ',' string_literal . ')'
+
+    ')'  shift, and go to state 259
+
+
+state 222
+
+   92 unit_qty: F_MIN '(' IDENTIFIER ',' IDENTIFIER . ')'
+
+    ')'  shift, and go to state 260
+
+
+state 223
+
+   93 unit_qty: F_MIN '(' IDENTIFIER ',' string_literal . ')'
+
+    ')'  shift, and go to state 261
+
+
+state 224
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   80 count_range: '{' '=' simple_int_expr . '}'
+  131 float_expr: simple_int_expr . '/' simple_int_expr
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+    '/'  shift, and go to state 67
+    '}'  shift, and go to state 262
+
+
+state 225
+
+   83 count_range: '{' '=' float_expr . '}'
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    '}'    shift, and go to state 263
+
+
+state 226
+
+   49 simple_int_expr: simple_int_expr '+' . simple_int_expr
+   79 count_range: '{' simple_int_expr '+' . '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+    '}'        shift, and go to state 264
+
+    simple_int_expr  go to state 123
+
+
+state 227
+
+   78 count_range: '{' simple_int_expr ',' . simple_int_expr '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 265
+
+
+state 228
+
+   82 count_range: '{' float_expr '+' . '}'
+  136 float_expr: float_expr '+' . float_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '}'        shift, and go to state 266
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 149
+
+
+state 229
+
+   81 count_range: '{' float_expr ',' . float_expr '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 107
+    unit_qty         go to state 108
+    float_expr       go to state 267
+
+
+state 230
+
+   77 limit_range: '{' '=' unit_qty . '}'
+
+    '}'  shift, and go to state 268
+
+
+state 231
+
+   76 limit_range: '{' unit_qty '+' . '}'
+
+    '}'  shift, and go to state 269
+
+
+state 232
+
+   75 limit_range: '{' unit_qty ',' . unit_qty '}'
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 127
+    FLOAT    shift, and go to state 128
+
+    unit_qty  go to state 270
+
+
+state 233
+
+   70 level: LEVEL '(' INTEGER . ')'
+
+    ')'  shift, and go to state 271
+
+
+state 234
+
+   69 limit: LIMIT '(' IDENTIFIER . ',' limit_spec ')'
+
+    ','  shift, and go to state 272
+
+
+state 235
+
+   61 thread: THREAD IDENTIFIER . '(' simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list '}'
+
+    '('  shift, and go to state 273
+
+
+state 236
+
+   30 statement: error ';' .
+
+    $default  reduce using rule 30 (statement)
+
+
+state 237
+
+   95 repeat_range: BETWEEN . simple_int_expr AND simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 274
+
+
+state 238
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   94 repeat_range: simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 94 (repeat_range)
+
+
+state 239
+
+   43 int_func: REPEAT repeat_range . statement
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+
+    statement    go to state 275
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 240
+
+   21 statement: XOR '{' . xor_list '}'
+
+    $default  reduce using rule 53 (xor_list)
+
+    xor_list  go to state 276
+
+
+state 241
+
+   22 statement: MAYBE statement .
+
+    $default  reduce using rule 22 (statement)
+
+
+state 242
+
+   20 statement: CALL '(' . IDENTIFIER ')' ';'
+
+    IDENTIFIER  shift, and go to state 277
+
+
+state 243
+
+   24 statement: FUTURE IDENTIFIER . statement
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+
+    statement    go to state 278
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 244
+
+   23 statement: FUTURE statement .
+
+    $default  reduce using rule 23 (statement)
+
+
+state 245
+
+   25 statement: DONE '(' . IDENTIFIER ')' ';'
+
+    IDENTIFIER  shift, and go to state 279
+
+
+state 246
+
+   26 statement: ANY '(' . ')' ';'
+
+    ')'  shift, and go to state 280
+
+
+state 247
+
+   33 string_func: SEND '(' . msg_target ')' limit_list ';'
+
+    STRING      shift, and go to state 213
+    REGEX       shift, and go to state 214
+    IDENTIFIER  shift, and go to state 281
+    VARIABLE    shift, and go to state 282
+    '*'         shift, and go to state 216
+    '!'         shift, and go to state 283
+
+    simple_string_expr  go to state 284
+    msg_target          go to state 285
+    msg_list            go to state 286
+    string_literal      go to state 287
+
+
+state 248
+
+   34 string_func: RECV '(' . msg_target ')' limit_list ';'
+
+    STRING      shift, and go to state 213
+    REGEX       shift, and go to state 214
+    IDENTIFIER  shift, and go to state 281
+    VARIABLE    shift, and go to state 282
+    '*'         shift, and go to state 216
+    '!'         shift, and go to state 283
+
+    simple_string_expr  go to state 284
+    msg_target          go to state 288
+    msg_list            go to state 286
+    string_literal      go to state 287
+
+
+state 249
+
+   96 task: TASK '(' . simple_string_expr ')'
+
+    STRING    shift, and go to state 213
+    REGEX     shift, and go to state 214
+    VARIABLE  shift, and go to state 282
+    '*'       shift, and go to state 216
+    '!'       shift, and go to state 283
+
+    simple_string_expr  go to state 289
+    string_literal      go to state 287
+
+
+state 250
+
+   35 string_func: NOTICE '(' . simple_string_expr ')' ';'
+
+    STRING    shift, and go to state 213
+    REGEX     shift, and go to state 214
+    VARIABLE  shift, and go to state 282
+    '*'       shift, and go to state 216
+    '!'       shift, and go to state 283
+
+    simple_string_expr  go to state 290
+    string_literal      go to state 287
+
+
+state 251
+
+   28 statement: VARIABLE '=' . int_expr
+   29          | VARIABLE '=' . string_expr
+
+    REPEAT     shift, and go to state 195
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    SEND       shift, and go to state 202
+    RECV       shift, and go to state 203
+    TASK       shift, and go to state 204
+    NOTICE     shift, and go to state 205
+    STRING     shift, and go to state 213
+    REGEX      shift, and go to state 214
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 291
+    '*'        shift, and go to state 216
+    '!'        shift, and go to state 283
+
+    string_expr         go to state 292
+    string_func         go to state 293
+    simple_string_expr  go to state 294
+    int_expr            go to state 295
+    int_func            go to state 296
+    simple_int_expr     go to state 297
+    task                go to state 212
+    string_literal      go to state 287
+
+
+state 252
+
+   16 statement_list: statement_list . statement
+   27 statement: '{' statement_list . '}'
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+    '}'       shift, and go to state 298
+
+    statement    go to state 209
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 253
+
+   36 string_func: task limit_list . ';'
+   37            | task limit_list . '{' statement_list '}'
+   67 limit_list: limit_list . limit
+
+    LIMIT  shift, and go to state 156
+    '{'    shift, and go to state 299
+    ';'    shift, and go to state 300
+
+    limit  go to state 301
+
+
+state 254
+
+   86 unit_qty: AVERAGE '(' IDENTIFIER ',' IDENTIFIER ')' .
+
+    $default  reduce using rule 86 (unit_qty)
+
+
+state 255
+
+   87 unit_qty: AVERAGE '(' IDENTIFIER ',' string_literal ')' .
+
+    $default  reduce using rule 87 (unit_qty)
+
+
+state 256
+
+   88 unit_qty: STDDEV '(' IDENTIFIER ',' IDENTIFIER ')' .
+
+    $default  reduce using rule 88 (unit_qty)
+
+
+state 257
+
+   89 unit_qty: STDDEV '(' IDENTIFIER ',' string_literal ')' .
+
+    $default  reduce using rule 89 (unit_qty)
+
+
+state 258
+
+   90 unit_qty: F_MAX '(' IDENTIFIER ',' IDENTIFIER ')' .
+
+    $default  reduce using rule 90 (unit_qty)
+
+
+state 259
+
+   91 unit_qty: F_MAX '(' IDENTIFIER ',' string_literal ')' .
+
+    $default  reduce using rule 91 (unit_qty)
+
+
+state 260
+
+   92 unit_qty: F_MIN '(' IDENTIFIER ',' IDENTIFIER ')' .
+
+    $default  reduce using rule 92 (unit_qty)
+
+
+state 261
+
+   93 unit_qty: F_MIN '(' IDENTIFIER ',' string_literal ')' .
+
+    $default  reduce using rule 93 (unit_qty)
+
+
+state 262
+
+   80 count_range: '{' '=' simple_int_expr '}' .
+
+    $default  reduce using rule 80 (count_range)
+
+
+state 263
+
+   83 count_range: '{' '=' float_expr '}' .
+
+    $default  reduce using rule 83 (count_range)
+
+
+state 264
+
+   79 count_range: '{' simple_int_expr '+' '}' .
+
+    $default  reduce using rule 79 (count_range)
+
+
+state 265
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   78 count_range: '{' simple_int_expr ',' simple_int_expr . '}'
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+    '}'  shift, and go to state 302
+
+
+state 266
+
+   82 count_range: '{' float_expr '+' '}' .
+
+    $default  reduce using rule 82 (count_range)
+
+
+state 267
+
+   81 count_range: '{' float_expr ',' float_expr . '}'
+  133 float_expr: float_expr . '/' float_expr
+  134           | float_expr . '*' float_expr
+  135           | float_expr . '-' float_expr
+  136           | float_expr . '+' float_expr
+  137           | float_expr . F_POW float_expr
+
+    F_POW  shift, and go to state 80
+    '+'    shift, and go to state 87
+    '-'    shift, and go to state 88
+    '*'    shift, and go to state 89
+    '/'    shift, and go to state 90
+    '}'    shift, and go to state 303
+
+
+state 268
+
+   77 limit_range: '{' '=' unit_qty '}' .
+
+    $default  reduce using rule 77 (limit_range)
+
+
+state 269
+
+   76 limit_range: '{' unit_qty '+' '}' .
+
+    $default  reduce using rule 76 (limit_range)
+
+
+state 270
+
+   75 limit_range: '{' unit_qty ',' unit_qty . '}'
+
+    '}'  shift, and go to state 304
+
+
+state 271
+
+   70 level: LEVEL '(' INTEGER ')' .
+
+    $default  reduce using rule 70 (level)
+
+
+state 272
+
+   69 limit: LIMIT '(' IDENTIFIER ',' . limit_spec ')'
+
+    AVERAGE  shift, and go to state 20
+    STDDEV   shift, and go to state 21
+    F_MAX    shift, and go to state 22
+    F_MIN    shift, and go to state 23
+    INTEGER  shift, and go to state 305
+    FLOAT    shift, and go to state 128
+    '{'      shift, and go to state 306
+
+    limit_spec   go to state 307
+    limit_range  go to state 308
+    count_range  go to state 309
+    unit_qty     go to state 310
+
+
+state 273
+
+   61 thread: THREAD IDENTIFIER '(' . simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list '}'
+
+    STRING    shift, and go to state 213
+    REGEX     shift, and go to state 214
+    VARIABLE  shift, and go to state 282
+    '*'       shift, and go to state 216
+    '!'       shift, and go to state 283
+
+    simple_string_expr  go to state 311
+    string_literal      go to state 287
+
+
+state 274
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   95 repeat_range: BETWEEN simple_int_expr . AND simple_int_expr
+
+    AND  shift, and go to state 312
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+
+state 275
+
+   43 int_func: REPEAT repeat_range statement .
+
+    $default  reduce using rule 43 (int_func)
+
+
+state 276
+
+   21 statement: XOR '{' xor_list . '}'
+   52 xor_list: xor_list . xor
+
+    BRANCH  shift, and go to state 313
+    '}'     shift, and go to state 314
+
+    xor  go to state 315
+
+
+state 277
+
+   20 statement: CALL '(' IDENTIFIER . ')' ';'
+
+    ')'  shift, and go to state 316
+
+
+state 278
+
+   24 statement: FUTURE IDENTIFIER statement .
+
+    $default  reduce using rule 24 (statement)
+
+
+state 279
+
+   25 statement: DONE '(' IDENTIFIER . ')' ';'
+
+    ')'  shift, and go to state 317
+
+
+state 280
+
+   26 statement: ANY '(' ')' . ';'
+
+    ';'  shift, and go to state 318
+
+
+state 281
+
+   60 msg_list: IDENTIFIER .
+
+    $default  reduce using rule 60 (msg_list)
+
+
+state 282
+
+   39 simple_string_expr: VARIABLE .
+
+    $default  reduce using rule 39 (simple_string_expr)
+
+
+state 283
+
+   40 simple_string_expr: '!' . simple_string_expr
+
+    STRING    shift, and go to state 213
+    REGEX     shift, and go to state 214
+    VARIABLE  shift, and go to state 282
+    '*'       shift, and go to state 216
+    '!'       shift, and go to state 283
+
+    simple_string_expr  go to state 319
+    string_literal      go to state 287
+
+
+state 284
+
+   58 msg_target: simple_string_expr .
+
+    $default  reduce using rule 58 (msg_target)
+
+
+state 285
+
+   33 string_func: SEND '(' msg_target . ')' limit_list ';'
+
+    ')'  shift, and go to state 320
+
+
+state 286
+
+   57 msg_target: msg_list .
+   59 msg_list: msg_list . ',' IDENTIFIER
+
+    ','  shift, and go to state 321
+
+    $default  reduce using rule 57 (msg_target)
+
+
+state 287
+
+   38 simple_string_expr: string_literal .
+
+    $default  reduce using rule 38 (simple_string_expr)
+
+
+state 288
+
+   34 string_func: RECV '(' msg_target . ')' limit_list ';'
+
+    ')'  shift, and go to state 322
+
+
+state 289
+
+   96 task: TASK '(' simple_string_expr . ')'
+
+    ')'  shift, and go to state 323
+
+
+state 290
+
+   35 string_func: NOTICE '(' simple_string_expr . ')' ';'
+
+    ')'  shift, and go to state 324
+
+
+state 291
+
+   39 simple_string_expr: VARIABLE .
+   51 simple_int_expr: VARIABLE .
+
+    ';'       reduce using rule 39 (simple_string_expr)
+    ';'       [reduce using rule 51 (simple_int_expr)]
+    $default  reduce using rule 51 (simple_int_expr)
+
+
+state 292
+
+   29 statement: VARIABLE '=' string_expr .
+
+    $default  reduce using rule 29 (statement)
+
+
+state 293
+
+   31 string_expr: string_func .
+
+    $default  reduce using rule 31 (string_expr)
+
+
+state 294
+
+   32 string_expr: simple_string_expr . ';'
+
+    ';'  shift, and go to state 325
+
+
+state 295
+
+   28 statement: VARIABLE '=' int_expr .
+
+    $default  reduce using rule 28 (statement)
+
+
+state 296
+
+   41 int_expr: int_func .
+
+    $default  reduce using rule 41 (int_expr)
+
+
+state 297
+
+   42 int_expr: simple_int_expr . ';'
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+    ';'  shift, and go to state 326
+
+
+state 298
+
+   27 statement: '{' statement_list '}' .
+
+    $default  reduce using rule 27 (statement)
+
+
+state 299
+
+   37 string_func: task limit_list '{' . statement_list '}'
+
+    $default  reduce using rule 17 (statement_list)
+
+    statement_list  go to state 327
+
+
+state 300
+
+   36 string_func: task limit_list ';' .
+
+    $default  reduce using rule 36 (string_func)
+
+
+state 301
+
+   67 limit_list: limit_list limit .
+
+    $default  reduce using rule 67 (limit_list)
+
+
+state 302
+
+   78 count_range: '{' simple_int_expr ',' simple_int_expr '}' .
+
+    $default  reduce using rule 78 (count_range)
+
+
+state 303
+
+   81 count_range: '{' float_expr ',' float_expr '}' .
+
+    $default  reduce using rule 81 (count_range)
+
+
+state 304
+
+   75 limit_range: '{' unit_qty ',' unit_qty '}' .
+
+    $default  reduce using rule 75 (limit_range)
+
+
+state 305
+
+   73 limit_spec: INTEGER .
+   84 unit_qty: INTEGER . IDENTIFIER
+
+    IDENTIFIER  shift, and go to state 53
+
+    $default  reduce using rule 73 (limit_spec)
+
+
+state 306
+
+   75 limit_range: '{' . unit_qty ',' unit_qty '}'
+   76            | '{' . unit_qty '+' '}'
+   77            | '{' . '=' unit_qty '}'
+   78 count_range: '{' . simple_int_expr ',' simple_int_expr '}'
+   79            | '{' . simple_int_expr '+' '}'
+   80            | '{' . '=' simple_int_expr '}'
+   81            | '{' . float_expr ',' float_expr '}'
+   82            | '{' . float_expr '+' '}'
+   83            | '{' . '=' float_expr '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+    '='        shift, and go to state 328
+
+    simple_int_expr  go to state 179
+    unit_qty         go to state 329
+    float_expr       go to state 180
+
+
+state 307
+
+   69 limit: LIMIT '(' IDENTIFIER ',' limit_spec . ')'
+
+    ')'  shift, and go to state 330
+
+
+state 308
+
+   71 limit_spec: limit_range .
+
+    $default  reduce using rule 71 (limit_spec)
+
+
+state 309
+
+   72 limit_spec: count_range .
+
+    $default  reduce using rule 72 (limit_spec)
+
+
+state 310
+
+   74 limit_spec: unit_qty .
+
+    $default  reduce using rule 74 (limit_spec)
+
+
+state 311
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr . ',' thread_count_range ')' '{' path_limits statement_list '}'
+
+    ','  shift, and go to state 331
+
+
+state 312
+
+   95 repeat_range: BETWEEN simple_int_expr AND . simple_int_expr
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    INTEGER    shift, and go to state 114
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 332
+
+
+state 313
+
+   54 xor: BRANCH . ':' statement_list
+
+    ':'  shift, and go to state 333
+
+
+state 314
+
+   21 statement: XOR '{' xor_list '}' .
+
+    $default  reduce using rule 21 (statement)
+
+
+state 315
+
+   52 xor_list: xor_list xor .
+
+    $default  reduce using rule 52 (xor_list)
+
+
+state 316
+
+   20 statement: CALL '(' IDENTIFIER ')' . ';'
+
+    ';'  shift, and go to state 334
+
+
+state 317
+
+   25 statement: DONE '(' IDENTIFIER ')' . ';'
+
+    ';'  shift, and go to state 335
+
+
+state 318
+
+   26 statement: ANY '(' ')' ';' .
+
+    $default  reduce using rule 26 (statement)
+
+
+state 319
+
+   40 simple_string_expr: '!' simple_string_expr .
+
+    $default  reduce using rule 40 (simple_string_expr)
+
+
+state 320
+
+   33 string_func: SEND '(' msg_target ')' . limit_list ';'
+
+    $default  reduce using rule 68 (limit_list)
+
+    limit_list  go to state 336
+
+
+state 321
+
+   59 msg_list: msg_list ',' . IDENTIFIER
+
+    IDENTIFIER  shift, and go to state 337
+
+
+state 322
+
+   34 string_func: RECV '(' msg_target ')' . limit_list ';'
+
+    $default  reduce using rule 68 (limit_list)
+
+    limit_list  go to state 338
+
+
+state 323
+
+   96 task: TASK '(' simple_string_expr ')' .
+
+    $default  reduce using rule 96 (task)
+
+
+state 324
+
+   35 string_func: NOTICE '(' simple_string_expr ')' . ';'
+
+    ';'  shift, and go to state 339
+
+
+state 325
+
+   32 string_expr: simple_string_expr ';' .
+
+    $default  reduce using rule 32 (string_expr)
+
+
+state 326
+
+   42 int_expr: simple_int_expr ';' .
+
+    $default  reduce using rule 42 (int_expr)
+
+
+state 327
+
+   16 statement_list: statement_list . statement
+   37 string_func: task limit_list '{' statement_list . '}'
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+    '}'       shift, and go to state 340
+
+    statement    go to state 209
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 328
+
+   77 limit_range: '{' '=' . unit_qty '}'
+   80 count_range: '{' '=' . simple_int_expr '}'
+   83            | '{' '=' . float_expr '}'
+
+    INSTANCES  shift, and go to state 18
+    UNIQUE     shift, and go to state 19
+    AVERAGE    shift, and go to state 20
+    STDDEV     shift, and go to state 21
+    F_MAX      shift, and go to state 22
+    F_MIN      shift, and go to state 23
+    SQRT       shift, and go to state 24
+    LOG        shift, and go to state 25
+    LOGN       shift, and go to state 26
+    EXP        shift, and go to state 27
+    INTEGER    shift, and go to state 28
+    FLOAT      shift, and go to state 29
+    VARIABLE   shift, and go to state 30
+
+    simple_int_expr  go to state 224
+    unit_qty         go to state 341
+    float_expr       go to state 225
+
+
+state 329
+
+   75 limit_range: '{' unit_qty . ',' unit_qty '}'
+   76            | '{' unit_qty . '+' '}'
+  132 float_expr: unit_qty . '/' unit_qty
+
+    '+'  shift, and go to state 231
+    '/'  shift, and go to state 75
+    ','  shift, and go to state 232
+
+
+state 330
+
+   69 limit: LIMIT '(' IDENTIFIER ',' limit_spec ')' .
+
+    $default  reduce using rule 69 (limit)
+
+
+state 331
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' . thread_count_range ')' '{' path_limits statement_list '}'
+
+    INTEGER  shift, and go to state 342
+    '{'      shift, and go to state 343
+
+    thread_count_range  go to state 344
+
+
+state 332
+
+   48 simple_int_expr: simple_int_expr . '*' simple_int_expr
+   49                | simple_int_expr . '+' simple_int_expr
+   50                | simple_int_expr . '-' simple_int_expr
+   95 repeat_range: BETWEEN simple_int_expr AND simple_int_expr .
+
+    '+'  shift, and go to state 64
+    '-'  shift, and go to state 65
+    '*'  shift, and go to state 66
+
+    $default  reduce using rule 95 (repeat_range)
+
+
+state 333
+
+   54 xor: BRANCH ':' . statement_list
+
+    $default  reduce using rule 17 (statement_list)
+
+    statement_list  go to state 345
+
+
+state 334
+
+   20 statement: CALL '(' IDENTIFIER ')' ';' .
+
+    $default  reduce using rule 20 (statement)
+
+
+state 335
+
+   25 statement: DONE '(' IDENTIFIER ')' ';' .
+
+    $default  reduce using rule 25 (statement)
+
+
+state 336
+
+   33 string_func: SEND '(' msg_target ')' limit_list . ';'
+   67 limit_list: limit_list . limit
+
+    LIMIT  shift, and go to state 156
+    ';'    shift, and go to state 346
+
+    limit  go to state 301
+
+
+state 337
+
+   59 msg_list: msg_list ',' IDENTIFIER .
+
+    $default  reduce using rule 59 (msg_list)
+
+
+state 338
+
+   34 string_func: RECV '(' msg_target ')' limit_list . ';'
+   67 limit_list: limit_list . limit
+
+    LIMIT  shift, and go to state 156
+    ';'    shift, and go to state 347
+
+    limit  go to state 301
+
+
+state 339
+
+   35 string_func: NOTICE '(' simple_string_expr ')' ';' .
+
+    $default  reduce using rule 35 (string_func)
+
+
+state 340
+
+   37 string_func: task limit_list '{' statement_list '}' .
+
+    $default  reduce using rule 37 (string_func)
+
+
+state 341
+
+   77 limit_range: '{' '=' unit_qty . '}'
+  132 float_expr: unit_qty . '/' unit_qty
+
+    '/'  shift, and go to state 75
+    '}'  shift, and go to state 268
+
+
+state 342
+
+   62 thread_count_range: INTEGER .
+
+    $default  reduce using rule 62 (thread_count_range)
+
+
+state 343
+
+   63 thread_count_range: '{' . INTEGER ',' INTEGER '}'
+
+    INTEGER  shift, and go to state 348
+
+
+state 344
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range . ')' '{' path_limits statement_list '}'
+
+    ')'  shift, and go to state 349
+
+
+state 345
+
+   16 statement_list: statement_list . statement
+   54 xor: BRANCH ':' statement_list .
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+
+    BRANCH  reduce using rule 54 (xor)
+    '}'     reduce using rule 54 (xor)
+
+    statement    go to state 209
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 346
+
+   33 string_func: SEND '(' msg_target ')' limit_list ';' .
+
+    $default  reduce using rule 33 (string_func)
+
+
+state 347
+
+   34 string_func: RECV '(' msg_target ')' limit_list ';' .
+
+    $default  reduce using rule 34 (string_func)
+
+
+state 348
+
+   63 thread_count_range: '{' INTEGER . ',' INTEGER '}'
+
+    ','  shift, and go to state 350
+
+
+state 349
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' . '{' path_limits statement_list '}'
+
+    '{'  shift, and go to state 351
+
+
+state 350
+
+   63 thread_count_range: '{' INTEGER ',' . INTEGER '}'
+
+    INTEGER  shift, and go to state 352
+
+
+state 351
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' . path_limits statement_list '}'
+
+    $default  reduce using rule 66 (path_limits)
+
+    path_limits  go to state 353
+
+
+state 352
+
+   63 thread_count_range: '{' INTEGER ',' INTEGER . '}'
+
+    '}'  shift, and go to state 354
+
+
+state 353
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' path_limits . statement_list '}'
+   64 path_limits: path_limits . limit ';'
+   65            | path_limits . level ';'
+
+    LEVEL  shift, and go to state 155
+    LIMIT  shift, and go to state 156
+
+    $default  reduce using rule 17 (statement_list)
+
+    statement_list  go to state 355
+    limit           go to state 158
+    level           go to state 159
+
+
+state 354
+
+   63 thread_count_range: '{' INTEGER ',' INTEGER '}' .
+
+    $default  reduce using rule 63 (thread_count_range)
+
+
+state 355
+
+   16 statement_list: statement_list . statement
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list . '}'
+
+    error     shift, and go to state 194
+    REPEAT    shift, and go to state 195
+    XOR       shift, and go to state 196
+    MAYBE     shift, and go to state 197
+    CALL      shift, and go to state 198
+    FUTURE    shift, and go to state 199
+    DONE      shift, and go to state 200
+    ANY       shift, and go to state 201
+    SEND      shift, and go to state 202
+    RECV      shift, and go to state 203
+    TASK      shift, and go to state 204
+    NOTICE    shift, and go to state 205
+    VARIABLE  shift, and go to state 206
+    '{'       shift, and go to state 207
+    '}'       shift, and go to state 356
+
+    statement    go to state 209
+    string_func  go to state 210
+    int_func     go to state 211
+    task         go to state 212
+
+
+state 356
+
+   61 thread: THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list '}' .
+
+    $default  reduce using rule 61 (thread)

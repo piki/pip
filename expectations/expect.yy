@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 // vim: set sw=2 ts=2 tw=0:
 %{
 #include "parsetree.h"
@@ -23,6 +28,8 @@
 %token XOR
 %token MAYBE
 %token CALL
+%token FUTURE
+%token DONE
 %token BETWEEN
 %token AND
 %token ASSERT
@@ -62,14 +69,13 @@
 %token <iValue> INTEGER
 %token <fValue> FLOAT
 %token <sValue> IDENTIFIER
-%token <sValue> STRINGVAR
-%token <sValue> PATHVAR
+%token <sValue> VARIABLE
 %type <iValue> VALIDATOR INVALIDATOR RECOGNIZER pathtype
 %type <nList> limit_list statement_list thread_list xor_list path_limits msg_list
-%type <nPtr> statement thread thread_count_range
-%type <nPtr> repeat limit level limit_range limit_spec repeat_range path_expr
-%type <nPtr> string_expr xor task assert assertdecl bool_expr
-%type <nPtr> int_expr float_expr window string_literal unit_qty count_range
+%type <nPtr> statement thread thread_count_range pathboolexpr msg_target
+%type <nPtr> limit level limit_range limit_spec repeat_range
+%type <nPtr> string_expr simple_string_expr int_expr simple_int_expr xor task assert assertdecl bool_expr
+%type <nPtr> float_expr window string_literal unit_qty count_range int_func string_func
 
 %left B_AND B_OR IMPLIES
 %left '<' '>' LE GE EQ NE
@@ -98,40 +104,102 @@ program:
 
 pathdecl:
 		pathtype IDENTIFIER '{' path_limits thread_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($2,RECOGNIZER), (ListNode*)$4, (ListNode*)$5, true, $1));
+			if (this_path_ok) add_recognizer(new PathRecognizer(idcge($2,RECOGNIZER), dynamic_cast<ListNode*>($4), dynamic_cast<ListNode*>($5), true, $1));
 			delete $4;
+			this_path_ok = true;
 		}
 		| FRAGMENT pathtype IDENTIFIER '{' path_limits statement_list '}' {
-			if (yy_success) add_recognizer(new Recognizer(idcge($3,RECOGNIZER), (ListNode*)$5, (ListNode*)$6, false, $2));
+			if (this_path_ok) add_recognizer(new PathRecognizer(idcge($3,RECOGNIZER), dynamic_cast<ListNode*>($5), dynamic_cast<ListNode*>($6), false, $2));
 			delete $5;
+			this_path_ok = true;
+		}
+		| pathtype IDENTIFIER ':' pathboolexpr ';' {
+			if (this_path_ok) add_recognizer(new SetRecognizer(idcge($2,RECOGNIZER), $4, $1));
+			this_path_ok = true;
 		}
 		;
 
 pathtype:
-	VALIDATOR							{ $$ = VALIDATOR; }
-	| INVALIDATOR					{ $$ = INVALIDATOR; }
-	| RECOGNIZER					{ $$ = RECOGNIZER; }
-	;
+		VALIDATOR							{ $$ = VALIDATOR; }
+		| INVALIDATOR					{ $$ = INVALIDATOR; }
+		| RECOGNIZER					{ $$ = RECOGNIZER; }
+		;
+
+pathboolexpr:
+		pathboolexpr B_AND pathboolexpr						{ $$ = opr(B_AND, 2, $1, $3); }
+		| pathboolexpr B_OR pathboolexpr					{ $$ = opr(B_OR, 2, $1, $3); }
+		| pathboolexpr IMPLIES pathboolexpr				{ $$ = opr(IMPLIES, 2, $1, $3); }
+		| '!' pathboolexpr												{ $$ = opr('!', 1, $2); }
+		| '(' pathboolexpr ')'										{ $$ = $2; }
+		| IDENTIFIER															{ $$ = idf($1,RECOGNIZER); }
+		;
 
 statement_list:
 		statement_list statement									{ $$ = $1; ($$)->add($2); }
 		|																					{ $$ = new ListNode; }
 		;
 		
+/* The placement of semicolons is a little hackish here.  We want to be
+ * able to say "$n = task(*) {...}" or "$n = task(*);" or "$n=$z*2;".  I
+ * get this by forcing statement, int_expr, string_expr, int_func, and
+ * string_func to be self-terminating (i.e., end in ';' or '}'). */
 statement:
-		SEND '(' msg_list ')' limit_list ';'			{ $$ = opr(SEND, 2, $3, $5); }
-		| RECV '(' msg_list ')' limit_list ';'		{ $$ = opr(RECV, 2, $3, $5); }
+		string_func
+		| int_func
 		| CALL '(' IDENTIFIER ')' ';'							{ $$ = opr(CALL, 1, idf($3,RECOGNIZER)); }   //?
-		| NOTICE '(' string_expr ')' ';'					{ $$ = opr(NOTICE, 1, $3); }
-		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
-		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
-		| string_expr
-		| path_expr
 		| XOR '{' xor_list '}'										{ $$ = opr(XOR, 1, $3); }
 		| MAYBE statement													{ $$ = opr(REPEAT, 2, opr(RANGE, 2, new IntNode(0), new IntNode(1)), $2); }
+		| FUTURE statement												{ $$ = opr(FUTURE, 2, NULL, $2); }
+		| FUTURE IDENTIFIER statement							{ $$ = opr(FUTURE, 2, idcl($2,FUTURE), $3); }
+		| DONE '(' IDENTIFIER ')' ';'							{ $$ = opr(DONE, 1, idf($3,FUTURE)); }
 		| ANY	'(' ')' ';'													{ $$ = opr(ANY, 0); }
 		| '{' statement_list '}'									{ $$ = $2; }
+		| VARIABLE '=' int_expr										{ $$ = opr('=', 2, idcl($1,INT_VAR), $3); }
+		| VARIABLE '=' string_expr									{ $$ = opr('=', 2, idcl($1,STRING_VAR), $3); }
 		| error ';'																{ $$ = NULL; }
+		;
+
+/* Why string_expr vs. simple_string_expr and int_expr vs.
+ * simple_int_expr?  In addition to the above?  Because we don't really
+ * want to allow "repeat" to be used as an argument to "repeat," or "send"
+ * as an argument to "send," etc. */
+string_expr:
+		string_func
+		| simple_string_expr ';'
+		;
+
+string_func:
+		SEND '(' msg_target ')' limit_list ';'		{ $$ = opr(SEND, 2, $3, $5); }
+		| RECV '(' msg_target ')' limit_list ';'	{ $$ = opr(RECV, 2, $3, $5); }
+		| NOTICE '(' simple_string_expr ')' ';'		{ $$ = opr(NOTICE, 1, $3); }
+		| task limit_list ';'											{ $$ = opr(TASK, 3, $1, $2, NULL); }
+		| task limit_list '{' statement_list '}'	{ $$ = opr(TASK, 3, $1, $2, $4); }
+		;
+
+simple_string_expr:
+		string_literal
+		| VARIABLE																{ $$ = idf($1,STRING_VAR); }
+		| '!' simple_string_expr									{ $$ = opr('!', 1, $2); }
+		;
+
+int_expr:
+		int_func
+		| simple_int_expr ';'
+		;
+
+int_func:
+		REPEAT repeat_range statement							{ $$ = opr(REPEAT, 2, $2, $3); }
+		;
+
+simple_int_expr:
+		INTEGER																		{ $$ = new IntNode($1); }
+		| INSTANCES '(' IDENTIFIER ')'						{ $$ = opr(INSTANCES, 1, idf($3,RECOGNIZER)); }
+		| UNIQUE '(' IDENTIFIER ')'								{ $$ = opr(UNIQUE, 1, idf($3,RECOGNIZER)); }
+		| UNIQUE '(' VARIABLE ')'									{ $$ = opr(UNIQUE, 1, idf($3,STRING_VAR)); }
+		| simple_int_expr '*' simple_int_expr			{ $$ = opr('*', 2, $1, $3); }
+		| simple_int_expr '+' simple_int_expr			{ $$ = opr('+', 2, $1, $3); }
+		| simple_int_expr '-' simple_int_expr			{ $$ = opr('-', 2, $1, $3); }
+		| VARIABLE																{ $$ = idf($1,INT_VAR); }
 		;
 
 xor_list:
@@ -148,13 +216,18 @@ thread_list:
 		|																					{ $$ = new ListNode; }
 		;
 
+msg_target:
+		msg_list																	{ $$ = $1; }
+		| simple_string_expr
+		;
+
 msg_list:
 		msg_list ',' IDENTIFIER										{ $$ = $1; ($$)->add(idcl($3,THREAD)); }
 		| IDENTIFIER															{ $$ = new ListNode; ($$)->add(idcl($1,THREAD)); }
 		;
 
 thread:
-		THREAD IDENTIFIER '(' string_expr ',' thread_count_range ')' '{' path_limits statement_list '}' {
+		THREAD IDENTIFIER '(' simple_string_expr ',' thread_count_range ')' '{' path_limits statement_list '}' {
 			$$ = opr(THREAD, 5, idcl($2,THREAD), $4, $6, $9, $10);
 		}
 		;
@@ -162,10 +235,6 @@ thread:
 thread_count_range:
 		INTEGER																		{ $$ = opr(RANGE, 2, new IntNode($1), new IntNode($1)); }
 		| '{' INTEGER ',' INTEGER '}'							{ $$ = opr(RANGE, 2, new IntNode($2), new IntNode($4)); }
-		;
-
-repeat:
-		REPEAT repeat_range statement							{ $$ = opr(REPEAT, 2, $2, $3); }
 		;
 
 path_limits:
@@ -200,12 +269,12 @@ limit_range:
 		;
 
 count_range:
-		'{' int_expr ',' int_expr '}'							{ $$ = opr(RANGE, 2, $2, $4); }
-		| '{' int_expr '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
-		| '{' '=' int_expr '}'										{ $$ = opr(RANGE, 1, $3); }
-		| '{' float_expr ',' float_expr '}'				{ $$ = opr(RANGE, 2, $2, $4); }
-		| '{' float_expr '+' '}'									{ $$ = opr(RANGE, 2, $2, NULL); }
-		| '{' '=' float_expr '}'									{ $$ = opr(RANGE, 1, $3); }
+		'{' simple_int_expr ',' simple_int_expr '}'			{ $$ = opr(RANGE, 2, $2, $4); }
+		| '{' simple_int_expr '+' '}'										{ $$ = opr(RANGE, 2, $2, NULL); }
+		| '{' '=' simple_int_expr '}'										{ $$ = opr(RANGE, 1, $3); }
+		| '{' float_expr ',' float_expr '}'							{ $$ = opr(RANGE, 2, $2, $4); }
+		| '{' float_expr '+' '}'												{ $$ = opr(RANGE, 2, $2, NULL); }
+		| '{' '=' float_expr '}'												{ $$ = opr(RANGE, 1, $3); }
 		;
 
 unit_qty:
@@ -222,31 +291,18 @@ unit_qty:
 		;
 
 repeat_range:
-		INTEGER																		{ $$ = opr(RANGE, 2, new IntNode($1), new IntNode($1)); }
-		| BETWEEN INTEGER AND INTEGER							{ $$ = opr(RANGE, 2, new IntNode($2), new IntNode($4)); }
-		;
-
-path_expr:
-		repeat
-		| PATHVAR																	{ $$ = idf($1,PATH_VAR); }
-		| PATHVAR '=' path_expr										{ $$ = opr('=', 2, idcl($1,PATH_VAR), $3); }
+		simple_int_expr																	{ $$ = opr(RANGE, 2, $1, $1); }
+		| BETWEEN simple_int_expr AND simple_int_expr		{ $$ = opr(RANGE, 2, $2, $4); }
 		;
 
 task:
-		TASK '(' string_expr ')'									{ $$ = opr(TASK, 1, $3); }
+		TASK '(' simple_string_expr ')'						{ $$ = opr(TASK, 1, $3); }
 		;
 
 string_literal:
 		STRING																		{ $$ = new StringNode(NODE_STRING, $1); }
 		| REGEX																		{ $$ = new StringNode(NODE_REGEX, $1); }
 		| '*'																			{ $$ = new StringNode(NODE_WILDCARD, NULL); }
-		;
-
-string_expr:
-		'!' string_expr														{ $$ = opr('!', 1, $2); }
-		| string_literal
-		| STRINGVAR																{ $$ = idf($1,STRING_VAR); }
-		| STRINGVAR '=' string_expr								{ $$ = opr('=', 2, idcl($1,STRING_VAR), $3); }
 		;
 
 assertdecl:
@@ -269,13 +325,13 @@ bool_expr:
 		| bool_expr IMPLIES bool_expr							{ $$ = opr(IMPLIES, 2, $1, $3); }
 		| '!' bool_expr														{ $$ = opr('!', 1, $2); }
 		| '(' bool_expr ')'												{ $$ = $2; }
-		| int_expr IN count_range									{ $$ = opr(IN, 2, $1, $3); }
-		| int_expr '<' int_expr										{ $$ = opr('<', 2, $1, $3); }
-		| int_expr '>' int_expr										{ $$ = opr('>', 2, $1, $3); }
-		| int_expr LE int_expr										{ $$ = opr(LE, 2, $1, $3); }
-		| int_expr GE int_expr										{ $$ = opr(GE, 2, $1, $3); }
-		| int_expr EQ int_expr										{ $$ = opr(EQ, 2, $1, $3); }
-		| int_expr NE int_expr										{ $$ = opr(NE, 2, $1, $3); }
+		| simple_int_expr IN count_range					{ $$ = opr(IN, 2, $1, $3); }
+		| simple_int_expr '<' simple_int_expr			{ $$ = opr('<', 2, $1, $3); }
+		| simple_int_expr '>' simple_int_expr			{ $$ = opr('>', 2, $1, $3); }
+		| simple_int_expr LE simple_int_expr			{ $$ = opr(LE, 2, $1, $3); }
+		| simple_int_expr GE simple_int_expr			{ $$ = opr(GE, 2, $1, $3); }
+		| simple_int_expr EQ simple_int_expr			{ $$ = opr(EQ, 2, $1, $3); }
+		| simple_int_expr NE simple_int_expr			{ $$ = opr(NE, 2, $1, $3); }
 		| unit_qty IN limit_range									{ $$ = opr(IN, 2, $1, $3); }
 		| unit_qty '<' unit_qty										{ $$ = opr('<', 2, $1, $3); }
 		| unit_qty '>' unit_qty										{ $$ = opr('>', 2, $1, $3); }
@@ -291,19 +347,9 @@ bool_expr:
 		| float_expr NE float_expr								{ $$ = opr(NE, 2, $1, $3); }
 		;
 
-int_expr:
-		INTEGER																		{ $$ = new IntNode($1); }
-		| INSTANCES '(' IDENTIFIER ')'						{ $$ = opr(INSTANCES, 1, idf($3,RECOGNIZER)); }
-		| UNIQUE '(' IDENTIFIER ')'								{ $$ = opr(UNIQUE, 1, idf($3,RECOGNIZER)); }
-		| UNIQUE '(' STRINGVAR ')'								{ $$ = opr(UNIQUE, 1, idf($3,STRING_VAR)); }
-		| int_expr '*' int_expr										{ $$ = opr('*', 2, $1, $3); }
-		| int_expr '+' int_expr										{ $$ = opr('+', 2, $1, $3); }
-		| int_expr '-' int_expr										{ $$ = opr('-', 2, $1, $3); }
-		;
-
 float_expr:
 		FLOAT																			{ $$ = new FloatNode($1); }
-		| int_expr '/' int_expr										{ $$ = opr('/', 2, $1, $3); }
+		| simple_int_expr '/' simple_int_expr			{ $$ = opr('/', 2, $1, $3); }
 		| unit_qty '/' unit_qty										{ $$ = opr('/', 2, $1, $3); }
 		| float_expr '/' float_expr								{ $$ = opr('/', 2, $1, $3); }
 		| float_expr '*' float_expr								{ $$ = opr('*', 2, $1, $3); }
@@ -325,7 +371,7 @@ void yyerror(const char *fmt, ...) {
 	vfprintf(stderr, fmt, args);
 	va_end(args);
 	fputc('\n', stderr);
-	yy_success = false;
+	this_path_ok = yy_success = false;
 }
 
 bool expect_parse(const char *filename) {

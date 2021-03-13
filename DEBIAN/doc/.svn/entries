@@ -1,0 +1,54 @@
+8
+
+dir
+2802
+svn://glubglub/trunk/pip/DEBIAN/reconcile
+svn://glubglub
+
+
+
+2006-06-18T20:16:51.257749Z
+1469
+reynolds
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+60278c70-f413-0410-831d-f977779e0068
+
+control
+file
+2803
+
+
+
+2006-06-21T22:28:46.000000Z
+cf9f527b12dbb14997ca69092ac0e7f1
+2007-05-03T14:45:39.794793Z
+2803
+reynolds
+has-props
+
+files
+file
+2803
+
+
+
+2007-05-01T18:11:40.000000Z
+dea5f93905696d1ae576f6029081c331
+2007-05-03T14:45:39.794793Z
+2803
+reynolds
+has-props
+

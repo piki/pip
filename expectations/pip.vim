@@ -15,12 +15,12 @@ syn keyword  pipStatement  limit branch send recv
 syn keyword  pipStatement  notice xor call between and maybe
 syn keyword  pipStatement  assert instances unique in
 syn keyword  pipStatement  during any average stddev
-syn keyword  pipStatement  max min
+syn keyword  pipStatement  max min future done
 
 syn region      pipCommentL     start="//" end="$" keepend
 syn region			pipComment			start="/\*" end="\*/"
 syn region			pipString       start=+L\="+ skip=+\\\\\|\\"+ end=+"+
-syn region			pipRegex        start="m/" end="/"
+syn region			pipRegex        start="m/" skip=+\\/+ end="/"
 syn match       pipNumbers      display transparent "\<\d\|\.\d" contains=pipNumber
 syn match       pipNumber       display contained "\d\+[a-z]*"
 

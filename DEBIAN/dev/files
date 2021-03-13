@@ -1,0 +1,3 @@
+dbfill/annotrans		usr/bin/pip-annotrans		strip
+libannotate/libannotate.a	usr/lib/libannotate.a
+libannotate/annotate.h		usr/include/annotate.h

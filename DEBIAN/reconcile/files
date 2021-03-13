@@ -1,0 +1,3 @@
+dbfill/droptables		usr/bin/pip-droptables
+dbfill/dbfill			usr/bin/pip-dbfill		strip
+dbfill/new-reconcile		usr/bin/pip-reconcile		strip

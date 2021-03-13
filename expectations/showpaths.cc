@@ -1,20 +1,25 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 #include <assert.h>
 #include <string>
 #include <stdarg.h>
 #include <stdio.h>
 #include "path.h"
-#include <mysql/mysql.h>
 #include <map>
 #include <set>
 #include "aggregates.h"
 #include "exptree.h"
+#include "rcfile.h"
+#include "pathfactory.h"
 
-static void read_path(const char *base, int pathid);
-static MYSQL mysql;
+static void read_path(PathFactory *pf, int pathid);
 static int malformed_paths_count = 0;
 
 int main(int argc, char **argv) {
-	std::map<std::string,Recognizer*>::const_iterator rp;
+	std::map<std::string,RecognizerBase*>::const_iterator rp;
 	int just_one = -1;
 
 	if (argc < 2 || argc > 3) {
@@ -26,42 +31,26 @@ int main(int argc, char **argv) {
 
 	const char *base = argv[1];
 
-	mysql_init(&mysql);
-	if (!mysql_real_connect(&mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
-		fprintf(stderr, "Connection failed: %s\n", mysql_error(&mysql));
-		return 1;
+	PathFactory *pf = path_factory(base);
+	if (!pf->valid()) return 1;
+
+	if (just_one == -1) {
+		std::vector<int> pathids = pf->get_path_ids();
+		for (std::vector<int>::const_iterator p=pathids.begin(); p!=pathids.end(); p++)
+			read_path(pf, *p);
 	}
-
-	MYSQL_RES *res;
-	MYSQL_ROW row;
-
-	std::set<int> pathids;
-	if (just_one == -1)
-		get_path_ids(&mysql, base, &pathids);
-
-	fprintf(stderr, "Reading threads...");
-	run_sqlf(&mysql, "SELECT * from %s_threads", base);
-	res = mysql_use_result(&mysql);
-	while ((row = mysql_fetch_row(res)) != NULL) {
-		threads[atoi(row[0])] = new PathThread(row);
-	}
-	mysql_free_result(res);
-	fprintf(stderr, " done: %d found.\n", (int)threads.size());
-
-	if (just_one != -1)
-		read_path(base, just_one);
 	else
-		for (std::set<int>::const_iterator p=pathids.begin(); p!=pathids.end(); p++)
-			read_path(base, *p);
+		read_path(pf, just_one);
 
 	printf("malformed paths: %d\n", malformed_paths_count);
 
-	mysql_close(&mysql);
+	delete pf;
+
 	return 0;
 }
 
-static void read_path(const char *base, int pathid) {
-	Path *path = new Path(&mysql, base, pathid);
+static void read_path(PathFactory *pf, int pathid) {
+	Path *path = pf->get_path(pathid);
 	if (!path->valid()) {
 		printf("# path %d malformed\n", pathid);
 		malformed_paths_count++;

@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+
+while (<>) {
+	if (($left, $exp, $right) = /(.*)"(.*)"(.*)/) {
+		$oldexp = $exp;
+		$exp =~ s/\b\d+\b/\\d+/g;
+		$exp =~ s/\b\d[0-9a-f]+\b/[0-9a-f]+/g;
+		if ($oldexp ne $exp) {
+			$exp =~ s/\(/\\(/g;
+			$exp =~ s/\)/\\)/g;
+			$exp =~ s/\./\\./g;
+			print "${left}m/$exp/$right\n";
+		}
+		else {
+			print "$left\"$exp\"$right\n";
+		}
+	}
+	else { print; }
+}

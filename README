@@ -1,12 +1,197 @@
-Pip finds structural and performance bugs in distributed systems by
-comparing actual system behavior to expected system behavior. Actual
-system behavior is based on program annotations, interposition, or
-sniffing -- or some combination of the above. Expected system behavior is
-described in an external specification of the system's call graph and
-communication protocols.
+Intro
+-----
 
-Pip automatically checks actual behavior against expected behavior and
-helps programmers visualize the result to discover the causes of any
-unexpected behavior.
+This is Pip, a system for finding bugs in distributed systems using
+expectations.  It was written by Patrick Reynolds from 2005-2007 and is
+copyrighted by Duke University (2005-2006) and Patrick Reynolds (2007).
+See the file "COPYING" for details.
 
-More at http://issg.cs.duke.edu/pip/
+Email: reynolds at cs dot cornell dot edu
+
+
+Building
+--------
+
+Type ./configure.  Then type make.  If it doesn't work, send me email with
+the error output and the name and version of your Linux distribution.
+
+If you will be using MySQL support, create a ~/.piprc file to describe
+where your database is:
+	db.host = HOSTNAME        # optional: default=localhost
+	db.name = DATABASE_NAME   # optional: default="pip"
+	db.user = DATABASE_USER   # optional: default=<your login>
+	db.password = PASSWORD    # optional: default=<none>
+
+Requirements:
+Linux
+libglade-2.0, GTK+-2.4 or higher, libxml2
+Perl
+libpcre
+Bison (GNU yacc clone) and Lex
+
+Recommended:
+librsvg2 (for communication-graph support in pathview)
+
+Optional:
+Java SDK
+libmysqlclient
+
+
+
+Running it
+----------
+
+1) Put some annotations into your application.  If you are using Mace,
+many but not all of the annotations will be done for you.
+
+2) Run your application on one or more hosts.
+
+3) Gather the files /tmp/trace-* from all hosts to a single place.  scp is
+good for this.  You should probably delete /tmp/trace-* from the hosts in
+your testbed in case you run the application again.
+
+4) Import the trace files.  You can load them to a single flat file:
+  ./dbfill/new-reconcile trace-file-name trace-*
+... or to a MySQL database:
+  ./dbfill/dbfill trace-table-name trace-*
+
+5) Write some expectations
+or 5b) Generate expectations automatically:
+  ./expectations/makeexp <name> <pathid> > <name>.pip
+or 5c) Browse your trace without any expectations:
+  cd pathview && ./pathview <name> /dev/null
+
+
+
+Annotations
+-----------
+
+The files in pip/libannotate/tests are all (very simple) C programs with
+annotations in them.
+
+First, one optimization.  Full thread support is slow, about 10
+microseconds per task or path annotation.  (Notices and messages are
+faster and are not affected by thread support.)  There are three ways to
+make annotations faster:
+- disable threads in the build.  Comment out -DTHREADS and -lpthread in
+  libannotate/Makefile
+- use a Linux kernel before 2.6.6
+- patch the kernel on each target with one of the rusage patches.  Kernels
+  from 2.6.18+ can use rusage-diff-2.6.20.  Kernels before that may try
+  rusage-diff-2.6.12, but if it applies with any "fuzz," you probably
+  shouldn't run it.
+If you take any of these actions, annotations cost 1 microsecond instead of 10.
+
+Annotations mark three different behaviors in your program: tasks,
+notices, and messages.
+- A task is any chunk of processing, generally a millisecond or longer.
+  Pip will assign it a name and keep resource usage statistics. 
+- A notice is essentially a log statement, in the context of a thread,
+  path, and (sometimes) task.
+- A message is any communication, including network messages, IPC, timer
+  events (set=send, fire=receive) or even locks (release=send,
+  acquire=receive).
+
+Application behavior must be divided into paths, generally in response to
+an outside event like a user request.  Paths are programmer-defined.  Each
+thread is in exactly one path at any given time; all annotations are
+associated with the current path.  If a path spans multiple nodes, all
+nodes except the first must "receive" it through a message annotation.
+
+Path IDs should be unique across all nodes, across the entire duration of
+a trace.  Sufficiently large random numbers (>= 128 bits) will probably be
+fine, as will a unique node identifier (IP address in some cases) plus a
+serial number.  Reusing path IDs in subsequent traces is fine.
+
+A few general hints about applying annotations.  You'll probably have to
+add two fields to most messages, to convey path ID and message ID.  When
+you receive a message, remember to set the path ID before you call receive
+message or start task.  Tasks can be nested, but remember to end the child
+task before ending the parent one.
+
+The annotations are as listed below.  Note that roles and level aren't
+really supported anywhere, so I invariably use NULL and 0, respectively.
+Roles and levels might be deprecated.
+
+ANNOTATE_INIT()
+Initialize annotation state, including a trace file.  Call this once per
+host, e.g., in main() or a global constructor.
+
+ANNOTATE_SET_PATH_ID(char *roles, int level, void *id, int size)
+ANNOTATE_SET_PATH_ID_INT(char *roles, int level, int id)
+ANNOTATE_SET_PATH_ID_STR(char *roles, int level, char *fmt, ...)
+Set the current path ID for the current thread.  Call this to associate
+subsequent behavior with a specific path.  The general form takes a memory
+chunk and size; the _INT form is a shortcut for 32-bit ints; the _STR form
+is a shortcut for printf-style format strings.
+
+ANNOTATE_PUSH_PATH_ID(char *roles, int level, void *id, int size)
+ANNOTATE_PUSH_PATH_ID_INT(char *roles, int level, int id)
+ANNOTATE_PUSH_PATH_ID_STR(char *roles, int level, char *fmt, ...)
+ANNOTATE_POP_PATH_ID(char *roles, int level)
+Push a path ID onto a stack (max stack size is 10).  Same three variants
+as above.
+Pop it back off.
+
+const void *ANNOTATE_GET_PATH_ID(int *len)
+Get the current path ID.  On return, len contains the size of the ID.
+
+ANNOTATE_END_PATH_ID(char *roles, int level, void *id, int size)
+ANNOTATE_END_PATH_ID_INT(char *roles, int level, int id)
+ANNOTATE_END_PATH_ID_STR(char *roles, int level, char *fmt, ...)
+Indicate that the given path is finished on this thread.  Call it once per
+thread.  Once all threads have called ANNOTATE_END_PATH_ID, the path is
+available for processing.
+NB: this is useful for real-time path checking, which is not actually
+written.  For now, it's a no-op.  It's always optional.
+
+ANNOTATE_START_TASK(char *roles, int level, char *name)
+ANNOTATE_END_TASK(char *roles, int level, char *name)
+Start and end a task, by name.  The beginning and end for a task must be
+in the same host, thread, and path.
+
+ANNOTATE_NOTICE(char *roles, int level, char *fmt, ...)
+Indicates a log message.  The format argument behaves like printf.
+
+ANNOTATE_SEND(char *roles, int level, char *msgid, int idsz, int msgsz)
+ANNOTATE_SEND_INT(char *roles, int level, char *msgid, int id)
+ANNOTATE_SEND_STR(char *roles, int level, char *msgid, char *fmt, ...)
+ANNOTATE_RECEIVE(char *roles, int level, char *msgid, int idsz, int msgsz)
+ANNOTATE_RECEIVE_INT(char *roles, int level, char *msgid, int id)
+ANNOTATE_RECEIVE_STR(char *roles, int level, char *msgid, char *fmt, ...)
+Indicates communication sent or received, including network messages, IPC,
+timers, or locks.  The send and receive events must have the same ID and
+size.  Any given ID can be used only once per trace (system-wide).  A
+message ID may be the same as a path ID, as long as it isn't the same as
+any other message ID.
+
+
+
+Expectations
+------------
+
+Expectations are patterns of behavior that are specifically allowed or
+disallowed.  Expectations can be composed, and a special category of
+expectations called "aggregates" applies to the behavior of an entire
+trace.
+
+Expectations can be validators, invalidators, or recognizers.  Validators
+and invalidators classify behavior as follows: behavior that matches one
+or more validators and zero invalidators is considered "expected"
+behavior.  Anything else (i.e., matching any invalidators or zero
+validators) is "unexpected" and will generate a warning.  Recognizers are
+neutral and are used as building blocks for other expectations.
+
+Both "pathcheck" and "pathview" check paths against validators and
+invalidators.  Only "pathcheck" checks aggregates.
+
+There are several example .pip files in the expectations directory that
+illustrate all the features of the language.  You can generate
+expectations for one path in your trace automatically by running:
+  makeexp {file|table} path_id
+You can also visualize paths without first writing any expectations by
+running: 
+  pathview {file|table} /dev/null
+
+There is more information about expectations in the NSDI 2006 paper, which
+is available at http://issg.cs.duke.edu/pip/

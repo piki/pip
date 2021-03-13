@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 #include <map>
 #include <string>
 #include <assert.h>
@@ -15,23 +20,23 @@ Symbol::Symbol(char *_name, SymbolType _type, bool _global)
 	free(_name);  // lex file strdups it, we free it.  ugly.
 }
 
-extern bool yy_success;
 extern int yylno;
 extern char *yyfilename;
+extern bool yy_success;
 
-Symbol *Symbol::create(char *name, SymbolType type, bool global,
-		bool excl) {
+Symbol *Symbol::create(char *name, SymbolType type, bool global, bool excl) {
+	assert(type != SYM_ANY);
 	Symbol *sym = symbol_table[name];
 	if (sym) {
 		if (excl) {
 			fprintf(stderr, "%s:%d: symbol \"%s\" redefined\n",
 				yyfilename, yylno, name);
-			yy_success = false;
+			yy_success = this_path_ok = false;
 		}
 		else if (sym->type != type) {
 			fprintf(stderr, "%s:%d: symbol \"%s\" type mismatch\n",
 				yyfilename, yylno, name);
-			yy_success = false;
+			yy_success = this_path_ok = false;
 		}
 	}
 	else {
@@ -45,7 +50,11 @@ Symbol *Symbol::find(const char *name, SymbolType type) {
 	Symbol *sym = symbol_table[name];
 	if (!sym) {
 		fprintf(stderr, "%s:%d: undefined symbol: %s\n", yyfilename, yylno, name);
-		yy_success = false;
+		yy_success = this_path_ok = false;
+	}
+	else if (type != SYM_ANY && sym->type != type) {
+		fprintf(stderr, "%s:%d: type mismatch: %s\n", yyfilename, yylno, name);
+		yy_success = this_path_ok = false;
 	}
 	return sym;
 }
@@ -62,6 +71,22 @@ OperatorNode::OperatorNode(int which, int argc, ...) {
 OperatorNode::~OperatorNode(void) {
 	for (unsigned int i=0; i<operands.size(); i++)
 		if (operands[i]) delete operands[i];
+}
+
+int OperatorNode::int_value(void) const {
+	switch (op) {
+		case '+':
+			assert(nops() == 2);
+			return operands[0]->int_value() + operands[1]->int_value();
+		case '-':
+			assert(nops() == 2);
+			return operands[0]->int_value() - operands[1]->int_value();
+		case '*':
+			assert(nops() == 2);
+			return operands[0]->int_value() * operands[1]->int_value();
+	}
+	fprintf(stderr, "OperatorNode::int_value: unknown op '%c' (%d)\n", op, op);
+	abort();
 }
 
 static const struct {
@@ -93,7 +118,7 @@ static UnitType get_unit_by_name(const char *sym) {
 		if (!strcasecmp(sym, unit_map[i].name))
 			return unit_map[i].unit;
 	fprintf(stderr, "%s:%d: invalid unit: %s\n", yyfilename, yylno, sym);
-	yy_success = false;
+	yy_success = this_path_ok = false;
 	return UNIT_NONE;
 }
 
@@ -109,7 +134,7 @@ UnitsNode::UnitsNode(float _amt, const char *_name) : amt(_amt) {
 
 	unit = get_unit_by_name(_name);
 	switch (unit) {
-		case UNIT_HOUR: amt *= (float)3600*1000000; unit = UNIT_USEC; break;
+		case UNIT_HOUR: amt *= 3600.0*1000000; unit = UNIT_USEC; break;
 		case UNIT_MIN:  amt *= 60*1000000; unit = UNIT_USEC; break;
 		case UNIT_SEC:  amt *= 1000000; unit = UNIT_USEC; break;
 		case UNIT_MSEC: amt *= 1000; unit = UNIT_USEC; break;
@@ -136,13 +161,17 @@ static struct {
 	const char *name;
 } opmap[] = {
 	{ VALIDATOR, "VALIDATOR" },
+	{ INVALIDATOR, "INVALIDATOR" },
 	{ RECOGNIZER, "RECOGNIZER" },
 	{ FRAGMENT, "FRAGMENT" },
 	{ LEVEL, "LEVEL" },
 	{ REPEAT, "REPEAT" },
 	{ BRANCH, "BRANCH" },
 	{ XOR, "XOR" },
+	{ MAYBE, "MAYBE" },
 	{ CALL, "CALL" },
+	{ FUTURE, "FUTURE" },
+	{ DONE, "DONE" },
 	{ BETWEEN, "BETWEEN" },
 	{ AND, "AND" },
 	{ ASSERT, "ASSERT" },
@@ -154,11 +183,11 @@ static struct {
 	{ STDDEV, "STDDEV" },
 	{ F_MAX, "F_MAX" },
 	{ F_MIN, "F_MIN" },
+	{ F_POW, "F_POW" },
+	{ SQRT, "SQRT" },
 	{ LOG, "LOG" },
 	{ LOGN, "LOGN" },
-	{ SQRT, "SQRT" },
 	{ EXP, "EXP" },
-	{ F_POW, "F_POW" },
 	{ GE, "GE" },
 	{ LE, "LE" },
 	{ EQ, "EQ" },
@@ -167,8 +196,8 @@ static struct {
 	{ B_OR, "B_OR" },
 	{ IMPLIES, "IMPLIES" },
 	{ IN, "IN" },
-	{ RECV, "RECV" },
 	{ SEND, "SEND" },
+	{ RECV, "RECV" },
 	{ TASK, "TASK" },
 	{ THREAD, "THREAD" },
 	{ NOTICE, "NOTICE" },
@@ -177,9 +206,9 @@ static struct {
 	{ STRING, "STRING" },
 	{ REGEX, "REGEX" },
 	{ INTEGER, "INTEGER" },
+	{ FLOAT, "FLOAT" },
 	{ IDENTIFIER, "IDENTIFIER" },
-	{ STRINGVAR, "STRINGVAR" },
-	{ PATHVAR, "PATHVAR" },
+	{ VARIABLE, "VARIABLE" },
 	{ -1, "" },
 };
 
@@ -200,32 +229,32 @@ void print_assert(FILE *fp, const Node *node) {
 	if (!node) { return; }
 	switch (node->type()) {
 		case NODE_INT:
-			fprintf(fp, "%d", ((IntNode*)node)->value);
+			fprintf(fp, "%d", dynamic_cast<const IntNode*>(node)->value);
 			break;
 		case NODE_FLOAT:
-			fprintf(fp, "%f", ((FloatNode*)node)->value);
+			fprintf(fp, "%f", dynamic_cast<const FloatNode*>(node)->value);
 			break;
 		case NODE_UNITS:
-			fprintf(fp, "%.2f%s", ((UnitsNode*)node)->amt, ((UnitsNode*)node)->name());
+			fprintf(fp, "%.2f%s", dynamic_cast<const UnitsNode*>(node)->amt, dynamic_cast<const UnitsNode*>(node)->name());
 			break;
 		case NODE_STRING:
-			fprintf(fp, "\"%s\"", ((StringNode*)node)->s);
+			fprintf(fp, "\"%s\"", dynamic_cast<const StringNode*>(node)->s);
 			break;
 		case NODE_REGEX:
-			fprintf(fp, "m/%s/", ((StringNode*)node)->s);
+			fprintf(fp, "m/%s/", dynamic_cast<const StringNode*>(node)->s);
 			break;
 		case NODE_IDENTIFIER:
-			fprintf(fp, "%s", ((IdentifierNode*)node)->sym->name.c_str());
+			fprintf(fp, "%s", dynamic_cast<const IdentifierNode*>(node)->sym->name.c_str());
 			break;
 		case NODE_LIST:{
-				ListNode *lnode = (ListNode*)node;										 	
+				const ListNode *lnode = dynamic_cast<const ListNode*>(node);										 	
 				for (unsigned int i=0; i<lnode->size(); i++) {
 					print_assert(fp, (*lnode)[i]);
 				}
 			}
 			break;
 		case NODE_OPERATOR:{
-			OperatorNode *onode = (OperatorNode*)node;
+			const OperatorNode *onode = dynamic_cast<const OperatorNode*>(node);
 			switch (onode->op) {
 				case RANGE:
 					fprintf(fp, "{");
@@ -364,29 +393,29 @@ void print_tree(const Node *node, int depth) {
 	if (!node) { printf("NULL\n"); return; }
 	switch (node->type()) {
 		case NODE_INT:
-			printf("int: %d\n", ((IntNode*)node)->value);
+			printf("int: %d\n", dynamic_cast<const IntNode*>(node)->value);
 			break;
 		case NODE_FLOAT:
-			printf("float: %f\n", ((FloatNode*)node)->value);
+			printf("float: %f\n", dynamic_cast<const FloatNode*>(node)->value);
 			break;
 		case NODE_UNITS:{
-			UnitsNode *unode = (UnitsNode*)node;
+			const UnitsNode *unode = dynamic_cast<const UnitsNode*>(node);
 			printf("units: %.2f %s\n", unode->amt, unode->name());
 			break;}
 		case NODE_STRING:
-			printf("string: \"%s\"\n", ((StringNode*)node)->s);
+			printf("string: \"%s\"\n", dynamic_cast<const StringNode*>(node)->s);
 			break;
 		case NODE_REGEX:
-			printf("regex: \"%s\"\n", ((StringNode*)node)->s);
+			printf("regex: \"%s\"\n", dynamic_cast<const StringNode*>(node)->s);
 			break;
 		case NODE_WILDCARD:
 			printf("wildcard: \"*\"\n");
 			break;
 		case NODE_IDENTIFIER:
-			printf("identifier: \"%s\"\n", ((IdentifierNode*)node)->sym->name.c_str());
+			printf("identifier: \"%s\"\n", dynamic_cast<const IdentifierNode*>(node)->sym->name.c_str());
 			break;
 		case NODE_LIST:{
-				ListNode *lnode = (ListNode*)node;										 	
+				const ListNode *lnode = dynamic_cast<const ListNode*>(node);
 				printf("list: %d\n", lnode->size());
 				for (unsigned int i=0; i<lnode->size(); i++) {
 					print_tree((*lnode)[i], depth+1);
@@ -394,7 +423,7 @@ void print_tree(const Node *node, int depth) {
 			}
 			break;
 		case NODE_OPERATOR:{
-			OperatorNode *onode = (OperatorNode*)node;
+			const OperatorNode *onode = dynamic_cast<const OperatorNode*>(node);
 			if (onode->op <= 255)
 				printf("operator %d (%c)\n", onode->op, onode->op);
 			else
@@ -408,11 +437,15 @@ void print_tree(const Node *node, int depth) {
 	}
 }
 
-std::map<std::string, Recognizer*> recognizers;
+std::map<std::string, RecognizerBase*> recognizers_by_name;
+std::vector<RecognizerBase*> recognizers;
 std::vector<Aggregate*> aggregates;
+bool this_path_ok = true;
 
-void add_recognizer(Recognizer *r) {
-	recognizers[r->name] = r;
+void add_recognizer(RecognizerBase *r) {
+	recognizers.push_back(r);
+	recognizers_by_name[r->name] = r;
+	//r->print();
 }
 
 void add_aggregate(Aggregate *a) {

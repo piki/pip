@@ -1,0 +1,38 @@
+
+validator BlockNotify {
+  thread Root("client0", 1) {
+    repeat between 1 and 1 {
+      notice(m/I am telling node client\d+ about block \d+/);
+      notice(m/I am sending node client\d+ block \d+/);
+      send(Peer);
+    }
+  }
+  thread Peer(*, {1,99}) {
+    recv(Peer); //should be ok for it
+    notice(m/client\d+ told me about block \d+/); 
+    repeat between 0 and 99 {
+      xor {
+      branch:
+        notice(m/I am requesting block \d+ from client\d+/);
+	send(Peer);
+	recv(Peer); 
+	notice(m/client\d+ gave me block \d+/); 
+      branch:
+	recv(Peer);
+	notice(m/Peer client\d+ asked about block \d+/);
+	send(Peer);
+      branch:
+	recv(Peer);
+	notice(m/Peer client\d+ requested block \d+/);
+        notice(m/I am sending node client\d+ block \d+/);
+	send(Peer);
+      branch:
+	notice(m/I have decided to tell client\d+ about \d+/);
+	send(Peer);
+      branch:
+        recv(Peer); 
+	notice(m/client\d+ told me about block \d+/); 
+      }
+    }
+  }
+}

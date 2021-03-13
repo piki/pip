@@ -1,9 +1,25 @@
+variables:
+make sure locals are flushed at the end of the thread.
+integrate them into the search.  this is kind of hard.
+fix the reduce/reduce issues.  they stem from the fact that $x=$y can
+reduce as a string or as an int.
+
+Optimize db reading more.
+Optimize message depth so it's not n^2.
+
+Does recursion work?  Can a called fragment call itself inside a repeat or
+xor?
+
+MatchSet optimization: combine [X,T,FC] and [X,F,FC] (ignore the
+resources=false) and sequences of [X,R,[N]]-[X,R,[N+M]] (combine into
+mandatory and optional futures).
+
+futures: implement done, fix futures-in-fragments
+
 rework accounting of validated, invalidated, and resource-failed paths.
 
 actually require send/recv to arrive at their named target thread classes
-variables
 hosts
-backtrack (non-greedy) search, maybe dp
 during?
 
 -----

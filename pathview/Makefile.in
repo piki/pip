@@ -1,0 +1,43 @@
+CFLAGS = -g -Wall -Werror
+CPPFLAGS = `@GLADEBIN@/pkg-config --cflags libglade-2.0` -I../expectations -I../dbfill \
+	-DBUILD_DIR=\"`pwd`\"
+PROGS = pathview plottest dagtest
+LDLIBS = -lm `@GLADEBIN@/pkg-config --libs libglade-2.0`
+LDFLAGS = -rdynamic
+OBJS = pathview.o plot.o dag.o pathtl.o \
+	pathstub.o \
+	../expectations/path.o ../expectations/exptree.o ../expectations/expect.o \
+	../expectations/expect.tab.o ../expectations/parsetree.o \
+	../expectations/aggregates.o ../expectations/pathfactory.o ../dbfill/rcfile.o \
+	../dbfill/pipdb.o
+
+ifeq ("@HAVE_MYSQL@","1")
+LDLIBS += -lmysqlclient
+LDFLAGS += @MYSQL@
+endif
+ifeq ("@HAVE_PCRE@","1")
+LDLIBS += -lpcre
+LDFLAGS += @PCRE@
+endif
+ifeq ("@HAVE_RSVG@","1")
+CPPFLAGS += `@RSVG@/pkg-config --cflags librsvg-2.0` -DHAVE_RSVG
+LDLIBS += `@RSVG@/pkg-config --libs librsvg-2.0`
+LDFLAGS += @PCRE@
+PROGS += graphtest
+OBJS += graph.o
+endif
+CXXFLAGS = $(CFLAGS) $(CPPFLAGS)
+
+all: $(PROGS)
+
+pathview: $(OBJS)
+	g++ $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
+plottest: plottest.o plot.o
+
+dagtest: dagtest.o dag.o
+
+graphtest: graphtest.o graph.o
+
+clean:
+	rm -f $(PROGS) *.o *.bak gmon.out

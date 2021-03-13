@@ -1,0 +1,3 @@
+optimize db writing more.
+
+annotrans should grok bz2 and gz.  Generalize bz2 and gz support.

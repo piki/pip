@@ -1,0 +1,165 @@
+AC_INIT(libannotate/annotate.c)
+
+AC_ARG_ENABLE(debug,  [  --enable-debug           turn on debugging [no]],
+  if test "$enable_debug" = "yes"; then
+    DEBUGFLAGS='-g -DDEBUG'
+  fi)
+
+GLADEBIN=/usr/bin
+AC_ARG_WITH(libglade, AC_HELP_STRING([--with-libglade=PFX],[prefix where libglade is installed (/usr) ]),
+  GLADEBIN=$withval/bin
+)
+
+MYSQL="-L/usr/lib -L/usr/lib/mysql"
+AC_ARG_WITH(mysql, AC_HELP_STRING([--with-mysql=PFX],[directory where MySQL library is installed (/usr/lib) ]),
+	MYSQL=-L$withval
+)
+
+RSVG=/usr/bin
+AC_ARG_WITH(rsvg, AC_HELP_STRING([--with-rsvg=PFX],[prefix where RSVG library is installed (/usr) ]),
+	RSVG=$withval/bin
+)
+
+PCRE=-L/usr/lib
+AC_ARG_WITH(pcre, AC_HELP_STRING([--with-pcre=PFX],[directory where Perl-compatible regex library is installed (/usr/lib) ]),
+	PCRE=-L$withval
+)
+
+PIKI=-L/usr/lib
+AC_ARG_WITH(piki, AC_HELP_STRING([--with-piki=PFX],[directory where libpiki is installed (/usr/lib) ]),
+	PIKI=-L$withval
+)
+
+AC_ARG_WITH(java, AC_HELP_STRING([--with-java=PFX],[prefix where include/jni.h can be found (/usr) ]),
+	HAVE_JAVA=1
+	if test "x$withval" = "xyes"; then
+		JAVA_HOME=/usr
+	else
+		JAVA_HOME=$withval
+	fi
+)
+
+if test `uname` = "Linux"; then
+	THREADS=-DTHREADS
+else
+	THREADS=""
+fi
+AC_ARG_WITH(threads, AC_HELP_STRING([--with-threads],[enable support for multithreaded annotations (yes on Linux, no on others)]),
+	if test "x$withval" = "xyes"; then
+		THREADS=-DTHREADS
+	else
+		THREADS=""
+	fi
+)
+
+AC_PROG_CC
+AC_PROG_CXX
+AC_PROG_CXXCPP
+AC_PROG_INSTALL
+AC_PROG_RANLIB
+
+AC_LANG_CPLUSPLUS
+
+AC_PATH_PROG(BISON, bison, no)
+AC_PROG_LEX
+if test x"$BISON" = "x:"; then
+	AC_MSG_WARN(*** Pathview and expectations will not be built (yacc not found) ***)
+fi
+if test x"$LEX" = "x:"; then
+	AC_MSG_WARN(*** Pathview and expectations will not be built (lex not found) ***)
+fi
+
+dnl Checks for libraries.
+AC_CHECK_LIB(glade-2.0, glade_init,
+	HAVE_GLADE=1,
+	AC_MSG_WARN(*** Pathview will not be built (libglade not found) ***),
+	`$GLADEBIN/pkg-config --libs libglade-2.0`)
+
+AC_CHECK_LIB(mysqlclient, mysql_init,
+	HAVE_MYSQL=1,
+	AC_MSG_WARN(*** MySQL support will not be built (libmysqlclient not found) ***),
+	$MYSQL)
+
+AC_CHECK_LIB(rsvg-2, rsvg_handle_new,
+	HAVE_RSVG=1,
+	AC_MSG_WARN(*** Pathview graph diagrams will not be built (librsvg not found) ***),
+	`$RSVG/pkg-config --libs librsvg-2.0`)
+
+AC_CHECK_LIB(pcre, pcre_compile,
+	HAVE_PCRE=1,
+	AC_MSG_WARN(*** expectations and pathview will not be built (libpcre not found) ***),
+	$PCRE)
+
+AC_CHECK_LIB(piki, sock_connect,
+	HAVE_PIKI=1,
+	AC_MSG_WARN(*** loglistener will not be built (you can safely ignore this) ***),
+	$PIKI)
+
+if ! test -z "$JAVA_HOME"; then
+	AC_CHECK_HEADER($JAVA_HOME/include/jni.h,,
+		AC_MSG_WARN(*** jni.h not found: Java bindings will not be built ***)
+		unset JAVA_HOME
+	)
+fi
+if ! test -z "$JAVA_HOME"; then
+	PATH=$PATH:$JAVA_HOME/bin
+	AC_PATH_PROG(JAVAC_BIN,javac,no)
+	if test x"$JAVAC_BIN" != "xno"; then
+		LIBANNOTATE_EXTRA_PROGS="libjannotate.so AnnTest.class"
+		LIBANNOTATE_EXTRA_DIRS=annotate
+	else
+		AC_MSG_WARN(*** javac does not seem to work: Java bindings will not be built ***)
+		unset JAVA_HOME
+	fi
+fi
+
+DIRS="libannotate dbfill"
+if test x"$HAVE_PIKI" != "x"; then
+	PIKI="$PIKI -lpiki"
+fi
+if test x"$HAVE_PCRE" != "x" -a x"$BISON" != "x:" -a x"$LEX" != "x:"; then
+	DIRS="$DIRS expectations"
+	if test x"$HAVE_GLADE" != "x"; then
+		DIRS="$DIRS pathview"
+	fi
+fi
+
+AC_SUBST(GLADEBIN)
+AC_SUBST(MYSQL)
+AC_SUBST(HAVE_MYSQL)
+AC_SUBST(RSVG)
+AC_SUBST(HAVE_RSVG)
+AC_SUBST(PCRE)
+AC_SUBST(HAVE_PCRE)
+AC_SUBST(PIKI)
+AC_SUBST(HAVE_PIKI)
+AC_SUBST(LEX)
+AC_SUBST(BISON)
+AC_SUBST(DIRS)
+AC_SUBST(LIBANNOTATE_EXTRA_PROGS)
+AC_SUBST(LIBANNOTATE_EXTRA_DIRS)
+AC_SUBST(JAVA_HOME)
+AC_SUBST(HAVE_JAVA)
+AC_SUBST(THREADS)
+
+#AC_OUTPUT(Makefile dbfill/Makefile expectations/Makefile libannotate/Makefile pathview/Makefile magwitch/Makefile)
+AC_OUTPUT(Makefile dbfill/Makefile expectations/Makefile libannotate/Makefile pathview/Makefile)
+
+if false; then
+echo GLADEBIN: $GLADEBIN
+echo MYSQL: $MYSQL
+echo RSVG: $RSVG
+echo PCRE: $PCRE
+echo PIKI: $PIKI
+echo BISON: $BISON
+echo LEX: $LEX
+echo HAVE_GLADE: $HAVE_GLADE
+echo HAVE_MYSQL: $HAVE_MYSQL
+echo HAVE_PCRE: $HAVE_PCRE
+echo HAVE_PIKI: $HAVE_PIKI
+echo JAVAC_BIN: $JAVAC_BIN
+echo JAVA_HOME: $JAVA_HOME
+echo DIRS: $DIRS
+echo LIBANNOTATE_EXTRA_PROGS: $LIBANNOTATE_EXTRA_PROGS
+#echo LIBANNOTATE_EXTRA_DIRS: $LIBANNOTATE_EXTRA_DIRS
+fi

@@ -1,0 +1,590 @@
+// *************************************************************************
+// *  Write paths
+// *************************************************************************
+
+validator Write3Others {
+	thread Root(*, 1) {      // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Write") {
+			// Send 3 "order" messages; need two replies
+			repeat 3 { send(Peer); }
+			repeat 2 {
+				recv(Peer);
+				task("quorumrpc::OrderReply");
+			}
+			future F_Order {
+				recv(Peer);
+				task("quorumrpc::OrderReply");
+			}
+			// Send 3 "write" messages; need two replies
+			repeat 3 { send(Peer); }
+			repeat 2 {
+				recv(Peer);
+				task("quorumrpc::Write2Reply");
+			}
+			future {
+				done(F_Order);
+				recv(Peer);
+				task("quorumrpc::Write2Reply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 3) {
+		recv(Coordinator);
+		task("quorumrpc::OrderReq") {
+			send(Coordinator);
+		}
+		recv(Coordinator);
+		task("quorumrpc::Write2Req") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator WriteMeAny {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Write") {
+			// Send 3 "order" messages; need two replies
+			future F_Order {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::OrderReq") {
+					send(Coordinator);
+					recv(Coordinator);
+					task("quorumrpc::OrderReply");
+				}
+			}
+			repeat 2 { send(Peer); }
+			done(F_Order);
+			recv(Peer);
+			task("quorumrpc::OrderReply");
+			future {
+				recv(Peer);
+				task("quorumrpc::OrderReply");
+			}
+			// Send 3 "write" messages; need two replies
+			future F_Write {
+				send(Peer);
+				recv(Coordinator);
+				task("quorumrpc::Write2Req") {
+					send(Coordinator);
+					recv(Peer);
+					task("quorumrpc::Write2Reply");
+				}
+			}
+			repeat 2 { send(Peer); }
+			done(F_Write);
+			recv(Peer);
+			task("quorumrpc::Write2Reply");
+			future {
+				recv(Peer);
+				task("quorumrpc::Write2Reply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::OrderReq") {
+			send(Coordinator);
+		}
+		recv(Coordinator);
+		task("quorumrpc::Write2Req") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator WriteMe1st {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Write") {
+			// Send 3 "order" messages; need two replies
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::OrderReq") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::OrderReply");
+			}
+			repeat 2 { send(Peer); }
+			recv(Peer);
+			task("quorumrpc::OrderReply");
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::OrderReply");
+			}
+			// Send 3 "write" messages; need two replies
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::Write2Req") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::Write2Reply");
+			}
+			repeat 2 { send(Peer); }
+			recv(Peer);
+			task("quorumrpc::Write2Reply");
+			future F2 {
+				recv(Peer);
+				task("quorumrpc::Write2Reply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::OrderReq") {
+			send(Coordinator);
+		}
+		recv(Coordinator);
+		task("quorumrpc::Write2Req") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator WriteMe2nd {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Write") {
+			// Send 3 "order" messages; need two replies
+			send(Peer);
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::OrderReq") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::OrderReply");
+			}
+			send(Peer);
+			recv(Peer);
+			task("quorumrpc::OrderReply");
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::OrderReply");
+			}
+			// Send 3 "write" messages; need two replies
+			send(Peer);
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::Write2Req") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::Write2Reply");
+			}
+			send(Peer);
+			recv(Peer);
+			task("quorumrpc::Write2Reply");
+			future F2 {
+				recv(Peer);
+				task("quorumrpc::Write2Reply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::OrderReq") {
+			send(Coordinator);
+		}
+		recv(Coordinator);
+		task("quorumrpc::Write2Req") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator WriteMe3rd {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Write") {
+			// Send 3 "order" messages; need two replies
+			repeat 2 { send(Peer); }
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::OrderReq") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::OrderReply");
+			}
+			recv(Peer);
+			task("quorumrpc::OrderReply");
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::OrderReply");
+			}
+			// Send 3 "write" messages; need two replies
+			repeat 2 { send(Peer); }
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::Write2Req") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::Write2Reply");
+			}
+			recv(Peer);
+			task("quorumrpc::Write2Reply");
+			future F2 {
+				recv(Peer);
+				task("quorumrpc::Write2Reply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::OrderReq") {
+			send(Coordinator);
+		}
+		recv(Coordinator);
+		task("quorumrpc::Write2Req") {
+			send(Coordinator);
+		}
+	}
+}
+
+fragment recognizer Write {
+	task("quorumrpc::Write2Reply");
+}
+
+recognizer UnmatchedWrite : Write && !Write3Others && !WriteMeAny;
+
+// *************************************************************************
+// *  Read paths
+// *************************************************************************
+
+validator Read3Others {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Read") {
+			repeat 3 {
+				send(Peer);
+			}
+			repeat 2 {
+				recv(Peer);
+				task("quorumrpc::ReadReply");
+			}
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::ReadReply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 3) {
+		recv(Coordinator);
+		task("quorumrpc::ReadReq") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator ReadMeAny {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Read") {
+			future F_Read {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::ReadReq") {
+					send(Coordinator);
+					recv(Coordinator);
+					task("quorumrpc::ReadReply");
+				}
+			}
+			repeat 2 { send(Peer); }
+			done(F_Read);
+			recv(Peer);
+			task("quorumrpc::ReadReply");
+			future {
+				recv(Peer);
+				task("quorumrpc::ReadReply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::ReadReq") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator ReadMe1st {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Read") {
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::ReadReq") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::ReadReply");
+			}
+			repeat 2 { send(Peer); }
+			recv(Peer);
+			task("quorumrpc::ReadReply");
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::ReadReply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::ReadReq") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator ReadMe2nd {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Read") {
+			send(Peer);
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::ReadReq") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::ReadReply");
+			}
+			send(Peer);
+			recv(Peer);
+			task("quorumrpc::ReadReply");
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::ReadReply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::ReadReq") {
+			send(Coordinator);
+		}
+	}
+}
+
+validator ReadMe3rd {
+	thread Root(*, 1) {    // root
+		send(Coordinator);
+		recv(Coordinator);
+	}
+	thread Coordinator(*, 1) {
+		recv(Root);
+		task("fabrpc::Read") {
+			repeat 2 { send(Peer); }
+			send(Coordinator);
+			recv(Coordinator);
+			task("quorumrpc::ReadReq") {
+				send(Coordinator);
+				recv(Coordinator);
+				task("quorumrpc::ReadReply");
+			}
+			recv(Peer);
+			task("quorumrpc::ReadReply");
+			future F1 {
+				recv(Peer);
+				task("quorumrpc::ReadReply");
+			}
+		}
+		send(Root);
+	}
+	thread Peer(*, 2) {
+		recv(Coordinator);
+		task("quorumrpc::ReadReq") {
+			send(Coordinator);
+		}
+	}
+}
+
+fragment recognizer Read {
+	task("quorumrpc::ReadReply");
+}
+
+recognizer UnmatchedRead : Read && !Read3Others && !ReadMeAny;
+
+recognizer ReadMeBuggy : ReadMeAny && !ReadMe3rd;
+recognizer WriteMeBuggy : WriteMeAny && !WriteMe3rd;
+
+// *************************************************************************
+// *  Paxos and membership paths
+// *************************************************************************
+
+validator Paxos {
+	thread Initiator(*, 1) {   // root
+		task("paxos::Context::tryReq") {
+			repeat 2 {
+				send(Initiator);
+				recv(Initiator);
+				task("paxosrpc::ReserveBallot");
+				send(Initiator);
+				recv(Initiator);
+				repeat 3 { send(Peer); }
+				repeat 2 { recv(Peer); }
+				future F_Reserve { recv(Peer); }
+			}
+			send(Initiator);
+			recv(Initiator);
+			task("paxosrpc::PassBallot");
+			send(Initiator);
+			recv(Initiator);
+			repeat 3 { send(Peer); }
+			repeat 2 { recv(Peer); }
+			future F_Pass { recv(Peer); }
+			send(Initiator);
+			recv(Initiator);
+			task("paxosrpc::CommitBallot");
+			send(Initiator);
+			recv(Initiator);
+			repeat 3 { send(Peer); }
+			repeat 2 { recv(Peer); }
+			future F_Commit { recv(Peer); }
+		}
+	}
+	thread Peer(*, 3) {
+		repeat 2 {
+			recv(Initiator);
+			task("paxosrpc::ReserveBallot");
+			send(Initiator);
+		}
+		recv(Initiator);
+		task("paxosrpc::PassBallot");
+		send(Initiator);
+		recv(Initiator);
+		task("paxosrpc::CommitBallot");
+		send(Initiator);
+	}
+}
+
+validator MembershipSendJoin {
+	thread Initiator(*, 1) {   // root
+		task("membership::SendJoinMessages") {
+			future { send(Initiator); }
+			repeat 3 { send(Peer); }
+		}
+		recv(Initiator);
+		task("membershiprpc::Join");
+	}
+	thread Peer(*, 3) {
+		recv(Initiator);
+		task("membershiprpc::Join");
+	}
+}
+
+validator MembershipHeartbeat {
+	thread Sender(*, 1) {   // root
+		task("membership::IamAliveTimeout") {
+			send(Receiver);
+		}
+	}
+	thread Receiver(*, 1) {
+		recv(Sender);
+		task("membershiprpc::Heartbeat");
+	}
+}
+
+validator MembershipNewGroup {
+	thread Initiator(*, 1) {   // root
+		task("membership::SendNewGroupMessages") {
+			repeat between 0 and 5 {
+				send(Peer);
+				future {
+					recv(t_3);
+					task("membershiprpc::Accept");
+				}
+			}
+		}
+	}
+	thread Peer(*, {0,5}) {
+		recv(Initiator);
+		task("membershiprpc::NewGroup") {
+			send(Initiator);
+		}
+	}
+}
+
+validator MembershipStatusUpdate {
+	thread Initiator(*, 1) {
+		task("membership::StatusUpdateTimeout") {
+			send(Peer);
+		}
+	}
+	thread Peer(*, {0,5}) {
+		recv(Initiator);
+		task("membershiprpc::StatusUpdate") {
+			send(Peer);
+		}
+	}
+	thread Leaf(*, 1) {
+		recv(Peer);
+		task("membershiprpc::StatusUpdate");
+	}
+}
+
+validator MembershipSendProbes {
+	thread Initiator(*, 1) {
+		task("membership::SendProbeMessages") {
+			repeat between 0 and 5 { send(Peer); }
+		}
+		// some of the messages may be to ourself
+		repeat between 0 and 5 {
+			recv(Initiator);
+			task("membershiprpc::Probe");
+		}
+	}
+	thread Peer(*, {0,5}) {
+		recv(Initiator);
+		task("membershiprpc::Probe");
+	}
+}
+
+validator MembershipInit {
+	thread Root(*, 1) {
+		task("membership::Init");
+	}
+}

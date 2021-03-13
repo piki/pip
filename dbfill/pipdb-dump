@@ -1,0 +1,46 @@
+#!/usr/bin/perl -w
+
+my $fn = $ARGV[0] || "pipdb";
+open(DB, "<$fn") || die "$fn: $!";
+read(DB, $hdr, 11*4);
+($magic, $version, $first_ts_sec, $first_ts_usec, $last_ts_sec, $last_ts_usec,
+	$thread_ofs, $nthreads, $task_ofs, $ntasks, $paths_ofs, $npaths) =
+	unpack("A3CV10", $hdr);
+print "Version: $magic v.$version\n";
+printf "Time range: %d.%06d - %d.%06d\n", $first_ts_sec, $first_ts_usec, $last_ts_sec, $last_ts_usec;
+printf "$nthreads threads at 0x%x\n", $thread_ofs;
+printf "$ntasks tasks at 0x%x\n", $task_ofs;
+printf "$npaths paths at 0x%x\n", $paths_ofs;
+print "\n";
+
+
+$next_ofs = $thread_ofs;
+foreach my $T (1..$nthreads) {
+	seek(DB, $next_ofs, 0);
+	read(DB, $thr, 542);
+	($host, $prog, $pid, $tid, $ppid, $uid, $start_sec, $start_usec, $tz) =
+		unpack("Z*Z*V7", $thr);
+	printf "thread[$T] = \"$host\" \"$prog\" pid=$pid tid=$tid ppid=$ppid uid=$uid ts=%d.%06d $tz\n", $start_sec, $start_usec;
+	$next_ofs += length($host) + length($prog) + 7*4 + 2;
+}
+
+
+seek(DB, $task_ofs, 0);
+read(DB, $tsk, $paths_ofs-$task_ofs);
+$next_ofs = 0;
+foreach my $T (1..$ntasks) {
+	($name, $nevents) = unpack("Z*V", substr($tsk, $next_ofs));
+	$next_ofs += length($name) + 1 + 4;
+	@offsets = unpack("V$nevents", substr($tsk, $next_ofs));
+	$next_ofs += 4*$nevents;
+	print "task[$T] = \"$name\" { " . (join', ',map{sprintf"0x%x",$_}@offsets) . " }\n";
+}
+
+
+seek(DB, $paths_ofs, 0);
+foreach my $P (1..$npaths) {
+	read(DB, $pth, 2);  $namelen = unpack "v", $pth;
+	read(DB, $pth, $namelen + 3*4);
+	($name, $taskofs, $noticeofs, $pathofs) = unpack("a${namelen}V3", $pth);
+	printf "path[$P] = [$namelen]{%08x} 0x%x 0x%x 0x%x\n", unpack("V",$name), $taskofs, $noticeofs, $pathofs;
+}

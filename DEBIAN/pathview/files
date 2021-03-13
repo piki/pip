@@ -1,0 +1,2 @@
+pathview/pathview.glade		usr/share/pip/pathview.glade
+pathview/pathview		usr/bin/pathview		strip

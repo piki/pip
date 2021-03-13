@@ -1,18 +1,76 @@
 /*
  * SS Buglist and working progress:
  * - receiving data message destined for someone else (data_path_req)
+ *   This was one of the first things I noticed when tracing multicast paths -- that sometimes
+ *   data was being delivered to the wrong place.  At this point I didn't diagnose it -- just find its occurrence.
+ *   This would have been present in MACEDON too.
+ *
  * - GenericTreeMulticast doesn't let SS "forward" data if it's destined for the groupId rather than me.  Possible fix: use nexthop instead
+ *   I had written generic tree multicasting code.  It would guard its forward handler with a check to make sure that
+ *   the destination was the local machine (so upcalls in the middle of overlays would not be handled).  But this 
+ *   guard prevented the multicasts from being received forwarded when being sent to the groupId.  This tended not
+ *   to be a problem much of the time since much of the time the source was a member of a tree (and would therefore 
+ *   forward by spreading it).  (The fix was to check if the next hop was me rather than the destination).
+ *
  * - getParent returns NONE from client0 during temporary periods of no parent.  Fix: use avoidKids to avoid client0 being part of join anyway
+ *   We later made a change to the API where if have no parent in a tree you are joined,
+ *   a call to getParent returns the null MaceKey.  This caused some sends to fail (because it was relying on forwarding
+ *   the multicast to the root via "getParent", which used to return the groupId if you were joined but with no parent).
+ *   To fix this I set up scribe to avoid kids if you had called createGroup (instead of joinGroup).  This way, the source
+ *   was only a member of the tree if it was the root of the tree.  This was better anyway, as we have (for a while now) 
+ *   wanted a mechanism to do this without hard-coding into the services a way to tell if you were the source.  In any 
+ *   case, this too is a Mace-only problem
+ *
  * - Pushdown code was buggy -- pushing down kids on the wrong group -- causing too many kids
+ *   Symptom was forwarding a multicast message to too many people.  Cause was a bug in the code where I was passing in 
+ *   the wrong value for groupId on the pushdown call, resulting in too many kids.  (Mace-only)
+ *
  * - splitstream not properly registered for verify handlers -- caused Pushdown bug a second time. (previously known but not mattered)
+ *   I later changed splitstream code to make the join paths better by not temporarily accepting the child if we
+ *   were going to immediately push it down.  But the way I did this exposed the fact that splitstream had not 
+ *   properly set itself as the active join verifier with Scribe, and the code wasn't used.  Result -- too many kids again.
+ *   (Mace-only)
+ *
  * - Pastry forwarding was not properly passing in the hash id for next hop (previously known but not mattered)
+ *   Looking at the nextHop in GenericTreeMulticast (or elsewhere) was wrong because the IPV4 address was being passed 
+ *   in instead of the SHA160 address comparisons against the local address (for bug #2) then failed.
+ *
  * - duplicate data delivers.
+ *   Many multicast paths failed due to data being delivered to the same node twice.  Some were a result of 
+ *   bad pastry forwarding, others are due to bad tree construction or tree changes.  Not fully diagnosed
+ *   or fixed, but I am now very aware of it.
+ *
  * - data messages sent and not received
+ *   I then discovered that sometimes data sending from a node goes nowhere.  Given the ample spare bandwidth I was using
+ *   at the time this shouldn't have happened. 
+ *
  * - notifyIdSpaceChanged on a multicast path
+ *   notifyIdSpaceChanged should never be called on a multicast path.  notifyIdSpaceChanged implies that 
+ *   you just received a message from a node who when you add state for it which causes your id space 
+ *   to change (receiving a multicast message from a node unknown to you but should be adjacent to you
+ *   in your leafset).
+ *   
  * - avoidKids bug: join was accepting a child when it had no state even if group was to avoid kids
+ *   This was a bug in the avoidKids implementation -- the source was still accepting a child in the 
+ *   case where it had no state.  I was storing avoidKids in the group state, but then purging it
+ *   when I pushed the group away.  The fix was to keep a separate storage to track groups to avoid
+ *   kids in.
+ *
  * - mapping messages not sent when message not forwarded
+ *   data_path_request messages are supposed to be responded to with mapping messages (for future
+ *   direct routing).  But if a higher layer told pastry not to forward the message, it would also not
+ *   return a mapping message, causing future routing to also be slow.
+ *
  * - notifyIdSpaceChanged before update to address cache
+ *   I was notifying that the id space changed before I updated the address cache.  As a result,
+ *   direct routing which occured as a result of idspacechanged would fail to reach the proper destination,
+ *   since usually the stale map entry pointed to me.  
+ *
  * - mapping seems "out of date" -- added verify to help prevent this
+ *   Still diagnosing problems with the mapping (it's actually been re-written now).  In the interim, I 
+ *   added some code which updates the mappings with every node I learn about.  I never did figure out 
+ *   what exactly happened here, but I completely re-wrote how this code worked since its the cause of 
+ *   so many bugs.
  */
 fragment invalidator TaskTooSlow {
   task(*) limit(REAL_TIME,{50ms+}) {

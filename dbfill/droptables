@@ -1,0 +1,36 @@
+#!/usr/bin/perl
+
+use DBI;
+
+rcfile_init();
+
+$pat = shift;
+
+$host = $config{'db.host'};
+if ($host) { $host = "\@$host"; }
+$dbh = DBI->connect("DBI:mysql:$config{'db.name'}$host", $config{"db.user"}, $config{"db.password"});
+$query = $dbh->prepare("show tables");
+$query->execute();
+while (($t) = $query->fetchrow()) {
+	if (!$pat || $t =~ /$pat/) {
+		print "Dropping table \"$t\"\n";
+		$dbh->prepare("drop table $t")->execute();
+	}
+}
+
+
+sub rcfile_init {
+	my $filename = "$ENV{HOME}/.piprc";
+	open(RCFILE, "<$filename") || die "$filename: $!";
+
+	while (<RCFILE>) {
+		chomp;
+		s/#.*//;
+		next if !/\S/;
+		my ($key, $value) = /^([^=]+)=(.*)$/;
+		$key =~ s/^\s*(.*?)\s*$/$1/;
+		$value =~ s/^\s*(.*?)\s*$/$1/;
+		$config{$key} = $value;
+	#	print "key=\"$key\" value=\"$value\"\n";
+	}
+}

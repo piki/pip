@@ -1,0 +1,11 @@
+Task names+counts, thread pool names+counts, graph data should all be
+limited by time sliders.
+
+
+"Log browser": see nearby events by several criteria: time window, same
+path, same thread, ...?
+
+Smarter "Debug mismatch."  Maybe a hierarchy corresponding to the search
+tree.  Maybe just showing the longest matching path and where it ended.
+
+Show results of aggregates/asserts.

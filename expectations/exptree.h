@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 #ifndef EXPTREE_H
 #define EXPTREE_H
 
@@ -9,9 +14,10 @@
 #include "parsetree.h"
 #include "path.h"
 
-enum ExpEventType { EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT, EXP_XOR, EXP_SPLIT, EXP_CALL, EXP_ANY };
-
-class Recognizer;
+enum ExpEventType {
+	EXP_TASK, EXP_NOTICE, EXP_MESSAGE_SEND, EXP_MESSAGE_RECV, EXP_REPEAT,
+	EXP_XOR, EXP_CALL, EXP_ANY, EXP_ASSIGN, EXP_EVAL, EXP_FUTURE, EXP_DONE
+};
 
 class Match {
 public:
@@ -81,6 +87,52 @@ private:
 };
 typedef std::vector<Limit*> LimitList;
 
+class FutureCounts {
+public:
+	FutureCounts(int _sz) : sz(_sz), _total(0) {
+		data = new unsigned short[sz];
+		memset(data, 0, sz*sizeof(unsigned short));
+	}
+	FutureCounts(const FutureCounts &cp) : sz(cp.sz), _total(cp._total) {
+		data = new unsigned short[sz];
+		memcpy(data, cp.data, sz*sizeof(unsigned short));
+	}
+	~FutureCounts(void) { delete[] data; }
+	inline void inc(int n) { data[n]++; _total++; }
+	inline void dec(int n) { data[n]--; _total--; }
+	inline unsigned short operator[](int n) const { return data[n]; }
+	inline unsigned short total(void) const { return _total; }
+	inline bool operator< (const FutureCounts &other) const {
+		assert(sz == other.sz);
+		return memcmp(data, other.data, sz*sizeof(unsigned short)) < 0;
+	}
+	unsigned short sz;
+private:
+	unsigned short _total;
+	unsigned short *data;
+};
+
+class ExpMatch {
+public:
+	ExpMatch(int _count, bool _resources, const FutureCounts &fc) : futures(fc) {
+		data = _count & 0x7FFF;
+		if (_resources) data |= 0x8000;
+	}
+	inline unsigned int count() const { return data & 0x7FFF; }
+	inline bool resources() const { return (data & 0x8000) != 0; }
+	inline bool operator< (const ExpMatch &other) const {
+		if (data < other.data) return true;
+		if (data > other.data) return false;
+		return futures < other.futures;
+	}
+
+	FutureCounts futures;
+protected:
+	unsigned short data;
+};
+typedef std::set<ExpMatch> MatchSet;
+
+class FutureTable;
 class ExpEvent {
 public:
 	virtual ~ExpEvent(void) {}
@@ -88,29 +140,13 @@ public:
 	virtual ExpEventType type(void) const = 0;
 
 	// checks to see if this Event can match 0 or more path events, starting
-	// at offset "ofs."  If yes, returns the number matched.  If no, returns
-	// -1.
-	// !! we need a way to return a continuation, i.e., for recursive
-	// searches if we could have matched a varying number
-	virtual int check(const std::vector<PathEvent*> &test, unsigned int ofs,
-			bool *resources, int max_level) const = 0;
+	// at offset "ofs."  Returns a set of all possible match lengths (empty
+	// set on failed match).
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const = 0;
+
+	bool base_check(const PathEventList &test, unsigned int ofs, int needed, PathEventType type, const char *name) const;
 };
 typedef std::vector<ExpEvent*> ExpEventList;
-
-class ExpThread {
-public:
-	ExpThread(const OperatorNode *onode);   // standard thread, in recognizer
-	ExpThread(const ListNode *limit_list, const ListNode *statement);  // fragment thread
-	~ExpThread(void);
-	void print(FILE *fp) const;
-	// not const, because it increments check itself
-	bool check(const PathEventList &test, int ofs, bool fragment, bool *resources, int max_level);
-
-	int min, max, count;
-	LimitList limits;
-	ExpEventList events;
-};
-typedef std::map<std::string, ExpThread*> ExpThreadSet;
 
 class ExpTask : public ExpEvent {
 public:
@@ -118,8 +154,7 @@ public:
 	virtual ~ExpTask(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_TASK; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 
 	Match *name;
 	LimitList limits;
@@ -132,8 +167,7 @@ public:
 	virtual ~ExpNotice(void) { delete name; }
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_NOTICE; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 
 	Match *name;
 };
@@ -144,8 +178,7 @@ public:
 	virtual ~ExpMessageSend(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_MESSAGE_SEND; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 	LimitList limits;
 };
 
@@ -154,8 +187,7 @@ public:
 	ExpMessageRecv(const OperatorNode *onode);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_MESSAGE_RECV; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 	LimitList limits;
 };
 
@@ -165,10 +197,9 @@ public:
 	virtual ~ExpRepeat(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_REPEAT; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 
-	int min, max;
+	Node *min, *max;
 	ExpEventList children;
 };
 
@@ -178,8 +209,7 @@ public:
 	virtual ~ExpXor(void);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_XOR; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 
 	std::vector<ExpEventList> branches;
 };
@@ -189,7 +219,7 @@ public:
 	ExpCall(const OperatorNode *onode);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_CALL; }
-	virtual int check(const PathEventList &test, unsigned int ofs, bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 
 	std::string target;
 };
@@ -199,34 +229,137 @@ public:
 	ExpAny(const OperatorNode *onode);
 	virtual void print(FILE *fp, int depth) const;
 	virtual ExpEventType type(void) const { return EXP_ANY; }
-	virtual int check(const PathEventList &test, unsigned int ofs,
-			bool *resources, int max_level) const;
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 };
 
-class Recognizer {
+class ExpAssign : public ExpEvent {
 public:
-	Recognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements, bool _complete, int _pathtype);
-	~Recognizer(void);
-	void print(FILE *fp = stdout) const;
-	bool check(const Path *path, bool *resources);
-	static int check(const PathEventList &test, const ExpEventList &list,
-			unsigned int ofs, bool *resources, int max_level);
+	ExpAssign(const OperatorNode *onode);
+	virtual ~ExpAssign(void);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_ASSIGN; }
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
+
+	IdentifierNode *ident;
+	ExpEventList child;
+};
+
+class ExpEval : public ExpEvent {
+public:
+	ExpEval(const Node *node);
+	virtual ~ExpEval(void);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_EVAL; }
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
+
+	const Node *node;
+};
+
+class ExpFuture : public ExpEvent {
+public:
+	ExpFuture(const OperatorNode *onode);
+	virtual ~ExpFuture(void);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_FUTURE; }
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
 
 	std::string name;
-	ExpThreadSet threads;
-	ExpThread *root;
-	LimitList limits;
-	bool complete;    // match full paths (true) or fragments (false)
-	int pathtype;     // validator, invalidator, or recognizer?
-	int max_level;    // only expect events at <= max_level
+	ExpEventList children;
+	int ft_pos;
+};
 
+class FutureTable {
+public:
+	void inline add(ExpFuture *future) { data.push_back(future); by_name[future->name] = future; }
+	const inline ExpFuture *find(const std::string &name) const { return by_name.find(name)->second; }
+	const inline ExpFuture *operator[] (unsigned int idx) const { return data[idx]; }
+	const inline unsigned int count(void) const { return data.size(); }
+private:
+	std::vector<ExpFuture*> data;
+	std::map<std::string, ExpFuture*> by_name;
+};
+
+class ExpDone : public ExpEvent {
+public:
+	ExpDone(const OperatorNode *onode);
+	virtual void print(FILE *fp, int depth) const;
+	virtual ExpEventType type(void) const { return EXP_DONE; }
+	virtual MatchSet check(const PathEventList &test, unsigned int ofs, const FutureTable &ft, const FutureCounts &fc) const;
+
+	std::string name;
+};
+
+class ExpThread {
+public:
+	ExpThread(const OperatorNode *onode);   // standard thread, in recognizer
+	ExpThread(const ListNode *limit_list, const ListNode *statement);  // fragment thread
+	~ExpThread(void);
+	void print(FILE *fp) const;
+	// not const, because it increments count itself
+	bool check(const PathEventList &test, unsigned int ofs, bool fragment, bool *resources);
+
+	int min, max, count;
+	LimitList limits;
+	ExpEventList events;
+
+protected:
+	FutureTable ft;
+	void find_futures(ExpEventList &list);
+	void find_futures(ExpEventList &list, int *seq);
+};
+typedef std::map<std::string, ExpThread*> ExpThreadSet;
+
+class RecognizerBase {
+public:
+	RecognizerBase(const IdentifierNode *ident, int _pathtype);
+	virtual ~RecognizerBase(void) {}
+	virtual void print(FILE *fp = stdout) const = 0;
+	// probably OK, and much more efficient, to key match_map on Symbol*, not std::string
+	virtual bool check(const Path *path, bool *resources, std::map<std::string, bool> *match_map) = 0;
+	virtual const char *type_string(void) const = 0;
+	virtual void tally(const Path *path);
+
+	std::string name;
+	int pathtype;     // validator, invalidator, or recognizer?
 	int instances, unique;
+
 	Counter real_time, utime, stime, cpu_time, busy_time, major_fault;
 	Counter minor_fault, vol_cs, invol_cs, latency, size, messages, depth;
 	Counter hosts, threadcount;
 };
 
+class SetRecognizer : public RecognizerBase {
+public:
+	SetRecognizer(const IdentifierNode *ident, const Node *_bool_expr, int _pathtype);
+	virtual void print(FILE *fp = stdout) const;
+	virtual bool check(const Path *path, bool *resources, std::map<std::string, bool> *match_map);
+	virtual const char *type_string(void) const { return "set"; }
+	const Node *bool_expr;
+};
+
+class PathRecognizer : public RecognizerBase {
+public:
+	PathRecognizer(const IdentifierNode *ident, const ListNode *limit_list, const ListNode *statements, bool _complete, int _pathtype);
+	~PathRecognizer(void);
+	virtual void print(FILE *fp = stdout) const;
+	virtual bool check(const Path *path, bool *resources, std::map<std::string, bool> *match_map);
+	static MatchSet vlistmatch(const ExpEventList &list, unsigned int eofs,
+			const PathEventList &test, unsigned int ofs,
+			const FutureTable &ft, const FutureCounts &fc,
+			bool match_all,           // must consume all path events
+			bool match_all_futures,   // must satisfy all futures
+			bool find_one,            // return after finding any one match
+			bool allow_futures);      // bother to match futures at all?
+	virtual const char *type_string(void) const { return complete ? "complete" : "fragment"; }
+
+	ExpThreadSet threads;
+	ExpThread *root;
+	LimitList limits;
+	bool complete;    // match full paths (true) or fragments (false)
+};
+
 const char *path_type_to_string(int pathtype);
 extern bool debug_failed_matches;
+extern std::string debug_buffer;
 
 #endif

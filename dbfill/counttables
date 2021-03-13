@@ -1,0 +1,10 @@
+#!/bin/sh
+
+for i in threads notices paths messages tasks; do
+	echo -n "$i: "
+	C=`echo "SELECT COUNT(*) FROM ${1}_$i" | mysql -u root anno | tail +2`
+	echo $C
+	TOT=$[$TOT+$C]
+done
+echo ==============
+echo Total: $TOT

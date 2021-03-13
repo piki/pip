@@ -1,63 +1,11 @@
 fragment recognizer SPSub {
 	xor {
+		branch:   // actor not found
+		branch:   // cache hit
+			notice("cache hit");
 		branch:   // cache miss
 			notice("cache miss");
 			task("shortest path") limit(CPU_TIME, 1.0s);
-		branch:   // cache hit
-			notice("cache hit");
-		branch:   // actor not found
-	}
-}
-fragment recognizer SPSub0 {
-	xor {
-		branch:   // cache miss
-			task("shortest path") limit(CPU_TIME, 1.0s);
-		branch:   // cache hit or actor not found
-	}
-}
-
-validator Link0 {
-	level(0);
-	limit(DEPTH, {=3});
-	limit(MESSAGES, {=2});
-	limit(THREADS, {=2});
-	limit(HOSTS, {1,2});
-	thread Client(*, 1) {
-		task("link") {
-			send(Server);
-			recv(Server);
-		}
-	}
-	thread Server(*, 1) {
-		task("link") {
-			recv(Client);
-			call(SPSub0);
-			send(Client);
-		}
-	}
-}
-
-validator Link1 {
-	level(1);
-	limit(DEPTH, {=3});
-	limit(MESSAGES, {=2});
-	limit(THREADS, {=2});
-	limit(HOSTS, {1,2});
-	thread Client(*, 1) {
-		task("link") {
-			send(Server);
-			recv(Server);
-		}
-	}
-	thread Server(*, 1) {
-		task("link") {
-			recv(Client);
-			repeat between 0 and 2 {
-				task("fuzzy find") limit(CPU_TIME, 400ms);
-			}
-			call(SPSub0);
-			send(Client);
-		}
 	}
 }
 
@@ -84,7 +32,7 @@ validator Link {
 	}
 }
 
-validator Center {
+recognizer Center {
 	limit(DEPTH, {=3});
 	limit(MESSAGES, {=2});
 	limit(THREADS, {=2});
@@ -106,7 +54,7 @@ validator Center {
 	}
 }
 
-validator ShowCache {
+recognizer ShowCache {
 	limit(DEPTH, {=3});
 	limit(MESSAGES, {=2});
 	limit(THREADS, {=2});
@@ -123,6 +71,9 @@ validator ShowCache {
 		}
 	}
 }
+
+validator CenterOrShowCache : Center || ShowCache;
+validator CenterOrShowCacheNotCenter : CenterOrShowCache && !Center;
 
 validator ByNumber {
 	limit(DEPTH, {=3});
@@ -156,10 +107,78 @@ validator Init {
 	}
 }
 
+validator GreedyInit1 {
+	thread Server(*, 1) {
+		xor {
+			branch:
+			branch:
+				task("reading database");
+		}
+		task("jump tables");
+	}
+}
+
+validator GreedyInit2 {
+	thread Server(*, 1) {
+		repeat between 1 and 2 { task(*); }
+		task("jump tables");
+	}
+}
+
+validator FutureInit {
+	thread Server(*, 1) {
+		future F1 { task("jump tables"); }
+		task("reading database");
+		done(F1);
+	}
+}
+
+validator FutureInit2 {
+	thread Server(*, 1) {
+		future F1 { task("reading database"); }
+		task("jump tables");
+		done(F1);
+	}
+}
+
+validator FutureInit3 {
+	thread Server(*, 1) {
+		future F1 {
+			task("reading database");
+			future F2 {
+				task("jump tables");
+			}
+		}
+	}
+}
+
+fragment recognizer FutureSub {
+	future F1 { task("jump tables"); }
+}
+
+validator FutureInit4 {
+	thread Server(*, 1) {
+		call(FutureSub);
+		task("reading database");
+	}
+}
+
+validator FutureInit5 {
+	thread Server(*, 1) {
+		repeat between 1 and 99 {
+			future F1 { task("jump tables"); }
+		}
+		task("reading database");
+		done(F1);
+	}
+}
+
 fragment recognizer CacheHit { notice("cache hit"); }
 fragment recognizer CacheMiss { notice("cache miss"); }
 fragment invalidator TooLong { task(*) limit(REAL_TIME,{1s+}); }
-fragment invalidator NotBusyEnough { task(*) limit(BUSY_TIME,{0.0,0.5}) limit(REAL_TIME,{0.5s+}); }
+fragment invalidator NotBusyEnough {
+	task(*) limit(BUSY_TIME,{0.0,0.5}) limit(REAL_TIME,{0.5s+}) { any(); }
+}
 
 assert(instances(Init) == 1 );
 assert(instances(ShowCache) <= 20);

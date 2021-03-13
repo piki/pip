@@ -1,0 +1,20 @@
+Package: pip-pathview
+Version: <VERSION>
+Section: devel
+Priority: optional
+Architecture: i386
+Essential: no
+Depends: libgtk2.0-0 (>= 2.4), libglade2-0, libpcre3, librsvg2-2, libmysqlclient15off, libc6 (>= 2.3)
+Recommends: graphviz
+Suggests: virtual-mysql-server, virtual-mysql-client
+Installed-Size: <SIZE>
+Maintainer: Patrick Reynolds [reynolds@cs.cornell.edu]
+Description: Pip path viewer GUI
+ .
+ Pip is a set of debugging tools for distributed systems
+ 
+ Pip is intended for three types of programmers: 1) developers who wish to
+ find and fix structural and performance bugs in a distributed system they
+ are writing; 2) developers who inherit someone else's system and wish to
+ learn about it; 3) operators who wish to monitor a system to confirm that
+ it is exhibiting the expected structural and performance behaviors.

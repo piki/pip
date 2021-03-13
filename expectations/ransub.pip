@@ -1,0 +1,283 @@
+validator MainClient0 {
+	limit(THREADS, {=1});
+	thread Root(*, 1) {   // root
+		task("ReplayTree::maceInit(Tree)") {
+			send(Root);
+		}
+		task("RanSubAggregator::maceInit(Aggregate)") {
+			task("ReplayTree::joinOverlay(Tree)") {
+				task("RanSubAggregator::joinResultOverlay(OverlayJoinHandler)") {
+					send(Root);
+					task("ReplayTree::isRoot(Tree)");
+					send(Root);
+				}
+			}
+		}
+		task("RanSub::maceInit(Gossip)");
+		task("ransub_test::maceInit(Null)") {
+			task("RanSub::publishGossip(Gossip)") {
+				task("RanSubAggregator::aggregateSubscribe(Aggregate)");
+			}
+		}
+		// too unspecific; only the last of each is allowed to omit the send
+		repeat between 0 and 10000 {
+			recv(Root);
+			xor {
+				branch:
+					task("RanSubAggregator::timer printer") {
+						maybe { send(Root); }
+					}
+				branch:
+					task("ReplayTree::timer printer") {
+						maybe { send(Root); }
+					}
+				branch:
+					task("RanSubAggregator::timer collect") {
+						task("ReplayTree::isRoot(Tree)");
+					}
+			}
+		}
+	}
+}
+
+validator Collect_Distribute {
+	thread Root(*, 1) {
+		notice(m/^RanSub: root dist seq \d+, population \d+$/);
+		task("RanSub::distributeAggregateData(AggregateDataHandler)") {
+			task("ransub_test::deliverGossip(GossipDataHandler)");
+		}
+		repeat between 0 and 19 {
+			send(Interior);
+			future F1 {
+				recv(Interior);
+				task("RanSubAggregator::deliver(ReceiveDataHandler)") {
+					task("RanSubAggregator::deliver::collectMsg(ReceiveDataHandler)") {
+						notice(m/^RanSub: got coll seq \d+\(\d+ desc\.\) from [0-9a-f]+$/);
+						task("joined_xmit_collect_if_need");
+					}
+				}
+			}
+		}
+		send(Interior);
+		future F2 {
+			recv(t_31);
+			task("RanSubAggregator::deliver(ReceiveDataHandler)") {
+				task("RanSubAggregator::deliver::collectMsg(ReceiveDataHandler)") {
+					notice(m/^RanSub: got coll seq \d+\(\d+ desc\.\) from [0-9a-f]+$/);
+					task("joined_xmit_collect_if_need") {
+						task("ReplayTree::isRoot(Tree)");
+						notice("joined_xmit_collect_if_need: kids are okay");
+						notice(m/^SEQ \d+ DONE$/);
+						task("ReplayTree::isRoot(Tree)");
+						task("RanSub::collectAggregateData(AggregateDataHandler)");
+					}
+				}
+			}
+		}
+		maybe {
+			send(Root);
+			future F3 {
+				recv(Root);
+				task("RanSubAggregator::timer collect") {
+					task("ReplayTree::isRoot(Tree)");
+				}
+			}
+		}
+	}
+	thread Leaf(*, {1,99}) {
+		recv(Interior);
+		task("RanSubAggregator::deliver(ReceiveDataHandler)") {
+			task("RanSubAggregator::deliver::distributeMsg(ReceiveDataHandler)") {
+				task("recv distribute") {
+					notice(m/^RanSub: dist from [0-9a-f]+ seq \d+, expect \d+.$/);
+					task("RanSub::distributeAggregateData(AggregateDataHandler)") {
+						task("ransub_test::deliverGossip(GossipDataHandler)");
+					}
+					task("RanSub::collectAggregateData(AggregateDataHandler)");
+					task("ReplayTree::isRoot(Tree)");
+					send(Interior);
+				}
+			}
+		}
+	}
+	thread Interior(*, {0,100}) {
+		recv(Root);
+		task("RanSubAggregator::deliver(ReceiveDataHandler)") {
+			task("RanSubAggregator::deliver::distributeMsg(ReceiveDataHandler)") {
+				task("recv distribute") {
+					notice(m/^RanSub: dist from [0-9a-f]+ seq \d+, expect \d+\.$/);
+					task("RanSub::distributeAggregateData(AggregateDataHandler)") {
+						task("ransub_test::deliverGossip(GossipDataHandler)");
+					}
+					repeat between 0 and 19 {
+						send(Leaf);
+						future F1 {
+							recv(Leaf);
+							task("RanSubAggregator::deliver(ReceiveDataHandler)") {
+								task("RanSubAggregator::deliver::collectMsg(ReceiveDataHandler)") {
+									notice(m/^RanSub: got coll seq \d+\(\d+ desc\.\) from [0-9a-f]+$/);
+									task("joined_xmit_collect_if_need");
+								}
+							}
+						}
+					}
+					send(Leaf);
+					future F1 {
+						recv(Leaf);
+						task("RanSubAggregator::deliver(ReceiveDataHandler)") {
+							task("RanSubAggregator::deliver::collectMsg(ReceiveDataHandler)") {
+								notice(m/^RanSub: got coll seq \d+\(\d+ desc\.\) from [0-9a-f]+$/);
+								task("joined_xmit_collect_if_need") {
+									task("ReplayTree::isRoot(Tree)");
+									notice("joined_xmit_collect_if_need: kids are okay");
+									task("ReplayTree::isRoot(Tree)");
+									task("RanSub::collectAggregateData(AggregateDataHandler)");
+									send(Root);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+validator TcpError {
+	thread Root(*, 1) {
+		notice(m/macedon_tcp_transport:: signal_error [13] on [0-9a-f]+:\d+ msg_count=[01] at \d+\.\d+$/);
+		maybe { task("ReplayTree::error(NetworkErrorHandler)"); }
+	}
+}
+
+validator Error {
+	thread Root(*, 1) {
+		notice(m/^Peer [0-9a-f]+ died$/);
+		maybe {
+			send(Root);
+			recv(Root);
+			task("ReplayTree::timer join");
+		}
+	}
+}
+
+validator Main {
+	thread Root(*, 1) {
+		task("ReplayTree::maceInit(Tree)") {
+			send(t_336);
+		}
+		task("RanSubAggregator::maceInit(Aggregate)") {
+			task("ReplayTree::joinOverlay(Tree)");
+		}
+		task("RanSub::maceInit(Gossip)");
+		task("ransub_test::maceInit(Null)") {
+			task("RanSub::publishGossip(Gossip)") {
+				task("RanSubAggregator::aggregateSubscribe(Aggregate)");
+			}
+		}
+		recv(t_333);
+		repeat between 1 and 10000 {
+			task("ReplayTree::timer printer") {
+				send(t_336);
+			}
+			recv(t_336);
+		}
+		task("ReplayTree::timer printer");
+	}
+}
+
+validator RandtreeInit {
+	limit(THREADS, {=2});
+	thread Init(*, 1) {
+		send(RealRoot);
+		recv(RealRoot);
+		task("ReplayTree::deliver(ReceiveDataHandler)") {
+			task("ReplayTree::deliver::join_reply(ReceiveDataHandler)") {
+				task("RanSubAggregator::joinResultOverlay(OverlayJoinHandler)") {
+					send(Init);
+					task("ReplayTree::isRoot(Tree)");
+				}
+				task("RanSubAggregator::notifyParent(TreeStructureHandler)");
+			}
+		}
+		recv(Init);
+		repeat between 1 and 1000 {
+			task("RanSubAggregator::timer printer") {
+				send(Init);
+			}
+			recv(Init);
+		}
+		task("RanSubAggregator::timer printer");
+	}
+	thread RealRoot("client0", 1) {
+		recv(Init);
+		task("ReplayTree::deliver(ReceiveDataHandler)") {
+			task("ReplayTree::deliver::join_msg(ReceiveDataHandler)") {
+				task("RanSubAggregator::notifyChildren(TreeStructureHandler)") {
+					task("joined_xmit_collect_if_need") {
+						task("ReplayTree::isRoot(Tree)");
+						notice("joined_xmit_collect_if_need: kids are okay");
+						notice("SEQ 0 DONE");
+					}
+				}
+				send(Init);
+			}
+		}
+	}
+}
+
+validator RandtreeInit2 {
+	limit(THREADS, {=3});
+	thread Init(*, 1) {
+		send(RealRoot);
+		recv(Intermediary);
+		task("ReplayTree::deliver(ReceiveDataHandler)") {
+			task("ReplayTree::deliver::join_reply(ReceiveDataHandler)") {
+				task("RanSubAggregator::joinResultOverlay(OverlayJoinHandler)") {
+					send(Init);
+					task("ReplayTree::isRoot(Tree)");
+				}
+				task("RanSubAggregator::notifyParent(TreeStructureHandler)");
+			}
+		}
+		repeat between 0 and 5 {
+			future F1 {
+				send(Init);
+				future F2 {
+					recv(Init);
+					task("ReplayTree::timer join");
+				}
+			}
+		}
+		recv(Init);
+		repeat between 1 and 1000 {
+			task("RanSubAggregator::timer printer") {
+				send(Init);
+			}
+			recv(Init);
+		}
+		task("RanSubAggregator::timer printer");
+	}
+	thread Intermediary(*, 1) {
+		recv(RealRoot);
+		task("ReplayTree::deliver(ReceiveDataHandler)") {
+			task("ReplayTree::deliver::join_msg(ReceiveDataHandler)") {
+				task("RanSubAggregator::notifyChildren(TreeStructureHandler)") {
+					task("joined_xmit_collect_if_need") {
+						task("ReplayTree::isRoot(Tree)");
+						notice("joined_xmit_collect_if_need: kids are okay");
+					}
+				}
+				send(Init);
+			}
+		}
+	}
+	thread RealRoot("client0", 1) {
+		recv(Init);
+		task("ReplayTree::deliver(ReceiveDataHandler)") {
+			task("ReplayTree::deliver::join_msg(ReceiveDataHandler)") {
+				send(Intermediary);
+			}
+		}
+	}
+}

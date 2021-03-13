@@ -1,0 +1,39 @@
+--- linux/include/linux/resource.h.old	2005-04-14 13:19:30.000000000 -0400
++++ linux/include/linux/resource.h	2005-04-14 13:19:48.000000000 -0400
+@@ -19,6 +19,7 @@
+ #define	RUSAGE_SELF	0
+ #define	RUSAGE_CHILDREN	(-1)
+ #define RUSAGE_BOTH	(-2)		/* sys_wait4() uses this */
++#define RUSAGE_THREAD	(-3)
+ 
+ struct	rusage {
+ 	struct timeval ru_utime;	/* user time used */
+--- linux/kernel/sys.c.old	2005-04-14 13:20:32.000000000 -0400
++++ linux/kernel/sys.c	2005-04-14 13:50:08.000000000 -0400
+@@ -2037,6 +2037,17 @@
+ 			} while (t != p);
+ 			break;
+ 
++		case RUSAGE_THREAD:
++			utime = p->signal->utime;
++			stime = p->signal->stime;
++			utime = cputime_add(utime, t->utime);
++			stime = cputime_add(stime, t->stime);
++			r->ru_nvcsw += p->signal->nvcsw    + p->nvcsw;
++			r->ru_nivcsw += p->signal->nivcsw  + p->nivcsw;
++			r->ru_minflt += p->signal->min_flt + p->min_flt;
++			r->ru_majflt += p->signal->maj_flt + p->maj_flt;
++			break;
++
+ 		default:
+ 			BUG();
+ 	}
+@@ -2057,7 +2071,7 @@
+ 
+ asmlinkage long sys_getrusage(int who, struct rusage __user *ru)
+ {
+-	if (who != RUSAGE_SELF && who != RUSAGE_CHILDREN)
++	if (who != RUSAGE_SELF && who != RUSAGE_CHILDREN && who != RUSAGE_THREAD)
+ 		return -EINVAL;
+ 	return getrusage(current, who, ru);
+ }

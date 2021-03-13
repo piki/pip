@@ -1,0 +1,86 @@
+Overall goal: combine trace files into a somewhat smaller format called a
+pipdb.  Be faster than MySQL at reconciling and at querying.  Keep paths
+contiguous.  Each DB will be reconciled once and queried many times.
+
+
+Queries to support:
+- get path N
+	- get tasks, notices, messages; tasks must be sorted by start time
+		* paths are contiguous.
+- get first timestamp, get last timestamp
+		* let the reconciler find these and write them statically
+- select tasks name,count(name) with optional substring filter
+		* separate tasks index has this information
+- select pathname,path_number with optional substring filter
+		* easy.  the paths index has all this.
+- select <measure> from tasks for pdf, cdf, bytime
+		* tasks index points to offsets of task events
+- commgraph by path N
+		* easy.  the path is contiguous.
+
+
+Pipdb format:
+HEADER:
+  version: "PIP" . 8-bit version number
+  first timestamp: 64 bits (struct timeval)
+  last timestamp: 64 bits (struct timeval)
+  threads offset: 32 bits
+  #threads: 32 bits
+  task index offset: 32 bits
+  #tasks: 32 bits
+  paths offset: 32 bits
+  #paths: 32 bits
+  <extensible>
+
+THREADS:
+	host '\0' program '\0' pid[32] tid[32] ppid[32] uid[32] start[64] tz[32]
+  ...
+
+TASK-INDEX:
+  name '\0' #events[32] offset[32] offset[32] offset[32] ...
+  ...
+
+PATH-INDEX:
+  namelen[16] name taskofs noticeofs messageofs
+  ...
+
+TASK: flags[16] nameofs[32] start[64] end[64] realtime[32] utime[32] stime[32] majfault[32] minfault[32] volcs[32] involcs[32] startthread[32] endthread[32]
+
+TASK-FLAGS:
+  0: T=>nameidx is 32 bits, F=>nameidx is 16 bits
+	1: end: T=>end is a timeval; F=>end is a diff from start
+  2: realtime: T=>included, F=>end - start
+  3: utime: T=>included, F=>0
+  4: stime: T=>included, F=>0
+  5: minfault: T=>included, F=>0
+  6: majfault: T=>included, F=>0
+  7: volcs: T=>included, F=>0
+  8: involcs: T=>included, F=>0
+  9: startthread: T=>32 bits, F=>16 bits
+  10: endthread: T=>included, F=>same as startthread
+
+NOTICE: str '\0' ts[64] thread[32]
+
+MESSAGE: flags[8] idlen[16] id sendts[64] recvts[64] size[32] sendthread[32] recvthread[32]
+
+MESSAGE-FLAGS:
+	0: recvts: T=>end is a timeval; F=>end is a diff from start
+  1: size: T=>32 bits, F=>16 bits
+  2: sendthread: T=>32 bits, F=>16 bits
+  3: recvthread: T=>32 bits, F=>16 bits
+
+
+Pass 1:
+Write out the thread list.  Get all the pathIDs and task names.  Hope they
+fit in RAM.  Figure out how much space each path will take up in the
+pipdb.  Write the task index (with holes) and the path index (with
+offsets).  Keep both indices.
+
+Pass 2:
+Read events again, putting them into final position.  Write the task
+offsets now.  Reading is sequential, writing is not.  Thank goodness for
+write-back caching.
+
+Pass 3: ?
+Sort the task events and the offset lists in the task index.
+Or just make the client do the sorting when it reads them.

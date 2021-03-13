@@ -1,0 +1,186 @@
+Sketchy documentation for Pip GUI
+written by Jeff Mogul, 10 March 2006
+
+Warning: this is probably full of bugs!
+
++++++++++++++++++++
+How to run demo under VMware player:
+
+The two things you need are the vmware player, and
+Patrick's pre-fabbed Pip GUI VM (sorry for the pun).
+
+VMware player:
+       go to vmware.com
+       under the Products pulldown, find + click on "VMware player"
+       Download it and follow the instructions for installation.
+
+Pip image:
+
+		Find the link on http://issg.cs.duke.edu/pip/
+
+    unpack it with winzip.  My suggestion is to create a folder
+    on your Windows desktop called "vmware images" and then extract
+    the entire zip file into that.  I think this will result in
+    a folder called "pipvm" with all of the relevant files.
+
+I downloaded Patrick's file at about 800 KB/sec, so it doesn't
+take too long.
+
+Patrick's instructions [with my notes in brackets]:
+
+    You should be able to click on 'pip.vmx' [in the pipvm folder] to
+    run it.  [Vmware might complain about a version mismatch; go ahead
+    anyway.]
+
+    It's set up to use 128MB of RAM and run at 1024x768 .  [You should
+    enter full-screen mode]
+
+    [Note that in vmware player, you need to select whether the player
+    or the virtual machine gets your mouse and keyboard input.  Ctrl-G
+    switches control to the VM; Ctrl-Alt switches control back to the
+    Windows environment.]
+
+    [Just exit the vmware player; this should suspend the virtual
+    machine until the next time]
+
+    If anything goes wrong with the VM, reboot it.  You can log in as
+    root (password=piproot) or patrick (password=pippatrick).  To run
+    the GUI, log in as patrick, run "startx", then run "./demo" in the
+    resulting xterm.
+
+    The trace in the database is "fab5", a mostly disk-bound
+    read/write trace taken shortly before the NSDI deadline.
+
++++++++++++++++++++
+
+General stuff:
+
+   Tables can be sorted on any column header, the usual way.
+
+   The two sliders at the bottom of the window focus the view in time.
+   The top slider is the start time, and the bottom is the end time, both
+   relative to the first event of the trace.
+
+   The search below each list box filter the contents of the list box.
+   In each case, a search beginning with "!" is a negative search,
+   yielding every task/host/path/recognizer not containing the string.
+
++++++++++++++++++++
+
+Tabs at the top left:
+
+   Tree view: shows communication path between nodes for one path
+
+   	only works if you have selected a specific path
+	from the "Paths" table.  Double-click the
+	path to see the tree view for it.
+
+	Node numbers correspond to Pool numbers in the
+	"Thread pools" table.
+	
+	Clicking on a node shows which other nodes in
+	the tree have the same pool number.  Also
+	shows path, host, and program name at the
+	bottom of the view pane.	
+			
+	Double-clicking a node pops up the traced events
+	corresponding to that node (e.g, a Recv()
+	event, a Task step, and then a Send() event).
+	
+	Double-clicking on a traced event pops up
+	the event details (e.g., for a task step, it
+	shows the resources consumed; for a message,
+	it shows the latency and size).
+
+	The zoom slider at the bottom of the view pane allows
+	you to zoom in or out.
+
+    Timeline view: shows communication and threads timeline for one path
+    
+	The zoom slider at the bottom of the view pane allows
+	you to zoom in or out.  If you zoom in enough, a horizontal
+	panning slider will appear.
+
+	checkboxes at the bottom of the view pane allow you
+	to see or suppress subtasks, notices, and messages.
+	
+	colored bars are threads; thin lines are messages.
+	If several bars of the same color appear stacked
+	vertically, these are subtasks.
+	
+	single-click on a bar to see (at bottom of the view
+	pane) the path, host, and task.
+
+	double-click on a bar to see the traced events for the thread.
+	
+	Double-clicking on a traced event pops up
+	the event details (e.g., for a task step, it
+	shows the resources consumed; for a message,
+	it shows the latency and size).
+
+   Communication: shows host-wise communication adjacencies for path
+   
+	The zoom slider at the bottom of the view pane allows
+	you to zoom in or out.
+
+	The layout is automatic; you have a choice of layout
+	algorithm.		
+	
+    Performance: this tab changes depending on whether you've
+    	most recently requested a task graph or a paths graph
+	
+	To graph "Performance: tasks", select one or more
+	rows in the "Tasks" table.  (Shift-click extends
+	selection; Ctrl-click adds to or deletes from selection.)
+	Then click on the "Graph" button above the "Tasks" table.
+	
+	To graph "Performance: paths": there seem to be two ways
+	to do this, depending on whether you want to graph just
+	one recognizer or more than one.  There are also things
+	that seem to sort-of work, but which end up yielding
+	confusing results ... beware.
+
+	 For multiple recognizers:
+	   1. If the "Filter" button above the "Recognizers"
+	   table is pushed in, unpush it.
+	   2. select one or more rows in the "Recognizers"
+	   table.  (Shift-click extends selection; Ctrl-click
+	   adds to or deletes from selection.)
+	   3. Now push in the "Filter" button.  This populates
+	   the "Paths" table with paths from the union of the
+	   selected recognizers.
+	   4. Now click "Graph" button above the "Paths" table.
+	
+	 For one recognizer:
+	   1. double-click one row in the "Recognizers" table.
+	   This auto-pushes the "Filter" button and populates
+	   the "Paths" table with paths from the selected recognizer.
+	   2. Now click "Graph" button above the "Paths" table.
+
+	You have your choice of "quantity" (i.e., metric) for any
+	graph (tasks or paths).  Some metrics are not meaningful
+	for both graph types (e.g., "network bytes" is not
+	meaningul for task performance graphs).  Other metrics
+	might just be too boring.  ("Real time," the default metric,
+  is often a good bet, though.)
+	
+	You have your choice of graphing the chosen metric
+	as a CDF, PDF, or time series.
+	
+	You can choose whether the x-scale is log or linear.
+	(Log is probably a bad idea for time series, but can be a
+	good idea for CDFs and PDFs.)
+	
+	You can use the "Max points" slider to adjust the
+	number of points plotted for a CDF.  This setting currently
+  has no effect for PDFs or time series.
+
++++++++++++++++++++
+
+Still to document:
+
+	How to use "mismatch details"
+	
+	details of column headers in "Recognizers" table
+	
+	how do checkboxes get checked in "Recognizers" table?

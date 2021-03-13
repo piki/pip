@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 #include <assert.h>
 #include "aggregates.h"
 #include "exptree.h"
@@ -5,7 +10,7 @@
 
 Aggregate::Aggregate(Node *_node) {
 	assert(_node->type() == NODE_OPERATOR);
-	OperatorNode *onode = (OperatorNode*)_node;
+	OperatorNode *onode = dynamic_cast<OperatorNode*>(_node);
 	assert(onode->nops() == 1);
 	assert(onode->operands[0]->type() == NODE_OPERATOR);
 	node = onode->operands[0];
@@ -25,8 +30,8 @@ bool Aggregate::check(void) const {
 	return eval_bool(node) != 0;
 }
 
-static const Recognizer *get_recognizer(const std::string &name) {
-	const Recognizer *r = recognizers[name];
+static const RecognizerBase *get_recognizer(const std::string &name) {
+	const RecognizerBase *r = recognizers_by_name[name];
 	if (!r) {
 		fprintf(stderr, "Recognizer not found: %s\n", name.c_str());
 		abort();
@@ -34,7 +39,7 @@ static const Recognizer *get_recognizer(const std::string &name) {
 	return r;
 }
 
-static const Counter &get_metric(const Recognizer *r, const std::string &name) {
+static const Counter &get_metric(const RecognizerBase *r, const std::string &name) {
 	Limit::Metric metric = Limit::metric_by_name(name);
 	switch (metric) {
 		case Limit::REAL_TIME:     return r->real_time;
@@ -59,14 +64,14 @@ static const Counter &get_metric(const Recognizer *r, const std::string &name) {
 }
 
 float Aggregate::eval_float(const Node *n) const {
-	OperatorNode *onode;
-	const Recognizer *r;
+	const OperatorNode *onode;
+	const RecognizerBase *r;
 	switch (n->type()) {
-		case NODE_INT:         return ((IntNode*)n)->value;
-		case NODE_FLOAT:       return ((FloatNode*)n)->value;
-		case NODE_UNITS:       return ((UnitsNode*)n)->amt;
+		case NODE_INT:         return dynamic_cast<const IntNode*>(n)->value;
+		case NODE_FLOAT:       return dynamic_cast<const FloatNode*>(n)->value;
+		case NODE_UNITS:       return dynamic_cast<const UnitsNode*>(n)->amt;
 		case NODE_OPERATOR:
-			onode = (OperatorNode*)n;
+			onode = dynamic_cast<const OperatorNode*>(n);
 			switch (onode->op) {
 				case '/':
 					assert(onode->nops() == 2);
@@ -98,31 +103,31 @@ float Aggregate::eval_float(const Node *n) const {
 				case INSTANCES:
 					assert(onode->nops() == 1);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
-					r = get_recognizer(((IdentifierNode*)onode->operands[0])->sym->name);
+					r = get_recognizer(dynamic_cast<IdentifierNode*>(onode->operands[0])->sym->name);
 					return r->instances;
 				case AVERAGE:
 					assert(onode->nops() == 2);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
-					r = get_recognizer(((IdentifierNode*)onode->operands[1])->sym->name);
-					return get_metric(r, ((IdentifierNode*)onode->operands[0])->sym->name).avg();
+					r = get_recognizer(dynamic_cast<IdentifierNode*>(onode->operands[1])->sym->name);
+					return get_metric(r, dynamic_cast<IdentifierNode*>(onode->operands[0])->sym->name).avg();
 				case STDDEV:
 					assert(onode->nops() == 2);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
 					assert(onode->operands[1]->type() == NODE_IDENTIFIER);
-					r = get_recognizer(((IdentifierNode*)onode->operands[1])->sym->name);
-					return get_metric(r, ((IdentifierNode*)onode->operands[0])->sym->name).stddev();
+					r = get_recognizer(dynamic_cast<IdentifierNode*>(onode->operands[1])->sym->name);
+					return get_metric(r, dynamic_cast<IdentifierNode*>(onode->operands[0])->sym->name).stddev();
 				case F_MAX:
 					assert(onode->nops() == 2);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
 					assert(onode->operands[1]->type() == NODE_IDENTIFIER);
-					r = get_recognizer(((IdentifierNode*)onode->operands[1])->sym->name);
-					return get_metric(r, ((IdentifierNode*)onode->operands[0])->sym->name).max();
+					r = get_recognizer(dynamic_cast<IdentifierNode*>(onode->operands[1])->sym->name);
+					return get_metric(r, dynamic_cast<IdentifierNode*>(onode->operands[0])->sym->name).max();
 				case F_MIN:
 					assert(onode->nops() == 2);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
 					assert(onode->operands[1]->type() == NODE_IDENTIFIER);
-					r = get_recognizer(((IdentifierNode*)onode->operands[1])->sym->name);
-					return get_metric(r, ((IdentifierNode*)onode->operands[0])->sym->name).min();
+					r = get_recognizer(dynamic_cast<IdentifierNode*>(onode->operands[1])->sym->name);
+					return get_metric(r, dynamic_cast<IdentifierNode*>(onode->operands[0])->sym->name).min();
 				case UNIQUE:
 					assert(onode->nops() == 1);
 					assert(onode->operands[0]->type() == NODE_IDENTIFIER);
@@ -138,10 +143,10 @@ float Aggregate::eval_float(const Node *n) const {
 }
 
 bool Aggregate::eval_bool(const Node *n) const {
-	OperatorNode *onode;
+	const OperatorNode *onode;
 	switch (n->type()) {
 		case NODE_OPERATOR:
-			onode = (OperatorNode*)n;
+			onode = dynamic_cast<const OperatorNode*>(n);
 			switch (onode->op) {
 				case EQ:
 					assert(onode->nops() == 2);
@@ -176,7 +181,7 @@ bool Aggregate::eval_bool(const Node *n) const {
 				case IN:{
 					assert(onode->nops() == 2);
 					assert(onode->operands[1]->type() == NODE_OPERATOR);
-					OperatorNode *right = (OperatorNode*)onode->operands[1];
+					OperatorNode *right = dynamic_cast<OperatorNode*>(onode->operands[1]);
 					assert(right->op == RANGE);
 					assert(right->nops() == 2);
 					float min = eval_float(right->operands[0]);

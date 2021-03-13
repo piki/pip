@@ -1,73 +1,63 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 #include <assert.h>
+#include <getopt.h>
 #include <string>
 #include <stdarg.h>
 #include <stdio.h>
 #include "path.h"
-#include <mysql/mysql.h>
 #include <map>
 #include <set>
 #include "aggregates.h"
 #include "exptree.h"
+#include "pathfactory.h"
+#include "rcfile.h"
 
-static void read_path(const char *base, int pathid);
-static MYSQL mysql;
-static int malformed_paths_count = 0;
+static void read_path(PathFactory *pf, int pathid);
+static void usage(const char *prog) {
+	fprintf(stderr, "Usage:\n  %s [options] table-name pathid\n\n", prog);
+	exit(1);
+}
+
+static bool use_regex = false;
 
 int main(int argc, char **argv) {
-	std::map<std::string,Recognizer*>::const_iterator rp;
-	int just_one = -1;
+	std::map<std::string,RecognizerBase*>::const_iterator rp;
 
-	if (argc < 2 || argc > 3) {
-		fprintf(stderr, "Usage:\n  %s table-name [pathid]\n\n", argv[0]);
+	char c;
+	while ((c = getopt(argc, argv, "r")) != -1) {
+		switch (c) {
+			case 'r': use_regex = true;  break;
+			default:  usage(argv[0]);
+		}
+	}
+	if (argc - optind != 2) {
+		fprintf(stderr, "Usage:\n  %s [options] table-name pathid\n\n", argv[0]);
 		return 1;
 	}
+	const char *base = argv[optind];
+	int pathid = atoi(argv[optind+1]);
 
-	if (argc == 3) just_one = atoi(argv[2]);
+	PathFactory *pf = path_factory(base);
+	if (!pf->valid()) return 1;
 
-	const char *base = argv[1];
+	read_path(pf, pathid);
 
-	mysql_init(&mysql);
-	if (!mysql_real_connect(&mysql, NULL, "root", NULL, "anno", 0, NULL, 0)) {
-		fprintf(stderr, "Connection failed: %s\n", mysql_error(&mysql));
-		return 1;
-	}
-
-	MYSQL_RES *res;
-	MYSQL_ROW row;
-
-	std::set<int> pathids;
-	if (just_one == -1)
-		get_path_ids(&mysql, base, &pathids);
-
-	fprintf(stderr, "Reading threads...");
-	run_sqlf(&mysql, "SELECT * from %s_threads", base);
-	res = mysql_use_result(&mysql);
-	while ((row = mysql_fetch_row(res)) != NULL) {
-		threads[atoi(row[0])] = new PathThread(row);
-	}
-	mysql_free_result(res);
-	fprintf(stderr, " done: %d found.\n", (int)threads.size());
-
-	if (just_one != -1)
-		read_path(base, just_one);
-	else
-		for (std::set<int>::const_iterator p=pathids.begin(); p!=pathids.end(); p++)
-			read_path(base, *p);
-
-	printf("malformed paths: %d\n", malformed_paths_count);
-
-	mysql_close(&mysql);
+	delete pf;
 	return 0;
 }
 
-static void read_path(const char *base, int pathid) {
-	Path *path = new Path(&mysql, base, pathid);
-	if (!path->valid()) {
+static void read_path(PathFactory *pf, int pathid) {
+	Path *path = pf->get_path(pathid);
+	if (!path->valid())
 		printf("# path %d malformed\n", pathid);
-		malformed_paths_count++;
-	}
 
-	printf("====================[ path %d ]====================\n", pathid);
-	path->print();
+	printf("// source=\"%s\" pathid=%d\n", pf->get_name().c_str(), pathid);
+	printf("validator val_%d {\n", pathid);
+	path->print_exp();
+	printf("}\n");
 	delete path;
 }

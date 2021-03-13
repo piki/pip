@@ -1,3 +1,25 @@
+validator VAR1 {
+	thread Foo(*, 1) {
+		$h = send(Bar);
+		recv($h);
+		$x = task(*);
+		$x = "Foo";
+		task($x);
+	}
+	thread Bar(*, 1) {
+		$h2 = recv(Foo);
+		send($h2);
+		$n = repeat between 1 and 3 {
+			task(*);
+		}
+		$z = $n*$n;
+		$z = 2;
+		repeat $z*2 {
+			notice(*);
+		}
+	}
+}
+
 fragment recognizer FR1 {
 limit(REAL_TIME, 15s);
 	{ notice("FOO"); }
@@ -34,10 +56,10 @@ fragment invalidator FI3 {
 fragment recognizer FR4 { }
 
 fragment recognizer FR5 {
-  xor {
-    branch: call(FR1);
-    branch: call(FI3);
-  }
+	xor {
+		branch: call(FR1);
+		branch: call(FI3);
+	}
 }
 
 recognizer R6 {
@@ -59,12 +81,14 @@ validator V_DHT_recursive_shortcut {
 	thread Client(*, 1) {
 		limit(SIZE, 10kb);
 		task(m/^DHT/);
+		future F1 { recv(Client); }
 		repeat between 1 and 5 {
 			send(Client)
 				limit(SIZE, 1kb)
 				limit(LATENCY, 0.5s);
 			task("DHT");
 		}
+		done(F1);
 		recv(Client);
 		task("DHT");
 	}
@@ -86,7 +110,7 @@ validator V_DHT_recursive {
 	thread Client(*, 1) {
 		task("DHT");
 		send(Client);
-		@PATH = repeat between 1 and 5 {
+		repeat between 1 and 5 {
 			task("DHT");
 			recv(Client);
 		}
@@ -119,8 +143,12 @@ validator V_DHT_Coral {
 }
 
 fragment recognizer FR_Timer {
-  notice("timer");
+	notice("timer");
 }
+
+recognizer SR1 : R6 && V7;
+
+validator SR2: SR1 || V_DHT_iterative;
 
 assert( instances(FR1) in { 1, 5 } );
 assert( instances(FR1) < 5 );

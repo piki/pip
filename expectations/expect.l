@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2005-2006 Duke University.  All rights reserved.
+ * Please see COPYING for license terms.
+ */
+
 %{
 #include <stdlib.h>
 void yyerror(const char *fmt, ...);
@@ -5,7 +10,6 @@ void yyerror(const char *fmt, ...);
 #include "expect.tab.hh"
 int yylno = 1;
 static char string_buf[1024], *string_p;
-static void yyunput (int c, char *buf_ptr) __attribute__((unused));
 %}
 
 digit		[0-9]
@@ -45,6 +49,8 @@ letter	[A-Za-z_]
 "xor"														return XOR;
 "maybe"													return MAYBE;
 "call"													return CALL;
+"future"												return FUTURE;
+"done"													return DONE;
 "between"												return BETWEEN;
 "and"														return AND;
 "assert"												return ASSERT;
@@ -61,8 +67,7 @@ letter	[A-Za-z_]
 "ln"														return LOGN;
 "sqrt"													return SQRT;
 "exp"														return EXP;
-\${letter}({letter}|{digit})*		{ yylval.sValue = strdup(yytext); return STRINGVAR; }
-\@{letter}({letter}|{digit})* 	{ yylval.sValue = strdup(yytext); return PATHVAR; }
+\${letter}({letter}|{digit})*		{ yylval.sValue = strdup(yytext); return VARIABLE; }
 {letter}({letter}|{digit})*			{ yylval.sValue = strdup(yytext); return IDENTIFIER; }
 {digit}+												{ yylval.iValue = atoi(yytext); return INTEGER; }
 {digit}+\.{digit}*							{ yylval.fValue = atof(yytext); return FLOAT; }
@@ -84,7 +89,7 @@ letter	[A-Za-z_]
 <S_STRING>\"										{ BEGIN 0; *string_p = '\0'; yylval.sValue = string_buf; return STRING; }
 <S_STRING>\n										{ yyerror("newline in string"); }
 <S_STRING>.	                  	*string_p++ = *yytext;
-                              
+
 m\/															{ BEGIN S_REGEX; string_p = string_buf; }
 <S_REGEX>\\\\	                	*string_p++ = '\\';
 <S_REGEX>\\\/	                	*string_p++ = '/';
@@ -96,4 +101,7 @@ m\/															{ BEGIN S_REGEX; string_p = string_buf; }
 
 %%
 
-int yywrap(void) { return 1; }
+int yywrap(void) {
+	if (0) yyunput(0,0);  /* quell the "unused" warning */
+	return 1;
+}
